@@ -1873,15 +1873,18 @@ int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
 		return -1;
 
 	}
-	printf("Checking rows for %s at level %d\n", rel_name, level);
+//	printf("Checking rows for %s at level %d\n", rel_name, level);
 
-	fflush(stdout);
+	//fflush(stdout);
 
 	while (read_line(&str, file) != EOF) {
 
 		//Make sure that we have enough space allocatd to read the quals
 		if (sscanf(str.data, "%d	%s	%d	%d	%d", &level_n, relname, &estsize,
 				&actsize, &qualssize) == ARG_NUM) {
+			//printf("found argss for %s at level %d\n", relname, level);
+
+		//	fflush(stdout);
 			if (!strcmp(relname, rel_name) && level_n == level) {
 				if (qualssize >= DEFAULT_SIZE) {
 
@@ -1903,7 +1906,7 @@ int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
 				}
 
 				if (sscanf(str.data, "%*d	%*s	%*d	%*d	%*d	%[^\n]", cquals)
-						==  1) {
+						== 1) {
 					int t1 = strlen(cquals);
 
 					if (comp_set_clauses(cquals, quals)) {
@@ -1914,15 +1917,15 @@ int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
 						return actsize;
 
 					}
-					int t2 = strlen(relname);
-					memset(relname, '\0', t2+1);
-					memset(cquals, '\0', DEFAULT_SIZE);
-					resetStringInfo(&str);
-					level_n = 0;
 
 				}
 			}
 		}
+		int t2 = strlen(relname);
+		memset(relname, '\0', t2 + 1);
+		memset(cquals, '\0', DEFAULT_SIZE);
+		resetStringInfo(&str);
+		level_n = 0;
 
 	}
 	free(cquals);
@@ -1951,8 +1954,8 @@ int get_join_memo_size(char *rel_names, int level, char *quals) {
 	memset(str1, '\0', strlen(str1) + 1);
 	strcpy(str1, rel_names);
 
-	printf("Checking join rows for %s at level %d\n", rel_names, level);
-	fflush(stdout);
+	//printf("Checking join rows for %s at level %d\n", rel_names, level);
+	//fflush(stdout);
 	while (fgets(buffer, sizeof(buffer), file) != NULL) {
 
 		if (sscanf(buffer, "%d	[ %s ]	%d	%d	%d	%s", &level_n, relnames,
@@ -1970,9 +1973,9 @@ int get_join_memo_size(char *rel_names, int level, char *quals) {
 
 				}
 				if (found != NULL) {
-					printf("found  join rel: %s at level %d and rows %d\n",
+		//			printf("found  join rel: %s at level %d and rows %d\n",
 							rel_names, level_n, actsize);
-					fflush(stdout);
+		//			fflush(stdout);
 					free(str1);
 					return actsize;
 				}
@@ -2013,9 +2016,9 @@ bool comp_set_clauses(char *str_1, char *str_2) {
 		strcpy(str2, str_2);
 		int t1 = strlen(str1);
 		int t2 = strlen(str2);
-		printf("size of str1 : %d \n", t1);
-		printf("size of str2 : %d \n", t2);
-		fflush(stdout);
+	//	printf("size of str1 : %d \n", t1);
+		//printf("size of str2 : %d \n", t2);
+		//fflush(stdout);
 
 		tmp = strtok_r(str2, s, &save);
 		while (tmp != NULL) {
@@ -2025,17 +2028,17 @@ bool comp_set_clauses(char *str_1, char *str_2) {
 				break;
 
 			memset(found, '0', strlen(tmp));
-			printf(" String state: \n %s \n", str1);
-			fflush(stdout);
-			printf("string length in loop:  %d \n ", strlen(str1));
-			fflush(stdout);
+//			printf(" String state: \n %s \n", str1);
+//			fflush(stdout);
+//			printf("string length in loop:  %d \n ", strlen(str1));
+//			fflush(stdout);
 
 			tmp = strtok_r(NULL, s, &save);
 
 		}
 		if (found != NULL) {
-			printf("found string %s \n", str_2);
-			fflush(stdout);
+//			printf("found string %s \n", str_2);
+//			fflush(stdout);
 			free(str1);
 			free(str2);
 			return true;
