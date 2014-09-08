@@ -1285,8 +1285,8 @@ create_indexscan_plan(PlannerInfo *root, IndexPath *best_path, List *tlist,
 
 	unsigned int res = 0;
 	build_selec_string(&res, scan_clauses, &rest);
-	printf(" quals at create plan level \n %s : \n", (char *)res);
-	fflush(stdout);
+//	printf(" quals at create plan level \n %s : \n", (char *)res);
+//	fflush(stdout);
 
 	cost_index(best_path, root, best_path->indexinfo->loop_count);
 	copy_path_costsize(&scan_plan->plan, &best_path->path);

@@ -3244,9 +3244,9 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel,
 
 	allclauses = list_concat(list_copy(param_clauses), rel->baserestrictinfo);
 	build_selec_string(&res, allclauses, &rest);
-
-	printf(" quals at cost plan level \n %s : \n", (char *) res);
-	fflush(stdout);
+//
+//	printf(" quals at cost plan level \n %s : \n", (char *) res);
+//	fflush(stdout);
 
 	/*
 	 * Estimate the number of rows returned by the parameterized scan, knowing
@@ -3305,7 +3305,7 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel,
 		List *restrictlist) {
 	double nrows;
 	int rest = 0;
-	fflush(stdout);
+//	fflush(stdout);
 
 	if (enable_memo) {
 
