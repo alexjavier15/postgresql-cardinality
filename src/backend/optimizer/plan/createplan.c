@@ -103,10 +103,10 @@ static void copy_plan_costsize(Plan *dest, Plan *src);
 static SeqScan *make_seqscan(List *qptlist, List *qpqual, Index scanrelid);
 static IndexScan *make_indexscan(List *qptlist, List *qpqual, Index scanrelid,
 		Oid indexid, List *indexqual, List *indexqualorig, List *indexorderby,
-		List *indexorderbyorig, ScanDirection indexscandir);
+		List *indexorderbyorig, ScanDirection indexscandir, List * scan_clauses);
 static IndexOnlyScan *make_indexonlyscan(List *qptlist, List *qpqual,
 		Index scanrelid, Oid indexid, List *indexqual, List *indexorderby,
-		List *indextlist, ScanDirection indexscandir);
+		List *indextlist, ScanDirection indexscandir, List * scan_clauses);
 static BitmapIndexScan *make_bitmap_indexscan(Index scanrelid, Oid indexid,
 		List *indexqual, List *indexqualorig);
 static BitmapHeapScan *make_bitmap_heapscan(List *qptlist, List *qpqual,
@@ -1275,22 +1275,18 @@ create_indexscan_plan(PlannerInfo *root, IndexPath *best_path, List *tlist,
 	if (indexonly)
 		scan_plan = (Scan *) make_indexonlyscan(tlist, qpqual, baserelid,
 				indexoid, fixed_indexquals, fixed_indexorderbys,
-				best_path->indexinfo->indextlist, best_path->indexscandir);
+				best_path->indexinfo->indextlist, best_path->indexscandir,
+				scan_clauses);
 	else
 		scan_plan = (Scan *) make_indexscan(tlist, qpqual, baserelid, indexoid,
 				fixed_indexquals, stripped_indexquals, fixed_indexorderbys,
-<<<<<<< HEAD
-				indexorderbys, best_path->indexscandir);
-=======
 				indexorderbys, best_path->indexscandir, scan_clauses);
 	int rest = 0;
-
 
 	unsigned int res = 0;
 	build_selec_string(&res, scan_clauses, &rest);
 //	printf(" quals at create plan level \n %s : \n", (char *)res);
 //	fflush(stdout);
->>>>>>> a0fb0350f330ea0203612ef785fb47838609eddc
 
 	cost_index(best_path, root, best_path->indexinfo->loop_count);
 	copy_path_costsize(&scan_plan->plan, &best_path->path);
@@ -3043,7 +3039,7 @@ make_seqscan(List *qptlist, List *qpqual, Index scanrelid) {
 static IndexScan *
 make_indexscan(List *qptlist, List *qpqual, Index scanrelid, Oid indexid,
 		List *indexqual, List *indexqualorig, List *indexorderby,
-		List *indexorderbyorig, ScanDirection indexscandir) {
+		List *indexorderbyorig, ScanDirection indexscandir, List * scan_clauses) {
 	IndexScan *node = makeNode(IndexScan);
 	Plan *plan = &node->scan.plan;
 
@@ -3059,6 +3055,7 @@ make_indexscan(List *qptlist, List *qpqual, Index scanrelid, Oid indexid,
 	node->indexorderby = indexorderby;
 	node->indexorderbyorig = indexorderbyorig;
 	node->indexorderdir = indexscandir;
+	node->scanclauses = scan_clauses;
 
 	return node;
 }
@@ -3066,7 +3063,7 @@ make_indexscan(List *qptlist, List *qpqual, Index scanrelid, Oid indexid,
 static IndexOnlyScan *
 make_indexonlyscan(List *qptlist, List *qpqual, Index scanrelid, Oid indexid,
 		List *indexqual, List *indexorderby, List *indextlist,
-		ScanDirection indexscandir) {
+		ScanDirection indexscandir, List * scan_clauses) {
 	IndexOnlyScan *node = makeNode(IndexOnlyScan);
 	Plan *plan = &node->scan.plan;
 
@@ -3081,6 +3078,7 @@ make_indexonlyscan(List *qptlist, List *qpqual, Index scanrelid, Oid indexid,
 	node->indexorderby = indexorderby;
 	node->indextlist = indextlist;
 	node->indexorderdir = indexscandir;
+	node->scanclauses = scan_clauses;
 
 	return node;
 }
@@ -3956,8 +3954,6 @@ make_agg(PlannerInfo *root, List *tlist, List *qual, AggStrategy aggstrategy,
 
 	plan->startup_cost = agg_path.startup_cost;
 	plan->total_cost = agg_path.total_cost;
-
-
 
 	/*
 	 * We will produce a single output tuple if not grouping, and a tuple per
