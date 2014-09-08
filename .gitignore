@@ -19,5 +19,7 @@ src/interfaces/
 *.o
 *.po
 *.Po
+*.txt
+*.so
 
 
