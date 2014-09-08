@@ -20,4 +20,4 @@ src/interfaces/
 *.po
 *.Po
 *.txt
-*so
+*.so
