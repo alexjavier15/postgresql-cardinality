@@ -1882,45 +1882,36 @@ int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
 		//Make sure that we have enough space allocatd to read the quals
 		if (sscanf(str.data, "%d	%s	%d	%d	%d", &level_n, relname, &estsize,
 				&actsize, &qualssize) == ARG_NUM) {
-			if (!strcmp(relname, rel_name) && level_n == level) {
-				if (qualssize >= DEFAULT_SIZE) {
 
-					cquals = (char *) realloc(cquals,
-							(qualssize + 1) * sizeof(char));
-					if (cquals == NULL) {
-						printf("error allocating memory \n");
-						fflush(stdout);
-						return -1;
+			if (qualssize >= DEFAULT_SIZE) {
 
-					}
-					memset(cquals, '0', qualssize + 1);
-					cquals[qualssize] = '\0';
-					int t = strlen(cquals);
-					int t1 = strlen(quals);
-					printf("size of cqual : %d \n", t);
-					printf("size of quals : %d \n", t1);
+				cquals = (char *) realloc(cquals, qualssize * sizeof(char) + 1);
+				if (cquals == NULL) {
+					printf("error allocating memory \n");
 					fflush(stdout);
+					return -1;
+
 				}
+				memset(cquals, '\0', qualssize + 1);
 
-				if (sscanf(str.data, "%*d	%*s	%*d	%*d	%*d	%[^\n]", cquals)
-						==  1) {
-					int t1 = strlen(cquals);
+			}
 
-					if (comp_set_clauses(cquals, quals)) {
+			if (sscanf(str.data, "%d	%s	%d	%d	%d	%[^\n]", &level_n, relname,
+					&estsize, &actsize, &qualssize, cquals) == ARG_NUM + 1) {
+				if (!strcmp(relname, rel_name) && level_n == level) {
+					if (comp_set_clauses(quals, cquals)) {
 						printf("found rel: %s at level %d with %d clauses \n",
 								rel_name, level_n, clauses_length);
 						fflush(stdout);
 						free(cquals);
 						return actsize;
-
 					}
-					int t2 = strlen(relname);
-					memset(relname, '\0', t2+1);
-					memset(cquals, '\0', DEFAULT_SIZE);
-					resetStringInfo(&str);
-					level_n = 0;
-
 				}
+				memset(relname, '\0', sizeof(relname));
+				memset(cquals, '\0', DEFAULT_SIZE);
+				resetStringInfo(&str);
+				level_n = 0;
+
 			}
 		}
 
@@ -2002,20 +1993,14 @@ bool comp_set_clauses(char *str_1, char *str_2) {
 	}
 
 	else {
-		int slen1 = strlen(str_1);
-		int slen2 = strlen(str_2);
-		str1 = (char*) malloc(slen1 * sizeof(char));
-		str2 = (char*) malloc(slen2 * sizeof(char));
-		memset(str1, '\0', slen1 + 1);
-		memset(str2, '\0', slen2 + 1);
+
+		str1 = (char*) malloc((strlen(str_1) + 1) * sizeof(char));
+		str2 = (char*) malloc((strlen(str_2) + 1) * sizeof(char));
+		memset(str1, '\0', strlen(str_1) + 1);
+		memset(str2, '\0', strlen(str_1) + 1);
 
 		strcpy(str1, str_1);
 		strcpy(str2, str_2);
-		int t1 = strlen(str1);
-		int t2 = strlen(str2);
-		printf("size of str1 : %d \n", t1);
-		printf("size of str2 : %d \n", t2);
-		fflush(stdout);
 
 		tmp = strtok_r(str2, s, &save);
 		while (tmp != NULL) {
@@ -2023,13 +2008,7 @@ bool comp_set_clauses(char *str_1, char *str_2) {
 			found = strstr(str1, tmp);
 			if (found == NULL)
 				break;
-
 			memset(found, '0', strlen(tmp));
-			printf(" String state: \n %s \n", str1);
-			fflush(stdout);
-			printf("string length in loop:  %d \n ", strlen(str1));
-			fflush(stdout);
-
 			tmp = strtok_r(NULL, s, &save);
 
 		}

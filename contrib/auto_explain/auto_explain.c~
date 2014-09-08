@@ -211,7 +211,7 @@ static void explain_ExecutorFinish(QueryDesc *queryDesc) {
  * ExecutorEnd hook: log results if needed
  */
 static void explain_ExecutorEnd(QueryDesc *queryDesc) {
-	FILE *file = fopen("memoTxt1.xml", "wb");
+	FILE *file = fopen("memoTxt33.txt", "wb");
 	FILE *file_d = fopen("durations.txt", "a+");
 
 	if (queryDesc->totaltime && auto_explain_enabled()) {
@@ -272,7 +272,7 @@ static void explain_ExecutorEnd(QueryDesc *queryDesc) {
 				fclose(file);
 				fclose(file_d);
 				if(auto_explain_log_memo){
-				system("java -jar explain.jar memoTxt.xml memoTxt");
+				system("/home_local/rivas/java/jre/bin/java -jar explain.jar memoTxt.xml memoTxt");
 }
 
 			}

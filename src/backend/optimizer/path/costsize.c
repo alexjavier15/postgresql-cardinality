@@ -143,6 +143,8 @@ static double calc_joinrel_size_estimate(PlannerInfo *root, double outer_rows,
 static void set_rel_width(PlannerInfo *root, RelOptInfo *rel);
 static double relation_byte_size(double tuples, int width);
 static double page_size(double tuples, int width);
+static void build_selec_string(unsigned int *buff, RelOptInfo *rel,
+		int * lenght);
 
 /*
  * clamp_row_est
@@ -3197,14 +3199,11 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 	Assert(rel->relid > 0);
 
 	//maybe memo hacked
-	if (enable_memo && rel->rel_name != NULL
-			&& list_length(rel->baserestrictinfo) != 0) {
+	if (enable_memo && rel->rel_name != NULL &&  list_length(rel->baserestrictinfo) != 0) {
 
-		build_selec_string(&res, rel->baserestrictinfo, &rest);
+		build_selec_string(&res, rel, &rest);
 		printf("checking base relation %s with %d clauses\n", rel->rel_name,
 				rest);
-		printf(" quals at path  plan level \n %s : \n", (char *) res);
-
 		fflush(stdout);
 
 		mrows = get_baserel_memo_size(rel->rel_name,
@@ -3242,25 +3241,20 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel,
 	int mrows = -1;
 	unsigned int res = 0;
 
-	allclauses = list_concat(list_copy(param_clauses), rel->baserestrictinfo);
-	build_selec_string(&res, allclauses, &rest);
-
-	printf(" quals at cost plan level \n %s : \n", (char *) res);
-	fflush(stdout);
-
 	/*
 	 * Estimate the number of rows returned by the parameterized scan, knowing
 	 * that it will apply all the extra join clauses as well as the rel's own
 	 * restriction clauses.  Note that we force the clauses to be treated as
 	 * non-join clauses during selectivity estimation.
 	 */
-
+	allclauses = list_concat(list_copy(param_clauses), rel->baserestrictinfo);
 	if (enable_memo && rel->rel_name != NULL) {
 
 		printf("checking parameterized relation %s with %d clauses\n",
 				rel->rel_name, rest);
+		fflush(stdout);
 
-
+		build_selec_string(&res, rel, &rest);
 
 		mrows = get_baserel_memo_size(rel->rel_name,
 				root->query_level + rel->rtekind, rest, (char *) res);
@@ -3853,15 +3847,16 @@ void set_default_effective_cache_size(void) {
 			PGC_S_DYNAMIC_DEFAULT);
 	Assert(effective_cache_size > 0);
 }
-void build_selec_string(unsigned int *buff, List *clauses, int * lenght) {
+static void build_selec_string(unsigned int *buff, RelOptInfo *rel,
+		int * lenght) {
 	Node *node = NIL;
 	char * tmp = NULL;
 	StringInfoData str;
 	initStringInfo(&str);
-	*lenght = list_length(clauses);
+	*lenght = list_length(rel->baserestrictinfo);
 
 	if (*lenght != 0) {
-		node = (Node *) make_ands_explicit(clauses);
+		node = (Node *) make_ands_explicit(rel->baserestrictinfo);
 		nodeSimToString(node, &str);
 
 		tmp = (char *) malloc((str.len + 1) * sizeof(char));
@@ -3872,4 +3867,3 @@ void build_selec_string(unsigned int *buff, List *clauses, int * lenght) {
 	}
 
 }
-

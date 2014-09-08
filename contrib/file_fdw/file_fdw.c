@@ -897,8 +897,6 @@ estimate_size(PlannerInfo *root, RelOptInfo *baserel,
 	double		ntuples;
 	double		nrows;
 
-
-
 	/*
 	 * Get size of the file.  It might not be there at plan time, though, in
 	 * which case we have to use a default estimate.
