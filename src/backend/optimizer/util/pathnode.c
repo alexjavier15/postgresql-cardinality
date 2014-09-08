@@ -1875,7 +1875,7 @@ int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
 	}
 //	printf("Checking rows for %s at level %d\n", rel_name, level);
 
-	//fflush(stdout);
+//fflush(stdout);
 
 	while (read_line(&str, file) != EOF) {
 
@@ -1884,15 +1884,15 @@ int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
 				&actsize, &qualssize) == ARG_NUM) {
 			//printf("found argss for %s at level %d\n", relname, level);
 
-		//	fflush(stdout);
+			//	fflush(stdout);
 			if (!strcmp(relname, rel_name) && level_n == level) {
 				if (qualssize >= DEFAULT_SIZE) {
 
 					cquals = (char *) realloc(cquals,
 							(qualssize + 1) * sizeof(char));
 					if (cquals == NULL) {
-						printf("error allocating memory \n");
-						fflush(stdout);
+//						printf("error allocating memory \n");
+//						fflush(stdout);
 						return -1;
 
 					}
@@ -1973,9 +1973,8 @@ int get_join_memo_size(char *rel_names, int level, char *quals) {
 
 				}
 				if (found != NULL) {
-		//			printf("found  join rel: %s at level %d and rows %d\n",
-							rel_names, level_n, actsize);
-		//			fflush(stdout);
+					//	printf("found  join rel: %s at level %d and rows %d\n",	rel_names, level_n, actsize	);
+					//	fflush(stdout);
 					free(str1);
 					return actsize;
 				}
@@ -2014,9 +2013,9 @@ bool comp_set_clauses(char *str_1, char *str_2) {
 
 		strcpy(str1, str_1);
 		strcpy(str2, str_2);
-		int t1 = strlen(str1);
-		int t2 = strlen(str2);
-	//	printf("size of str1 : %d \n", t1);
+		//	int t1 = strlen(str1);
+		//int t2 = strlen(str2);
+		//	printf("size of str1 : %d \n", t1);
 		//printf("size of str2 : %d \n", t2);
 		//fflush(stdout);
 
