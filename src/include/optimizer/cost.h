@@ -189,7 +189,7 @@ extern Selectivity clause_selectivity(PlannerInfo *root,
 				   int varRelid,
 				   JoinType jointype,
 				   SpecialJoinInfo *sjinfo);
-extern void build_selec_string(unsigned int *buff,  List *clauses,
+extern void build_selec_string( const void * str, List *clauses,
 		int * lenght);
 
 #endif   /* COST_H */

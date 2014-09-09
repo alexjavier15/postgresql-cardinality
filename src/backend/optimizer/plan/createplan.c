@@ -1281,12 +1281,12 @@ create_indexscan_plan(PlannerInfo *root, IndexPath *best_path, List *tlist,
 		scan_plan = (Scan *) make_indexscan(tlist, qpqual, baserelid, indexoid,
 				fixed_indexquals, stripped_indexquals, fixed_indexorderbys,
 				indexorderbys, best_path->indexscandir, scan_clauses);
-	int rest = 0;
+	//int rest = 0;
 
-	unsigned int res = 0;
-	build_selec_string(&res, scan_clauses, &rest);
-//	printf(" quals at create plan level \n %s : \n", (char *)res);
-//	fflush(stdout);
+	//unsigned int res = 0;
+	//build_selec_string(&res, scan_clauses, &rest);
+	//printf(" quals at create plan level \n %s : \n", (char *)res);
+	//fflush(stdout);
 
 	cost_index(best_path, root, best_path->indexinfo->loop_count);
 	copy_path_costsize(&scan_plan->plan, &best_path->path);

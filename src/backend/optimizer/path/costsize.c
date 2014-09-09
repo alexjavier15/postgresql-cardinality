@@ -3192,7 +3192,8 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 	int rest = 0;
 	int mrows = -1;
 
-	unsigned int res = 0;
+	StringInfoData str;
+	initStringInfo(&str);
 	/* Should only be applied to base relations */
 	Assert(rel->relid > 0);
 
@@ -3200,17 +3201,17 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 	if (enable_memo && rel->rel_name != NULL
 			&& list_length(rel->baserestrictinfo) != 0) {
 
-		build_selec_string(&res, rel->baserestrictinfo, &rest);
+		build_selec_string(&str, rel->baserestrictinfo, &rest);
 		printf("checking base relation %s with %d clauses\n", rel->rel_name,
 				rest);
-		printf(" quals at path  plan level \n %s : \n", (char *) res);
+		//printf(" quals at path  plan level \n %s : \n", (char *) res);
 
 		fflush(stdout);
 
 		mrows = get_baserel_memo_size(rel->rel_name,
-				root->query_level + rel->rtekind, rest, (char *) res);
+				root->query_level + rel->rtekind, rest, &str);
 
-		free((char *) res);
+		resetStringInfo(&str);
 
 	}
 
@@ -3240,13 +3241,13 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel,
 	double nrows;
 	int rest = 0;
 	int mrows = -1;
-	unsigned int res = 0;
-
+	StringInfoData str;
+	initStringInfo(&str);
 	allclauses = list_concat(list_copy(param_clauses), rel->baserestrictinfo);
-	build_selec_string(&res, allclauses, &rest);
-//
-//	printf(" quals at cost plan level \n %s : \n", (char *) res);
-//	fflush(stdout);
+	 build_selec_string(&str,allclauses, &rest);
+
+	//printf(" quals at cost plan level \n %s : \n", (char *) res);
+	//fflush(stdout);
 
 	/*
 	 * Estimate the number of rows returned by the parameterized scan, knowing
@@ -3260,11 +3261,11 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel,
 		printf("checking parameterized relation %s with %d clauses\n",
 				rel->rel_name, rest);
 
-
-
 		mrows = get_baserel_memo_size(rel->rel_name,
-				root->query_level + rel->rtekind, rest, (char *) res);
-		free((char *) res);
+				root->query_level + rel->rtekind, rest, &str);
+
+		resetStringInfo(&str);
+
 	}
 
 	nrows = rel->tuples * clauselist_selectivity(root, allclauses, rel->relid, /* do not use 0! */
@@ -3853,21 +3854,14 @@ void set_default_effective_cache_size(void) {
 			PGC_S_DYNAMIC_DEFAULT);
 	Assert(effective_cache_size > 0);
 }
-void build_selec_string(unsigned int *buff, List *clauses, int * lenght) {
+void  build_selec_string(const void * str, List *clauses, int * lenght) {
 	Node *node = NIL;
-	char * tmp = NULL;
-	StringInfoData str;
-	initStringInfo(&str);
+
 	*lenght = list_length(clauses);
 
 	if (*lenght != 0) {
 		node = (Node *) make_ands_explicit(clauses);
 		nodeSimToString(node, &str);
-
-		tmp = (char *) malloc((str.len + 1) * sizeof(char));
-		memset(tmp, '\0', sizeof(buff));
-		strcpy(tmp, str.data);
-		*buff = tmp;
 
 	}
 

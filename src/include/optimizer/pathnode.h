@@ -158,6 +158,6 @@ extern ParamPathInfo *get_joinrel_parampathinfo(PlannerInfo *root,
 extern ParamPathInfo *get_appendrel_parampathinfo(RelOptInfo *appendrel,
 							Relids required_outer);
 extern int get_join_memo_size(char *rel_names, int level, char *quals);
-extern int get_baserel_memo_size(char *rel_name, int level, int lclauses, char *quals);
+extern int get_baserel_memo_size(char *rel_name, int level, int lclauses, const void  *quals);
 
 #endif   /* PATHNODE_H */

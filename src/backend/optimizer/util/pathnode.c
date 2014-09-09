@@ -39,9 +39,7 @@ typedef enum {
 static List *translate_sub_tlist(List *tlist, int relid);
 static bool query_is_distinct_for(Query *query, List *colnos, List *opids);
 static Oid distinct_col_search(int colno, List *colnos, List *opids);
-static void parse_node(char *node, char *buffer);
-static void parse_operator(char *node, char *buffer);
-static bool comp_set_clauses(char *str1, char *str2);
+static bool comp_set_clauses(const void  *str1, const void *str2);
 
 /*****************************************************************************
  *		MISC. PATH UTILITIES
@@ -1853,7 +1851,7 @@ static int read_line(StringInfo str, FILE *file) {
 }
 
 int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
-		char *quals) {
+		const void *quals) {
 	FILE *file = AllocateFile("memoTxt.txt", "rb");
 	int DEFAULT_SIZE = 256;
 	int ARG_NUM = 5;
@@ -1863,8 +1861,10 @@ int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
 	int qualssize;
 	int estsize;
 	int actsize;
+	int t2;
 	StringInfoData str;
 	initStringInfo(&str);
+	;
 
 	memset(cquals, '\0', DEFAULT_SIZE);
 	if (cquals == NULL) {
@@ -1873,9 +1873,9 @@ int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
 		return -1;
 
 	}
-//	printf("Checking rows for %s at level %d\n", rel_name, level);
+	printf("Checking rows for %s at level %d\n", rel_name, level);
 
-//fflush(stdout);
+	fflush(stdout);
 
 	while (read_line(&str, file) != EOF) {
 
@@ -1884,30 +1884,29 @@ int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
 				&actsize, &qualssize) == ARG_NUM) {
 			//printf("found argss for %s at level %d\n", relname, level);
 
-			//	fflush(stdout);
+			//fflush(stdout);
 			if (!strcmp(relname, rel_name) && level_n == level) {
 				if (qualssize >= DEFAULT_SIZE) {
 
 					cquals = (char *) realloc(cquals,
 							(qualssize + 1) * sizeof(char));
 					if (cquals == NULL) {
-//						printf("error allocating memory \n");
-//						fflush(stdout);
+						printf("error allocating memory \n");
+						fflush(stdout);
 						return -1;
 
 					}
 					memset(cquals, '0', qualssize + 1);
 					cquals[qualssize] = '\0';
-					int t = strlen(cquals);
-					int t1 = strlen(quals);
-					printf("size of cqual : %d \n", t);
-					printf("size of quals : %d \n", t1);
+					//int t = strlen(cquals);
+					//int t1 = strlen(quals);
+					//printf("size of cqual : %d \n", t);
+					//printf("size of quals : %d \n", t1);
 					fflush(stdout);
 				}
 
 				if (sscanf(str.data, "%*d	%*s	%*d	%*d	%*d	%[^\n]", cquals)
 						== 1) {
-					int t1 = strlen(cquals);
 
 					if (comp_set_clauses(cquals, quals)) {
 						printf("found rel: %s at level %d with %d clauses \n",
@@ -1921,7 +1920,7 @@ int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
 				}
 			}
 		}
-		int t2 = strlen(relname);
+		t2 = strlen(relname);
 		memset(relname, '\0', t2 + 1);
 		memset(cquals, '\0', DEFAULT_SIZE);
 		resetStringInfo(&str);
@@ -1973,8 +1972,9 @@ int get_join_memo_size(char *rel_names, int level, char *quals) {
 
 				}
 				if (found != NULL) {
-					//	printf("found  join rel: %s at level %d and rows %d\n",	rel_names, level_n, actsize	);
-					//	fflush(stdout);
+					printf("found  join rel: %s at level %d and rows %d\n",
+							rel_names, level_n, actsize);
+					fflush(stdout);
 					free(str1);
 					return actsize;
 				}
@@ -1989,7 +1989,7 @@ int get_join_memo_size(char *rel_names, int level, char *quals) {
 	return -1;
 
 }
-bool comp_set_clauses(char *str_1, char *str_2) {
+bool comp_set_clauses(const void  *str_1, const void *str_2) {
 
 	char *found;
 	const char s[2] = ",";
@@ -1997,25 +1997,27 @@ bool comp_set_clauses(char *str_1, char *str_2) {
 	char *save;
 	char *str1 = NULL;
 	char *str2 = NULL;
-	if (str_2 == NULL || !strcmp("<>", str_2)) {
-		if (!strcmp(str_1, "NULL"))
+	if (((StringInfoData *) str_2)->len == 0
+			|| !strcmp("<>", ((StringInfoData *) str_2)->data)) {
+		if (!strcmp((char *)str_1, "NULL"))
 			return true;
 
 	}
 
 	else {
-		int slen1 = strlen(str_1);
-		int slen2 = strlen(str_2);
-		str1 = (char*) malloc(slen1 * sizeof(char));
-		str2 = (char*) malloc(slen2 * sizeof(char));
-		memset(str1, '\0', slen1 + 1);
-		memset(str2, '\0', slen2 + 1);
+		int slen1 = strlen((char *)str_1);
 
-		strcpy(str1, str_1);
-		strcpy(str2, str_2);
-		//	int t1 = strlen(str1);
+		str1 = (char*) malloc(slen1 * sizeof(char));
+		str2 = (char*) malloc(
+				(((StringInfoData *) str_2)->len + 1) * sizeof(char));
+		memset(str1, '\0', slen1 + 1);
+		memset(str2, '\0', ((StringInfoData *) str_2)->len + 1);
+
+		strcpy(str1, (char *)str_1);
+		strcpy(str2, ((StringInfoData *) str_2)->data);
+		//int t1 = strlen(str1);
 		//int t2 = strlen(str2);
-		//	printf("size of str1 : %d \n", t1);
+		//printf("size of str1 : %d \n", t1);
 		//printf("size of str2 : %d \n", t2);
 		//fflush(stdout);
 
@@ -2027,16 +2029,16 @@ bool comp_set_clauses(char *str_1, char *str_2) {
 				break;
 
 			memset(found, '0', strlen(tmp));
-//			printf(" String state: \n %s \n", str1);
-//			fflush(stdout);
-//			printf("string length in loop:  %d \n ", strlen(str1));
-//			fflush(stdout);
+			/*	printf(" String state: \n %s \n", str1);
+			 fflush(stdout);
+			 printf("string length in loop:  %d \n ", strlen(str1));
+			 fflush(stdout);*/
 
 			tmp = strtok_r(NULL, s, &save);
 
 		}
 		if (found != NULL) {
-//			printf("found string %s \n", str_2);
+			/*		printf("found string %s \n", str_2);*/
 			fflush(stdout);
 			free(str1);
 			free(str2);
