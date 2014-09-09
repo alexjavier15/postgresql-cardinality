@@ -3193,14 +3193,14 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 	int mrows = -1;
 
 	StringInfoData str;
-	initStringInfo(&str);
+
 	/* Should only be applied to base relations */
 	Assert(rel->relid > 0);
 
 	//maybe memo hacked
 	if (enable_memo && rel->rel_name != NULL
 			&& list_length(rel->baserestrictinfo) != 0) {
-
+		initStringInfo(&str);
 		build_selec_string(&str, rel->baserestrictinfo, &rest);
 		printf("checking base relation %s with %d clauses\n", rel->rel_name,
 				rest);
@@ -3242,9 +3242,8 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel,
 	int rest = 0;
 	int mrows = -1;
 	StringInfoData str;
-	initStringInfo(&str);
+
 	allclauses = list_concat(list_copy(param_clauses), rel->baserestrictinfo);
-	 build_selec_string(&str,allclauses, &rest);
 
 	//printf(" quals at cost plan level \n %s : \n", (char *) res);
 	//fflush(stdout);
@@ -3257,6 +3256,8 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel,
 	 */
 
 	if (enable_memo && rel->rel_name != NULL) {
+		initStringInfo(&str);
+		build_selec_string(&str, allclauses, &rest);
 
 		printf("checking parameterized relation %s with %d clauses\n",
 				rel->rel_name, rest);
@@ -3854,14 +3855,14 @@ void set_default_effective_cache_size(void) {
 			PGC_S_DYNAMIC_DEFAULT);
 	Assert(effective_cache_size > 0);
 }
-void  build_selec_string(const void * str, List *clauses, int * lenght) {
+void build_selec_string(const void * str, List *clauses, int * lenght) {
 	Node *node = NIL;
 
 	*lenght = list_length(clauses);
 
 	if (*lenght != 0) {
 		node = (Node *) make_ands_explicit(clauses);
-		nodeSimToString(node, &str);
+		nodeSimToString(node, str);
 
 	}
 

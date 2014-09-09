@@ -110,7 +110,6 @@ static void ExplainXMLTag(const char *tagname, int flags, ExplainState *es);
 static void ExplainJSONLineEnding(ExplainState *es);
 static void ExplainYAMLLineStarting(ExplainState *es);
 static void escape_yaml(StringInfo buf, const char *str);
-static void get_varattno(Expr * expr, Datum* att);
 
 /*
  * ExplainQuery -
@@ -1145,7 +1144,7 @@ static void ExplainNode(PlanState *planstate, List *ancestors,
 			show_instrumentation_count("Rows Removed by Filter", 1, planstate,
 					es);
 			if (enable_explain_memo) {
-				show_scan_parsed_qual(plan->qual, "PFilter", es);
+				show_scan_parsed_qual(((IndexScan *) plan)->scanclauses, "PFilter", es);
 				show_scan_parsed_qual(((IndexScan *) plan)->indexqualorig,
 						"PIndex Cond", es);
 			}
@@ -1165,8 +1164,8 @@ static void ExplainNode(PlanState *planstate, List *ancestors,
 			show_instrumentation_count("Rows Removed by Filter", 1, planstate,
 					es);
 			if (enable_explain_memo) {
-				show_scan_parsed_qual(plan->qual, "PFilter", es);
-				show_scan_parsed_qual(((IndexScan *) plan)->indexqualorig,
+				show_scan_parsed_qual(((IndexOnlyScan *) plan)->scanclauses, "PFilter", es);
+				show_scan_parsed_qual(((IndexOnlyScan *) plan)->indexqual,
 						"PIndex Cond", es);
 			}
 		}
