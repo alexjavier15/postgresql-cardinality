@@ -1882,6 +1882,7 @@ int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
 		//Make sure that we have enough space allocatd to read the quals
 		if (sscanf(str.data, "%d	%s	%d	%d	%d", &level_n, relname, &estsize,
 				&actsize, &qualssize) == ARG_NUM) {
+			//printf("checkpoint 1");
 			//printf("found argss for %s at level %d\n", relname, level);
 
 			//fflush(stdout);
@@ -1907,7 +1908,7 @@ int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
 
 				if (sscanf(str.data, "%*d	%*s	%*d	%*d	%*d	%[^\n]", cquals)
 						== 1) {
-
+					//printf("checkpoint 2");
 					if (comp_set_clauses(cquals, quals)) {
 						printf("found rel: %s at level %d with %d clauses \n",
 								rel_name, level_n, clauses_length);
@@ -2007,7 +2008,7 @@ bool comp_set_clauses(const void *str_1, const void *str_2) {
 	else {
 		int slen1 = strlen((char *) str_1);
 
-		str1 = (char*) palloc(slen1 * sizeof(char));
+		str1 = (char*) palloc((slen1+1) * sizeof(char));
 		str2 = (char*) palloc(
 				(((StringInfoData *) str_2)->len + 1) * sizeof(char));
 		memset(str1, '\0', slen1 + 1);
@@ -2027,7 +2028,8 @@ bool comp_set_clauses(const void *str_1, const void *str_2) {
 			found = strstr(str1, tmp);
 			if (found == NULL)
 				break;
-
+			//printf("checkoint 3 \n");
+			//fflush(stdout);
 			memset(found, '0', strlen(tmp));
 			/*	printf(" String state: \n %s \n", str1);
 			 fflush(stdout);
