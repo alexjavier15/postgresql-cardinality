@@ -34,6 +34,7 @@ typedef struct
 } PreparedStatement;
 
 extern bool enable_explain_memo;
+
 /* Utility statements PREPARE, EXECUTE, DEALLOCATE, EXPLAIN EXECUTE */
 extern void PrepareQuery(PrepareStmt *stmt, const char *queryString);
 extern void ExecuteQuery(ExecuteStmt *stmt, IntoClause *intoClause,

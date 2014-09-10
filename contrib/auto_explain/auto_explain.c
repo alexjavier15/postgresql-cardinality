@@ -18,7 +18,8 @@
 #include "executor/instrument.h"
 #include "utils/guc.h"
 #include "optimizer/cost.h"
-PG_MODULE_MAGIC;
+PG_MODULE_MAGIC
+;
 
 /* GUC variables */
 static int auto_explain_log_min_duration = 0; /* msec or -1 */
@@ -28,6 +29,7 @@ static bool auto_explain_log_verbose = false;
 static bool auto_explain_log_buffers = false;
 static bool auto_explain_log_triggers = false;
 static bool auto_explain_log_timing = false;
+static bool auto_explain_memo_append = false;
 static int auto_explain_log_format = EXPLAIN_FORMAT_TEXT;
 static bool auto_explain_log_nested_statements = false;
 
@@ -76,9 +78,14 @@ void _PG_init(void) {
 	DefineCustomBoolVariable("auto_explain.log_verbose",
 			"Use EXPLAIN VERBOSE for plan logging.", NULL,
 			&auto_explain_log_verbose, false, PGC_SUSET, 0, NULL, NULL, NULL);
+
 	DefineCustomBoolVariable("auto_explain.log_memo",
 			"Use EXPLAIN VERBOSE for plan logging.", NULL,
 			&auto_explain_log_memo, false, PGC_SUSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("auto_explain.memo_append",
+			"Use EXPLAIN VERBOSE for plan logging.", NULL,
+			&auto_explain_memo_append, false, PGC_SUSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable("auto_explain.log_buffers", "Log buffers usage.",
 			NULL, &auto_explain_log_buffers, false, PGC_SUSET, 0, NULL, NULL,
@@ -236,10 +243,9 @@ static void explain_ExecutorEnd(QueryDesc *queryDesc) {
 			es.format = auto_explain_log_format;
 
 			ExplainBeginOutput(&es);
-			
+
 			ExplainPrintPlan(&es, queryDesc);
 
-			
 			ExplainEndOutput(&es);
 			// update he time to be print
 			msec = queryDesc->totaltime->total * 1000.0;
@@ -268,12 +274,15 @@ static void explain_ExecutorEnd(QueryDesc *queryDesc) {
 					fprintf(file_d, "\n");
 				else
 					fprintf(file_d, "	");
-				fwrite( es.str->data, 1,strlen(es.str->data),file );
+				fwrite(es.str->data, 1, strlen(es.str->data), file);
 				fclose(file);
 				fclose(file_d);
-				if(auto_explain_log_memo){
-				system("java -jar explain.jar memoTxt.xml memoTxt");
-}
+				if (auto_explain_log_memo) {
+					if (auto_explain_memo_append)
+						system("java -jar explain.jar true memoTxt.xml memoTxt");
+					else
+						system("java -jar explain.jar false memoTxt.xml memoTxt");
+				}
 
 			}
 			pfree(es.str->data);

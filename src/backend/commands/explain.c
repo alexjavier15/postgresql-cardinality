@@ -48,6 +48,7 @@ explain_get_index_name_hook_type explain_get_index_name_hook = NULL;
 #define X_NOWHITESPACE 4
 
 bool enable_explain_memo = false;
+
 static void ExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 		const char *queryString, ParamListInfo params);
 static void report_triggers(ResultRelInfo *rInfo, bool show_relname,
