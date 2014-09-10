@@ -3306,15 +3306,15 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel,
 		RelOptInfo *outer_rel, RelOptInfo *inner_rel, SpecialJoinInfo *sjinfo,
 		List *restrictlist) {
 	double nrows;
-	int rest = 0;
-//	fflush(stdout);
+	//int rest = 0;
+	//fflush(stdout);
 
 	if (enable_memo) {
 
-		rest = list_length(restrictlist);
+		//rest = list_length(restrictlist);
 
 		nrows = get_join_memo_size(rel->rel_name, root->query_level,
-				restrictlist);
+				NULL);
 	}
 	if (!enable_memo || nrows == -1) {
 
@@ -3343,7 +3343,7 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel,
 double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel,
 		double outer_rows, double inner_rows, SpecialJoinInfo *sjinfo,
 		List *restrict_clauses) {
-	double nrows;
+	double nrows= -1;
 
 	/*
 	 * Estimate the number of rows returned by the parameterized join as the
@@ -3359,7 +3359,7 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel,
 		//rest = list_length(restrict_clauses);
 
 		nrows = get_join_memo_size(rel->rel_name, root->query_level,
-				restrict_clauses);
+				NULL);
 	}
 	if (!enable_memo || nrows == -1) {
 		nrows = calc_joinrel_size_estimate(root, outer_rows, inner_rows, sjinfo,

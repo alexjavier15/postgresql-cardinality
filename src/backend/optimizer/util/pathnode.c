@@ -39,7 +39,7 @@ typedef enum {
 static List *translate_sub_tlist(List *tlist, int relid);
 static bool query_is_distinct_for(Query *query, List *colnos, List *opids);
 static Oid distinct_col_search(int colno, List *colnos, List *opids);
-static bool comp_set_clauses(const void  *str1, const void *str2);
+static bool comp_set_clauses(const void *str1, const void *str2);
 
 /*****************************************************************************
  *		MISC. PATH UTILITIES
@@ -1856,7 +1856,7 @@ int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
 	int DEFAULT_SIZE = 256;
 	int ARG_NUM = 5;
 	char relname[DEFAULT_SIZE];
-	char *cquals = (char *) malloc(DEFAULT_SIZE * sizeof(char));
+	char *cquals = (char *) palloc(DEFAULT_SIZE * sizeof(char));
 	int level_n;
 	int qualssize;
 	int estsize;
@@ -1888,7 +1888,7 @@ int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
 			if (!strcmp(relname, rel_name) && level_n == level) {
 				if (qualssize >= DEFAULT_SIZE) {
 
-					cquals = (char *) realloc(cquals,
+					cquals = (char *) repalloc(cquals,
 							(qualssize + 1) * sizeof(char));
 					if (cquals == NULL) {
 						printf("error allocating memory \n");
@@ -1902,7 +1902,7 @@ int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
 					//int t1 = strlen(quals);
 					//printf("size of cqual : %d \n", t);
 					//printf("size of quals : %d \n", t1);
-					fflush(stdout);
+					//fflush(stdout);
 				}
 
 				if (sscanf(str.data, "%*d	%*s	%*d	%*d	%*d	%[^\n]", cquals)
@@ -1912,7 +1912,7 @@ int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
 						printf("found rel: %s at level %d with %d clauses \n",
 								rel_name, level_n, clauses_length);
 						fflush(stdout);
-						free(cquals);
+						pfree(cquals);
 						return actsize;
 
 					}
@@ -1927,7 +1927,7 @@ int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
 		level_n = 0;
 
 	}
-	free(cquals);
+	pfree(cquals);
 
 	return -1;
 
@@ -1949,7 +1949,7 @@ int get_join_memo_size(char *rel_names, int level, char *quals) {
 	char *saveptr1;
 
 	char *rel_name;
-	str1 = (char*) malloc((strlen(rel_names) + 1) * sizeof(char));
+	str1 = (char*) palloc((strlen(rel_names) + 1) * sizeof(char));
 	memset(str1, '\0', strlen(str1) + 1);
 	strcpy(str1, rel_names);
 
@@ -1975,7 +1975,7 @@ int get_join_memo_size(char *rel_names, int level, char *quals) {
 					printf("found  join rel: %s at level %d and rows %d\n",
 							rel_names, level_n, actsize);
 					fflush(stdout);
-					free(str1);
+					pfree(str1);
 					return actsize;
 				}
 
@@ -1985,11 +1985,11 @@ int get_join_memo_size(char *rel_names, int level, char *quals) {
 
 		}
 	}
-	free(str1);
+	pfree(str1);
 	return -1;
 
 }
-bool comp_set_clauses(const void  *str_1, const void *str_2) {
+bool comp_set_clauses(const void *str_1, const void *str_2) {
 
 	char *found;
 	const char s[2] = ",";
@@ -1999,21 +1999,21 @@ bool comp_set_clauses(const void  *str_1, const void *str_2) {
 	char *str2 = NULL;
 	if (((StringInfoData *) str_2)->len == 0
 			|| !strcmp("<>", ((StringInfoData *) str_2)->data)) {
-		if (!strcmp((char *)str_1, "NULL"))
+		if (!strcmp((char *) str_1, "NULL"))
 			return true;
 
 	}
 
 	else {
-		int slen1 = strlen((char *)str_1);
+		int slen1 = strlen((char *) str_1);
 
-		str1 = (char*) malloc(slen1 * sizeof(char));
-		str2 = (char*) malloc(
+		str1 = (char*) palloc(slen1 * sizeof(char));
+		str2 = (char*) palloc(
 				(((StringInfoData *) str_2)->len + 1) * sizeof(char));
 		memset(str1, '\0', slen1 + 1);
 		memset(str2, '\0', ((StringInfoData *) str_2)->len + 1);
 
-		strcpy(str1, (char *)str_1);
+		strcpy(str1, (char *) str_1);
 		strcpy(str2, ((StringInfoData *) str_2)->data);
 		//int t1 = strlen(str1);
 		//int t2 = strlen(str2);
@@ -2040,14 +2040,13 @@ bool comp_set_clauses(const void  *str_1, const void *str_2) {
 		if (found != NULL) {
 			/*		printf("found string %s \n", str_2);*/
 			fflush(stdout);
-			free(str1);
-			free(str2);
+			pfree(str1);
+			pfree(str2);
 			return true;
 		}
 
-		free(str1);
-		free(str2);
-
 	}
+	pfree(str1);
+	pfree(str2);
 	return false;
 }
