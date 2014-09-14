@@ -495,7 +495,7 @@ typedef struct RelOptInfo
 
 	/* information about a base rel (not set for join rels!) */
 	Index		relid;
-	char		*rel_name;
+	List		*rel_name;
 	Oid			reltablespace;	/* containing tablespace */
 	RTEKind		rtekind;		/* RELATION, SUBQUERY, or FUNCTION */
 	AttrNumber	min_attr;		/* smallest attrno of rel (often <0) */

@@ -13,6 +13,7 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+#include "nodes/print.h"
 
 #include <math.h>
 #include "lib/stringinfo.h"
@@ -29,6 +30,11 @@
 #include "utils/selfuncs.h"
 #include "storage/fd.h"
 
+#define isFullMatched(result) \
+		(result->found == 2 ? 1 : 0)
+#define isMatched(result) \
+		(result->found > 0 ? 1 : 0)
+
 typedef enum {
 	COSTS_EQUAL, /* path costs are fuzzily equal */
 	COSTS_BETTER1, /* first path is cheaper than second */
@@ -39,7 +45,11 @@ typedef enum {
 static List *translate_sub_tlist(List *tlist, int relid);
 static bool query_is_distinct_for(Query *query, List *colnos, List *opids);
 static Oid distinct_col_search(int colno, List *colnos, List *opids);
-static bool comp_set_clauses(const void *str1, const void *str2);
+static void compt_lists(MemoInfoData *result, List *str1, const List *str2);
+static void check_relation_names(MemoInfoData *cmpName, char *relName2,
+		const List *relName1);
+
+static void build_string_list(List ** buff, char * stringList);
 
 /*****************************************************************************
  *		MISC. PATH UTILITIES
@@ -1850,205 +1860,191 @@ static int read_line(StringInfo str, FILE *file) {
 	return ch;
 }
 
-int get_baserel_memo_size(char *rel_name, int level, int clauses_length,
-		const void *quals) {
+void get_baserel_memo_size(MemoInfoData *result, const List *lrelName,
+		int level, int clauses_length, char *quals) {
 	FILE *file = AllocateFile("memoTxt.txt", "rb");
-	int DEFAULT_SIZE = 256;
+
 	int ARG_NUM = 5;
-	char relname[DEFAULT_SIZE];
+	char srelname[DEFAULT_SIZE];
 	char *cquals = (char *) palloc(DEFAULT_SIZE * sizeof(char));
-	int level_n;
+	int mlevel;
+	List *lquals1 = NIL;
+	List *lquals2 = NIL;
 	int qualssize;
 	int estsize;
 	int actsize;
-	int t2;
 	StringInfoData str;
+	MemoInfoData resultName;
+	MemoInfoData *resultName_ptr;
+
+	resultName_ptr = &resultName;
 	initStringInfo(&str);
-	;
+	result->found = 0;
+	result->rows = -1;
+
+	build_string_list(&lquals2, quals);
 
 	memset(cquals, '\0', DEFAULT_SIZE);
 	if (cquals == NULL) {
 		printf("error allocating memory \n");
 		fflush(stdout);
-		return -1;
+
+		return;
 
 	}
-	printf("Checking rows for %s at level %d\n", rel_name, level);
 
 	fflush(stdout);
 
 	while (read_line(&str, file) != EOF) {
 
 		//Make sure that we have enough space allocatd to read the quals
-		if (sscanf(str.data, "%d	%s	%d	%d	%d", &level_n, relname, &estsize,
+		if (sscanf(str.data, "%d\t%s\t%d\t%d\t%d", &mlevel, srelname, &estsize,
 				&actsize, &qualssize) == ARG_NUM) {
 			//printf("checkpoint 1");
 			//printf("found argss for %s at level %d\n", relname, level);
 
 			//fflush(stdout);
-			if (!strcmp(relname, rel_name) && level_n == level) {
-				if (qualssize >= DEFAULT_SIZE) {
+			if (mlevel == level) {
+				check_relation_names(&resultName, srelname, lrelName);
 
-					cquals = (char *) repalloc(cquals,
-							(qualssize + 1) * sizeof(char));
-					if (cquals == NULL) {
-						printf("error allocating memory \n");
+				if (isFullMatched(resultName_ptr)) {
+					if (qualssize >= DEFAULT_SIZE) {
+
+						cquals = (char *) repalloc(cquals,
+								(qualssize + 1) * sizeof(char));
+						if (cquals == NULL) {
+							printf("error allocating memory \n");
+							fflush(stdout);
+
+							return;
+
+						}
+						memset(cquals, '0', qualssize + 1);
+						cquals[qualssize] = '\0';
+
 						fflush(stdout);
-						return -1;
-
-					}
-					memset(cquals, '0', qualssize + 1);
-					cquals[qualssize] = '\0';
-					//int t = strlen(cquals);
-					//int t1 = strlen(quals);
-					//printf("size of cqual : %d \n", t);
-					//printf("size of quals : %d \n", t1);
-					//fflush(stdout);
-				}
-
-				if (sscanf(str.data, "%*d	%*s	%*d	%*d	%*d	%[^\n]", cquals)
-						== 1) {
-					//printf("checkpoint 2");
-					if (comp_set_clauses(cquals, quals)) {
-						printf("found rel: %s at level %d with %d clauses \n",
-								rel_name, level_n, clauses_length);
-						fflush(stdout);
-						pfree(cquals);
-						return actsize;
-
 					}
 
+					if (sscanf(str.data, "%*d\t%*s\t%*d\t%*d\t%*d\t%[^\n]",
+							cquals) == 1) {
+						//printf("checkpoint 2");
+						build_string_list(&lquals1, cquals);
+
+						compt_lists(result, lquals1, lquals2);
+
+						if (isMatched(result)) {
+							/*printf(
+							 "found rel: %s at level %d with %d clauses et %d rows \n",
+							 srelname, mlevel, clauses_length, actsize);
+
+							 printf("Clauses were :\n ");
+
+							 print(lquals1);
+							 print(lquals2);
+							 fflush(stdout);*/
+							pfree(cquals);
+							result->rows = actsize;
+							return;
+
+						}
+
+					}
 				}
 			}
 		}
-		t2 = strlen(relname);
-		memset(relname, '\0', t2 + 1);
+
+		memset(srelname, '\0', strlen(srelname) + 1);
 		memset(cquals, '\0', DEFAULT_SIZE);
 		resetStringInfo(&str);
-		level_n = 0;
+		mlevel = 0;
 
 	}
 	pfree(cquals);
 
-	return -1;
-
 }
 
-int get_join_memo_size(char *rel_names, int level, char *quals) {
+void get_join_memo_size(MemoInfoData *result, const List *lrelName, int level,
+		char *quals) {
 
 	FILE *file = AllocateFile("memoTxt.txt", "rb");
 
-	char buffer[1024];
-	char relnames[1024];
-	char *str1 = NULL;
-	int level_n;
-	int qualssize;
+	int mlevel;
 	int estsize;
 	int actsize;
-	char cquals[200];
-	char *found;
-	char *saveptr1;
+	StringInfoData str;
+	char srelname[DEFAULT_SIZE];
+	MemoInfoData resultName;
+	MemoInfoData *resultName_ptr;
 
-	char *rel_name;
-	str1 = (char*) palloc((strlen(rel_names) + 1) * sizeof(char));
-	memset(str1, '\0', strlen(str1) + 1);
-	strcpy(str1, rel_names);
+	resultName_ptr = &resultName;
+	//Default values for the MemoinfoData struct
+	result->found = 0;
+	result->rows = -1;
 
-	//printf("Checking join rows for %s at level %d\n", rel_names, level);
-	//fflush(stdout);
-	while (fgets(buffer, sizeof(buffer), file) != NULL) {
+	//initialize  de file reader buffer;
+	initStringInfo(&str);
 
-		if (sscanf(buffer, "%d	[ %s ]	%d	%d	%d	%s", &level_n, relnames,
-				&estsize, &actsize, &qualssize, cquals) == 6) {
+	fflush(stdout);
+	while (read_line(&str, file) != EOF) {
 
-			if (strlen(rel_names) == strlen(relnames) && level == level_n) {
-				rel_name = strtok_r(relnames, ",", &saveptr1);
-				while (rel_name != NULL) {
+		if (sscanf(str.data, "%d\t%*[[]%[^]]%*[]]\t%d\t%d", &mlevel, srelname,
+				&estsize, &actsize) == 4) {
 
-					found = strstr(str1, rel_name);
-					if (found == NULL)
-						break;
-					memset(found, ' ', strlen(rel_name));
-					rel_name = strtok_r(NULL, ",", &saveptr1);
+			if (level == mlevel) {
+				check_relation_names(&resultName, srelname, lrelName);
 
-				}
-				if (found != NULL) {
-					printf("found  join rel: %s at level %d and rows %d\n",
-							rel_names, level_n, actsize);
-					fflush(stdout);
-					pfree(str1);
-					return actsize;
+				if (isFullMatched(resultName_ptr)) {
+					/*printf("found  join rel: %s at level %d and rows %d\n",
+							srelname, mlevel, actsize);
+					fflush(stdout);*/
+					result->rows = actsize;
+					return;
 				}
 
 			}
-			memset(relnames, '\0', sizeof(relnames));
-			level_n = 0;
-
 		}
+		memset(srelname, '\0', strlen(srelname) + 1);
+		resetStringInfo(&str);
+		mlevel = 0;
+
 	}
-	pfree(str1);
-	return -1;
 
 }
-bool comp_set_clauses(const void *str_1, const void *str_2) {
 
-	char *found;
-	const char s[2] = ",";
-	char *tmp;
+void compt_lists(MemoInfoData * result, List *lleft, const List *lright) {
+	List * ldiff = NIL;
+
+	if (list_length(lleft) >= list_length(lright)) {
+		ldiff = list_difference(lleft, lright);
+		result->found =
+				(ldiff == NIL)
+						+ ((ldiff == NIL)
+								&& (list_length(lleft) == list_length(lright)))
+						+ ((ldiff != NIL)
+								&& (list_length(lleft) > list_length(lright)));
+	}
+}
+
+static void build_string_list(List ** buff, char * stringList) {
 	char *save;
-	char *str1 = NULL;
-	char *str2 = NULL;
-	if (((StringInfoData *) str_2)->len == 0
-			|| !strcmp("<>", ((StringInfoData *) str_2)->data)) {
-		if (!strcmp((char *) str_1, "NULL"))
-			return true;
+	char *s = ",";
+	char *tmp = NULL;
+	Value *value;
+
+	tmp = strtok_r(stringList, s, &save);
+	while (tmp != NULL) {
+		value = makeString(tmp);
+		*buff = lappend(*buff, value);
+		tmp = strtok_r(NULL, s, &save);
 
 	}
-
-	else {
-		int slen1 = strlen((char *) str_1);
-
-		str1 = (char*) palloc((slen1+1) * sizeof(char));
-		str2 = (char*) palloc(
-				(((StringInfoData *) str_2)->len + 1) * sizeof(char));
-		memset(str1, '\0', slen1 + 1);
-		memset(str2, '\0', ((StringInfoData *) str_2)->len + 1);
-
-		strcpy(str1, (char *) str_1);
-		strcpy(str2, ((StringInfoData *) str_2)->data);
-		//int t1 = strlen(str1);
-		//int t2 = strlen(str2);
-		//printf("size of str1 : %d \n", t1);
-		//printf("size of str2 : %d \n", t2);
-		//fflush(stdout);
-
-		tmp = strtok_r(str2, s, &save);
-		while (tmp != NULL) {
-
-			found = strstr(str1, tmp);
-			if (found == NULL)
-				break;
-			//printf("checkoint 3 \n");
-			//fflush(stdout);
-			memset(found, '0', strlen(tmp));
-			/*	printf(" String state: \n %s \n", str1);
-			 fflush(stdout);
-			 printf("string length in loop:  %d \n ", strlen(str1));
-			 fflush(stdout);*/
-
-			tmp = strtok_r(NULL, s, &save);
-
-		}
-		if (found != NULL) {
-			/*		printf("found string %s \n", str_2);*/
-			fflush(stdout);
-			pfree(str1);
-			pfree(str2);
-			return true;
-		}
-
-	}
-	pfree(str1);
-	pfree(str2);
-	return false;
+	Assert(*buff != NIL);
 }
+void check_relation_names(MemoInfoData *cmpName, char *relName2,
+		const List *relName1) {
+	List * lrelname = NIL;
+	build_string_list(&lrelname, relName2);
+	compt_lists(cmpName, lrelname, relName1);
+
+}
+

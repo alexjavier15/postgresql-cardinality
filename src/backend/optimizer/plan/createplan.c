@@ -4484,9 +4484,9 @@ void print_injected_cost(const char *rel, int rows, double old_cost,
 int get_base_rows_from_memo(char *name, int level, int clauses) {
 
 	if (enable_cost_check) {
-
-		return get_baserel_memo_size(name, level, clauses, NIL);
-
+		MemoInfoData result;
+		get_baserel_memo_size(&result, name, level, clauses, NIL);
+		return result.rows;
 	}
 
 	return (-1);
@@ -4494,9 +4494,9 @@ int get_base_rows_from_memo(char *name, int level, int clauses) {
 int get_join_rows_from_memo(char *name, int level, int clauses) {
 
 	if (enable_cost_check) {
-
-		return get_join_memo_size(name, level, NIL);
-
+		MemoInfoData result;
+		get_join_memo_size(&result, name, level, NIL);
+		result.rows;
 	}
 
 	return (-1);

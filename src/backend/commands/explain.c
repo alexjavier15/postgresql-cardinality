@@ -941,7 +941,7 @@ static void ExplainNode(PlanState *planstate, List *ancestors,
 
 		if (plan->old_subplan)
 			ExplainPropertyText("Subquery", "true", es);
-				if (strategy)
+		if (strategy)
 			ExplainPropertyText("Strategy", strategy, es);
 		if (operation)
 			ExplainPropertyText("Operation", operation, es);
@@ -1088,7 +1088,25 @@ static void ExplainNode(PlanState *planstate, List *ancestors,
 		double nloops = planstate->instrument->nloops;
 		double startup_sec = 1000.0 * planstate->instrument->startup / nloops;
 		double total_sec = 1000.0 * planstate->instrument->total / nloops;
-		double rows = planstate->instrument->ntuples / nloops;
+		double rows = 0;
+		if (!enable_explain_memo) {
+			rows = planstate->instrument->ntuples / nloops;
+
+		} else {
+			switch (nodeTag(plan)) {
+
+			case T_IndexOnlyScan:
+			case T_IndexScan:
+			case T_BitmapIndexScan:
+			case T_BitmapHeapScan:
+				rows = planstate->instrument->ntuples;
+				break;
+			default:
+				rows = planstate->instrument->ntuples / nloops;
+				break;
+			}
+
+		}
 
 		if (es->format == EXPLAIN_FORMAT_TEXT) {
 			if (planstate->instrument->need_timer)
@@ -1096,7 +1114,7 @@ static void ExplainNode(PlanState *planstate, List *ancestors,
 						" (actual time=%.3f..%.3f rows=%.0f loops=%.0f)",
 						startup_sec, total_sec, rows, nloops);
 			else
-				appendStringInfo(es->str, " (actual rows=%.0f loops=%.0f)",
+				appendStringInfo(es->str, " (actual rows=%.5f loops=%.0f)",
 						rows, nloops);
 		} else {
 			if (planstate->instrument->need_timer) {
@@ -1143,11 +1161,20 @@ static void ExplainNode(PlanState *planstate, List *ancestors,
 		if (plan->qual) {
 			show_instrumentation_count("Rows Removed by Filter", 1, planstate,
 					es);
-			if (enable_explain_memo) {
-				show_scan_parsed_qual(((IndexScan *) plan)->scanclauses, "PFilter", es);
+
+		}
+		if (enable_explain_memo) {
+			if (((IndexScan *) plan)->scanclauses) {
+
+				show_scan_parsed_qual(((IndexScan *) plan)->scanclauses,
+						"PFilter", es);
+
+			}
+			if (((IndexScan *) plan)->indexqualorig) {
 				show_scan_parsed_qual(((IndexScan *) plan)->indexqualorig,
 						"PIndex Cond", es);
 			}
+
 		}
 
 		break;
@@ -1163,11 +1190,21 @@ static void ExplainNode(PlanState *planstate, List *ancestors,
 		if (plan->qual) {
 			show_instrumentation_count("Rows Removed by Filter", 1, planstate,
 					es);
-			if (enable_explain_memo) {
-				show_scan_parsed_qual(((IndexOnlyScan *) plan)->scanclauses, "PFilter", es);
+
+		}
+
+		if (enable_explain_memo) {
+			if (((IndexOnlyScan *) plan)->scanclauses) {
+
+				show_scan_parsed_qual(((IndexOnlyScan *) plan)->scanclauses,
+						"PFilter", es);
+
+			}
+			if (((IndexOnlyScan *) plan)->indexqual) {
 				show_scan_parsed_qual(((IndexOnlyScan *) plan)->indexqual,
 						"PIndex Cond", es);
 			}
+
 		}
 
 		if (es->analyze)

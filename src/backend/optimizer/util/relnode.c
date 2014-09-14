@@ -30,6 +30,7 @@
 #include "c.h"
 #include "storage/fd.h"
 #include "nodes/print.h"
+#include "nodes/pg_list.h"
 
 typedef struct JoinHashEntry {
 	Relids join_relids; /* hash key --- MUST BE FIRST */
@@ -82,9 +83,8 @@ RelOptInfo *
 build_simple_rel(PlannerInfo *root, int relid, RelOptKind reloptkind) {
 	RelOptInfo *rel;
 	RangeTblEntry *rte;
-	Relation relation;
 	ListCell *lc;
-	StringInfoData rel_name;
+	//StringInfoData rel_name;
 
 	/* Rel should not exist already */
 	Assert(relid > 0 && relid < root->simple_rel_array_size);
@@ -130,6 +130,7 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptKind reloptkind) {
 	rel->baserestrictcost.per_tuple = 0;
 	rel->joininfo = NIL;
 	rel->has_eclass_joins = false;
+	rel->rel_name = NIL;
 
 	/* Check type of rtable entry */
 	switch (rte->rtekind) {
@@ -145,17 +146,15 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptKind reloptkind) {
 	case RTE_VALUES:
 	case RTE_CTE:
 		if (rte->subquery) {
-			initStringInfo(&rel_name);
+			Value *relname;
 
 			foreach (lc, rte->subquery->rtable) {
 
-				appendStringInfoString(&rel_name,
+				relname = makeString(
 						((RangeTblEntry *) lfirst(lc))->eref->aliasname);
-				if (lnext(lc)) {
-					appendStringInfoChar(&rel_name, ',');
-				}
+				rel->rel_name = lappend(rel->rel_name, relname);
+
 			}
-			rel->rel_name = rel_name.data;
 
 		}
 		/*
@@ -324,11 +323,6 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel,
 	RelOptInfo *joinrel;
 	//Relation relation;
 	List *restrictlist;
-	int name_len = 0;
-
-	int memo_size = 0;
-	char *rel_names;
-	StringInfoData join_name;
 
 	/*
 	 * See if we already have a joinrel for this set of base rels.
@@ -387,20 +381,13 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel,
 	joinrel->baserestrictcost.per_tuple = 0;
 	joinrel->joininfo = NIL;
 	joinrel->has_eclass_joins = false;
-	joinrel->rel_name = NULL;
+	joinrel->rel_name = NIL;
 
 	/* We build the join mane  separated by colons using names of childs*/
 	/* see stringinfo.h for an explanation of this maneuver */
 //	if (enable_memo) {
-	initStringInfo(&join_name);
-
-	appendStringInfoString(&join_name, inner_rel->rel_name);
-
-	appendStringInfoChar(&join_name, ',');
-
-	appendStringInfoString(&join_name, outer_rel->rel_name);
-
-	joinrel->rel_name = join_name.data;
+	joinrel->rel_name = list_copy(inner_rel->rel_name);
+	joinrel->rel_name = list_concat(joinrel->rel_name, outer_rel->rel_name);
 //	}
 
 	/*
@@ -736,7 +723,6 @@ get_baserel_parampathinfo(PlannerInfo *root, RelOptInfo *baserel,
 	List *pclauses;
 	double rows;
 	ListCell *lc;
-	int lcls = 0;
 
 	/* Unparameterized paths have no ParamPathInfo */
 	if (bms_is_empty(required_outer))

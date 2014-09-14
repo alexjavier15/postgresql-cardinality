@@ -3191,25 +3191,36 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 	double nrows;
 	int rest = 0;
 	int mrows = -1;
+	MemoInfoData result;
 
 	StringInfoData str;
+//	ListCell *lc;
 
 	/* Should only be applied to base relations */
 	Assert(rel->relid > 0);
 
 	//maybe memo hacked
-	if (enable_memo && rel->rel_name != NULL
+	if (enable_memo && rel->rel_name != NIL
 			&& list_length(rel->baserestrictinfo) != 0) {
 		initStringInfo(&str);
-		build_selec_string(&str, rel->baserestrictinfo, &rest);
-		printf("checking base relation %s with %d clauses\n", rel->rel_name,
-				rest);
-		//printf(" quals at path  plan level \n %s : \n", (char *) res);
+		/*build_selec_string(&str, rel->baserestrictinfo, &rest);
+		 printf("checking base relation  ");
+		 printf("Names for base relation are: \n");
+		 fflush(stdout);
 
-		fflush(stdout);
+		 foreach (lc, rel->rel_name) {
 
-		mrows = get_baserel_memo_size(rel->rel_name,
-				root->query_level + rel->rtekind, rest, &str);
+		 printf("%s ,", ((Value *) lfirst(lc))->val.str);
+		 fflush(stdout);
+		 }
+		 printf("\n");
+
+		 printf(" with %d  clauses  \n", rest);
+		 fflush(stdout);*/
+
+		get_baserel_memo_size(&result, rel->rel_name,
+				root->query_level + rel->rtekind, rest, str.data);
+		mrows = result.rows;
 
 		resetStringInfo(&str);
 
@@ -3218,9 +3229,14 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 	nrows = rel->tuples
 			* clauselist_selectivity(root, rel->baserestrictinfo, 0, JOIN_INNER,
 					NULL);
+	if (enable_memo && rel->rel_name != NIL && result.found == 1) {
 
-	nrows = 1 <= mrows ? mrows : nrows;
+		mrows = nrows >= mrows ? nrows : mrows;
+
+	}
+	nrows = 0 < mrows ? mrows : nrows;
 	rel->rows = clamp_row_est(nrows);
+	//printf("final rows are : %f \n", nrows);
 
 	cost_qual_eval(&rel->baserestrictcost, rel->baserestrictinfo, root);
 
@@ -3242,6 +3258,8 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel,
 	int rest = 0;
 	int mrows = -1;
 	StringInfoData str;
+	MemoInfoData result;
+//	ListCell *lc;
 
 	allclauses = list_concat(list_copy(param_clauses), rel->baserestrictinfo);
 
@@ -3255,15 +3273,26 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel,
 	 * non-join clauses during selectivity estimation.
 	 */
 
-	if (enable_memo && rel->rel_name != NULL) {
+	if (enable_memo && rel->rel_name != NIL) {
 		initStringInfo(&str);
 		build_selec_string(&str, allclauses, &rest);
+		/*printf("checking parameterized base relation  ");
+		 foreach (lc, rel->rel_name) {
 
-		printf("checking parameterized relation %s with %d clauses\n",
-				rel->rel_name, rest);
+		 printf("%s ,", ((Value *) lfirst(lc))->val.str);
+		 fflush(stdout);
+		 }
+		 printf("\n");
 
-		mrows = get_baserel_memo_size(rel->rel_name,
-				root->query_level + rel->rtekind, rest, &str);
+		 printf(" with %d  clauses  \n", rest);
+		 printf("Clauses are :\n ");
+
+		 printf("%s \n", str.data);
+		 fflush(stdout);*/
+
+		get_baserel_memo_size(&result, rel->rel_name,
+				root->query_level + rel->rtekind, rest, str.data);
+		mrows = result.rows;
 
 		resetStringInfo(&str);
 
@@ -3271,9 +3300,15 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel,
 
 	nrows = rel->tuples * clauselist_selectivity(root, allclauses, rel->relid, /* do not use 0! */
 	JOIN_INNER, NULL);
-	nrows = 1 <= mrows ? mrows : nrows;
-	nrows = clamp_row_est(nrows);
 
+	if (enable_memo && rel->rel_name != NIL && result.found == 1) {
+
+		mrows = nrows >= mrows ? nrows : mrows;
+
+	}
+	nrows = 0 < mrows ? mrows : nrows;
+	nrows = clamp_row_est(nrows);
+	//printf("final rows are : %f \n", nrows);
 	/* For safety, make sure result is not more than the base estimate */
 	if (nrows > rel->rows)
 		nrows = rel->rows;
@@ -3306,15 +3341,22 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel,
 		RelOptInfo *outer_rel, RelOptInfo *inner_rel, SpecialJoinInfo *sjinfo,
 		List *restrictlist) {
 	double nrows;
-	//int rest = 0;
-	//fflush(stdout);
+	MemoInfoData result;
+//	ListCell *lc;
 
 	if (enable_memo) {
+		/*printf("checking join relation  ");
+		 foreach (lc, rel->rel_name) {
 
-		//rest = list_length(restrictlist);
+		 printf("%s ,", ((Value *) lfirst(lc))->val.str);
+		 fflush(stdout);
+		 }
+		 printf("\n");
 
-		nrows = get_join_memo_size(rel->rel_name, root->query_level,
-				NULL);
+		 fflush(stdout);*/
+
+		get_join_memo_size(&result, rel->rel_name, root->query_level, NULL);
+		nrows = result.rows;
 	}
 	if (!enable_memo || nrows == -1) {
 
@@ -3343,7 +3385,9 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel,
 double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel,
 		double outer_rows, double inner_rows, SpecialJoinInfo *sjinfo,
 		List *restrict_clauses) {
-	double nrows= -1;
+	double nrows = -1;
+	MemoInfoData result;
+//	ListCell *lc;
 
 	/*
 	 * Estimate the number of rows returned by the parameterized join as the
@@ -3355,11 +3399,18 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel,
 	 * estimate for any pair with the same parameterization.
 	 */
 	if (enable_memo && rel->rel_name != NULL) {
+		/*printf("checking parameterized join relation  ");
+		 foreach (lc, rel->rel_name) {
 
+		 printf("%s ,", ((Value *) lfirst(lc))->val.str);
+		 fflush(stdout);
+		 }
+		 printf("\n");
+		 fflush(stdout);*/
 		//rest = list_length(restrict_clauses);
+		get_join_memo_size(&result, rel->rel_name, root->query_level, NULL);
+		nrows = result.rows;
 
-		nrows = get_join_memo_size(rel->rel_name, root->query_level,
-				NULL);
 	}
 	if (!enable_memo || nrows == -1) {
 		nrows = calc_joinrel_size_estimate(root, outer_rows, inner_rows, sjinfo,
@@ -3856,7 +3907,7 @@ void set_default_effective_cache_size(void) {
 	Assert(effective_cache_size > 0);
 }
 void build_selec_string(const void * str, List *clauses, int * lenght) {
-	Node *node = NIL;
+	Node *node = NULL;
 
 	*lenght = list_length(clauses);
 
