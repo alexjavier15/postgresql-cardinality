@@ -11,6 +11,8 @@
 *.a
 *.mo
 *.pot
+*.rej
+*~
 objfiles.txt
 .deps/
 *.gcno
