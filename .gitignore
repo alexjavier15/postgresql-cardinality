@@ -27,10 +27,10 @@ lib*dll.def
 lib*.pc
 
 # Local excludes in root directory
-/GNUmakefile
-/config.log
-/config.status
-/pgsql.sln
-/pgsql.sln.cache
+GNUmakefile
+config.log
+config.status
+pgsql.sln
+pgsql.sln.cache
 /Debug/
 /Release/

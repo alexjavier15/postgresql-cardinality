@@ -3203,8 +3203,8 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 	if (enable_memo && rel->rel_name != NIL
 			&& list_length(rel->baserestrictinfo) != 0) {
 		initStringInfo(&str);
-		/*build_selec_string(&str, rel->baserestrictinfo, &rest);
-		 printf("checking base relation  ");
+		build_selec_string(&str, rel->baserestrictinfo, &rest);
+		/* printf("checking base relation  ");
 		 printf("Names for base relation are: \n");
 		 fflush(stdout);
 
