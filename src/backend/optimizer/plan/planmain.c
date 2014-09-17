@@ -25,6 +25,7 @@
 #include "optimizer/paths.h"
 #include "optimizer/placeholder.h"
 #include "optimizer/planmain.h"
+#include "utils/memocache.h"
 
 /*
  * query_planner
@@ -51,27 +52,23 @@
  * (We cannot construct canonical pathkeys until that's done.)
  */
 RelOptInfo *
-query_planner(PlannerInfo *root, List *tlist,
-			  query_pathkeys_callback qp_callback, void *qp_extra)
-{
-	Query	   *parse = root->parse;
-	List	   *joinlist;
+query_planner(PlannerInfo *root, List *tlist, query_pathkeys_callback qp_callback, void *qp_extra) {
+	Query *parse = root->parse;
+	List *joinlist;
 	RelOptInfo *final_rel;
-	Index		rti;
-	double		total_pages;
+	Index rti;
+	double total_pages;
 
 	/*
 	 * If the query has an empty join tree, then it's something easy like
 	 * "SELECT 2+2;" or "INSERT ... VALUES()".	Fall through quickly.
 	 */
-	if (parse->jointree->fromlist == NIL)
-	{
+	if (parse->jointree->fromlist == NIL) {
 		/* We need a dummy joinrel to describe the empty set of baserels */
 		final_rel = build_empty_join_rel(root);
 
 		/* The only path for it is a trivial Result path */
-		add_path(final_rel, (Path *)
-				 create_result_path((List *) parse->jointree->quals));
+		add_path(final_rel, (Path *) create_result_path((List *) parse->jointree->quals));
 
 		/* Select cheapest path (pretty easy in this case...) */
 		set_cheapest(final_rel);
@@ -81,7 +78,7 @@ query_planner(PlannerInfo *root, List *tlist,
 		 * like "SELECT 2+2 ORDER BY 1".
 		 */
 		root->canon_pathkeys = NIL;
-		(*qp_callback) (root, qp_extra);
+		(*qp_callback)(root, qp_extra);
 
 		return final_rel;
 	}
@@ -162,7 +159,7 @@ query_planner(PlannerInfo *root, List *tlist,
 	 * generate pathkeys in canonical form; so compute query_pathkeys and
 	 * other pathkeys fields in PlannerInfo.
 	 */
-	(*qp_callback) (root, qp_extra);
+	(*qp_callback)(root, qp_extra);
 
 	/*
 	 * Examine any "placeholder" expressions generated during subquery pullup.
@@ -214,17 +211,16 @@ query_planner(PlannerInfo *root, List *tlist,
 	 * and detecting self-joins here is difficult, so ignore it for now.
 	 */
 	total_pages = 0;
-	for (rti = 1; rti < root->simple_rel_array_size; rti++)
-	{
+	for (rti = 1; rti < root->simple_rel_array_size; rti++) {
 		RelOptInfo *brel = root->simple_rel_array[rti];
 
 		if (brel == NULL)
 			continue;
 
-		Assert(brel->relid == rti);		/* sanity check on array */
+		Assert(brel->relid == rti);
+		/* sanity check on array */
 
-		if (brel->reloptkind == RELOPT_BASEREL ||
-			brel->reloptkind == RELOPT_OTHER_MEMBER_REL)
+		if (brel->reloptkind == RELOPT_BASEREL || brel->reloptkind == RELOPT_OTHER_MEMBER_REL)
 			total_pages += (double) brel->pages;
 	}
 	root->total_table_pages = total_pages;
@@ -235,8 +231,7 @@ query_planner(PlannerInfo *root, List *tlist,
 	final_rel = make_one_rel(root, joinlist);
 
 	/* Check that we got at least one usable path */
-	if (!final_rel || !final_rel->cheapest_total_path ||
-		final_rel->cheapest_total_path->param_info != NULL)
+	if (!final_rel || !final_rel->cheapest_total_path || final_rel->cheapest_total_path->param_info != NULL)
 		elog(ERROR, "failed to construct the join relation");
 
 	return final_rel;

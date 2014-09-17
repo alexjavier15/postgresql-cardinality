@@ -29,6 +29,7 @@
 
 #include "nodes/relation.h"
 #include "utils/datum.h"
+#include  "nodes/nodes.h"
 
 /*
  * Macros to simplify output of different kinds of fields.	Use these
@@ -152,7 +153,7 @@ static void _outList(ArgType type, StringInfo str, const List *node, bool sim) {
 
 			if (!sim)
 				_outNode(str, lfirst(lc));
-			else
+			else {
 
 				switch (type) {
 				case S_AND:
@@ -167,27 +168,28 @@ static void _outList(ArgType type, StringInfo str, const List *node, bool sim) {
 				default:
 					break;
 				}
-			_outSimNode(S_NULL, str, lfirst(lc));
+				_outSimNode(S_NULL, str, lfirst(lc));
 
-			if (lnext(lc)) {
+				if (lnext(lc)) {
 
-				switch (nodeTag(lfirst(lc))) {
+					switch (nodeTag(lfirst(lc))) {
 
-				case T_SubPlan:
-				case T_OpExpr:
-				case T_BoolExpr:
-				case T_RestrictInfo:
-				case T_ScalarArrayOpExpr:
-					appendStringInfoChar(str, ',');
+					case T_SubPlan:
+					case T_OpExpr:
+					case T_BoolExpr:
+					case T_RestrictInfo:
+					case T_ScalarArrayOpExpr:
+						appendStringInfoChar(str, ',');
 
-					break;
-				default:
-					//printf("node tag not colon %d \n",  nodeTag(lfirst(lc)) );
-					//fflush(stdout);
+						break;
+					default:
+						//printf("node tag not colon %d \n",  nodeTag(lfirst(lc)) );
+						//fflush(stdout);
 
-					break;
+						break;
+					}
+
 				}
-
 			}
 		} else if (IsA(node, IntList))
 			appendStringInfo(str, " %d", lfirst_int(lc));
@@ -3036,18 +3038,18 @@ void _outSimNode(ArgType type, StringInfo str, const void *obj) {
 				break;
 			case T_RestrictInfo:
 				_outSimRestrictInfo(str, obj);
-		/*	case T_CurrentOfExpr:
-			case T_Var:
-			case T_Const:
-			case T_Param:
-			case T_DistinctExpr:
-			case T_FuncExpr:
-			case T_ScalarArrayOpExpr:
-			case T_RowCompareExpr:
-			case T_NullTest:
-			case T_BooleanTest:
-			case T_RelabelType:
-			case T_CoerceToDomain:*/
+				/*	case T_CurrentOfExpr:
+				 case T_Var:
+				 case T_Const:
+				 case T_Param:
+				 case T_DistinctExpr:
+				 case T_FuncExpr:
+				 case T_ScalarArrayOpExpr:
+				 case T_RowCompareExpr:
+				 case T_NullTest:
+				 case T_BooleanTest:
+				 case T_RelabelType:
+				 case T_CoerceToDomain:*/
 				break;
 			default:
 

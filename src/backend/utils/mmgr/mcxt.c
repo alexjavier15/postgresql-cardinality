@@ -751,6 +751,11 @@ repalloc(void *pointer, Size size)
 	 */
 	Assert(pointer != NULL);
 	Assert(pointer == (void *) MAXALIGN(pointer));
+	if(pointer == (void *) MAXALIGN(pointer)){
+
+
+
+	}
 
 	/*
 	 * OK, it's probably safe to look at the chunk header.

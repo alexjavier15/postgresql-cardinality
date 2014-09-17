@@ -36,7 +36,6 @@
 #ifndef HAVE_GETRUSAGE
 #include "rusagestub.h"
 #endif
-
 #include "access/printtup.h"
 #include "access/xact.h"
 #include "catalog/pg_type.h"
@@ -74,6 +73,8 @@
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
 #include "mb/pg_wchar.h"
+#include "utils/memocache.h"
+
 
 
 /* ----------------
@@ -833,7 +834,8 @@ exec_simple_query(const char *query_string)
 	bool		isTopLevel;
 	char		msec_str[32];
 
-
+	printf("%s\n", query_string);
+	InitCachesForMemo();
 	/*
 	 * Report query to various monitoring facilities.
 	 */

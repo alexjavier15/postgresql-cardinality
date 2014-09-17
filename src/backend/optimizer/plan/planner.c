@@ -44,6 +44,8 @@
 
 
 
+
+
 /* GUC parameter */
 double		cursor_tuple_fraction = DEFAULT_CURSOR_TUPLE_FRACTION;
 
@@ -212,6 +214,7 @@ standard_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		tuple_fraction = 0.0;
 	}
 
+
 	/* primary planning entry point (may recurse for subqueries) */
 	top_plan = subquery_planner(glob, parse, NULL,
 								false, tuple_fraction, &root);
@@ -322,6 +325,7 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	root->hasInheritedTarget = false;
 
 	root->hasRecursion = hasRecursion;
+
 	if (hasRecursion)
 		root->wt_param_id = SS_assign_special_param(root);
 	else
