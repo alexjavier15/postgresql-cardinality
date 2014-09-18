@@ -3232,7 +3232,6 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 	int rest = 0;
 	MemoInfoData1 result;
 
-
 	store_join(rel->rel_name, root->query_level);
 
 	if (enable_memo) {
