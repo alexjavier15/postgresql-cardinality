@@ -15,7 +15,6 @@
 #include "postgres.h"
 #include "stdio.h"
 #include "unistd.h"
-#include "optimizer/cost.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
 #include "optimizer/placeholder.h"

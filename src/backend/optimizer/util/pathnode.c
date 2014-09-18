@@ -1933,15 +1933,14 @@ void get_baserel_memo_size(MemoInfoData *result, const List *lrelName,
 						compt_lists(result, lquals1, lquals2);
 
 						if (isMatched(result)) {
-							/*printf(
-							 "found rel: %s at level %d with %d clauses et %d rows \n",
+							printf(" found rel: %s at level %d with %d clauses et %d rows \n",
 							 srelname, mlevel, clauses_length, actsize);
 
 							 printf("Clauses were :\n ");
 
 							 print(lquals1);
 							 print(lquals2);
-							 fflush(stdout);*/
+							 fflush(stdout);
 							pfree(cquals);
 							result->rows = actsize;
 							return;
@@ -1987,16 +1986,16 @@ void get_join_memo_size(MemoInfoData *result, const List *lrelName, int level,
 	fflush(stdout);
 	while (read_line(&str, file) != EOF) {
 
-		if (sscanf(str.data, "%d\t%*[[]%[^]]%*[]]\t%d\t%d", &mlevel, srelname,
+		if (sscanf(str.data, "%d\t%s\t%d\t%d", &mlevel, srelname,
 				&estsize, &actsize) == 4) {
 
 			if (level == mlevel) {
 				check_relation_names(&resultName, srelname, lrelName);
 
 				if (isFullMatched(resultName_ptr)) {
-					/*printf("found  join rel: %s at level %d and rows %d\n",
+					printf("found  join rel: %s at level %d and rows %d\n",
 							srelname, mlevel, actsize);
-					fflush(stdout);*/
+					fflush(stdout);
 					result->rows = actsize;
 					return;
 				}

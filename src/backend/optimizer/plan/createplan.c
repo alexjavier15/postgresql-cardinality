@@ -170,7 +170,6 @@ FILE *file;
 Plan *
 create_plan(PlannerInfo *root, Path *best_path) {
 	Plan *plan;
-
 	/* plan_params should not be in use in current query level */
 	Assert(root->plan_params == NIL);
 

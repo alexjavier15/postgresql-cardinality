@@ -18,7 +18,9 @@
 #include "executor/instrument.h"
 #include "utils/guc.h"
 #include "optimizer/cost.h"
-PG_MODULE_MAGIC;
+#include "utils/memocache.h"
+PG_MODULE_MAGIC
+;
 
 /* GUC variables */
 static int auto_explain_log_min_duration = 0; /* msec or -1 */
@@ -31,10 +33,9 @@ static bool auto_explain_log_timing = false;
 static int auto_explain_log_format = EXPLAIN_FORMAT_TEXT;
 static bool auto_explain_log_nested_statements = false;
 
-static const struct config_enum_entry format_options[] = { { "text",
-		EXPLAIN_FORMAT_TEXT, false }, { "xml", EXPLAIN_FORMAT_XML, false }, {
-		"json", EXPLAIN_FORMAT_JSON, false }, { "yaml", EXPLAIN_FORMAT_YAML,
-		false }, { NULL, 0, false } };
+static const struct config_enum_entry format_options[] = { { "text", EXPLAIN_FORMAT_TEXT, false }, { "xml",
+		EXPLAIN_FORMAT_XML, false }, { "json", EXPLAIN_FORMAT_JSON, false }, { "yaml", EXPLAIN_FORMAT_YAML, false }, {
+		NULL, 0, false } };
 
 /* Current nesting depth of ExecutorRun calls */
 static int nesting_level = 0;
@@ -53,8 +54,7 @@ void _PG_init(void);
 void _PG_fini(void);
 
 static void explain_ExecutorStart(QueryDesc *queryDesc, int eflags);
-static void explain_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction,
-		long count);
+static void explain_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count);
 static void explain_ExecutorFinish(QueryDesc *queryDesc);
 static void explain_ExecutorEnd(QueryDesc *queryDesc);
 
@@ -65,41 +65,31 @@ void _PG_init(void) {
 	/* Define custom GUC variables. */
 	DefineCustomIntVariable("auto_explain.log_min_duration",
 			"Sets the minimum execution time above which plans will be logged.",
-			"Zero prints all plans. -1 turns this feature off.",
-			&auto_explain_log_min_duration, -1, -1, INT_MAX / 1000, PGC_SUSET,
-			GUC_UNIT_MS, NULL, NULL, NULL);
+			"Zero prints all plans. -1 turns this feature off.", &auto_explain_log_min_duration, -1, -1, INT_MAX / 1000,
+			PGC_SUSET, GUC_UNIT_MS, NULL, NULL, NULL);
 
-	DefineCustomBoolVariable("auto_explain.log_analyze",
-			"Use EXPLAIN ANALYZE for plan logging.", NULL,
+	DefineCustomBoolVariable("auto_explain.log_analyze", "Use EXPLAIN ANALYZE for plan logging.", NULL,
 			&auto_explain_log_analyze, false, PGC_SUSET, 0, NULL, NULL, NULL);
 
-	DefineCustomBoolVariable("auto_explain.log_verbose",
-			"Use EXPLAIN VERBOSE for plan logging.", NULL,
+	DefineCustomBoolVariable("auto_explain.log_verbose", "Use EXPLAIN VERBOSE for plan logging.", NULL,
 			&auto_explain_log_verbose, false, PGC_SUSET, 0, NULL, NULL, NULL);
-	DefineCustomBoolVariable("auto_explain.log_memo",
-			"Use EXPLAIN VERBOSE for plan logging.", NULL,
+	DefineCustomBoolVariable("auto_explain.log_memo", "Use EXPLAIN VERBOSE for plan logging.", NULL,
 			&auto_explain_log_memo, false, PGC_SUSET, 0, NULL, NULL, NULL);
 
-	DefineCustomBoolVariable("auto_explain.log_buffers", "Log buffers usage.",
-			NULL, &auto_explain_log_buffers, false, PGC_SUSET, 0, NULL, NULL,
-			NULL);
-
-	DefineCustomBoolVariable("auto_explain.log_triggers",
-			"Include trigger statistics in plans.",
-			"This has no effect unless log_analyze is also set.",
-			&auto_explain_log_triggers, false, PGC_SUSET, 0, NULL, NULL, NULL);
-
-	DefineCustomEnumVariable("auto_explain.log_format",
-			"EXPLAIN format to be used for plan logging.", NULL,
-			&auto_explain_log_format, EXPLAIN_FORMAT_TEXT, format_options,
+	DefineCustomBoolVariable("auto_explain.log_buffers", "Log buffers usage.", NULL, &auto_explain_log_buffers, false,
 			PGC_SUSET, 0, NULL, NULL, NULL);
 
-	DefineCustomBoolVariable("auto_explain.log_nested_statements",
-			"Log nested statements.", NULL, &auto_explain_log_nested_statements,
-			false, PGC_SUSET, 0, NULL, NULL, NULL);
+	DefineCustomBoolVariable("auto_explain.log_triggers", "Include trigger statistics in plans.",
+			"This has no effect unless log_analyze is also set.", &auto_explain_log_triggers, false, PGC_SUSET, 0, NULL,
+			NULL, NULL);
 
-	DefineCustomBoolVariable("auto_explain.log_timing",
-			"Collect timing data, not just row counts.", NULL,
+	DefineCustomEnumVariable("auto_explain.log_format", "EXPLAIN format to be used for plan logging.", NULL,
+			&auto_explain_log_format, EXPLAIN_FORMAT_TEXT, format_options, PGC_SUSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("auto_explain.log_nested_statements", "Log nested statements.", NULL,
+			&auto_explain_log_nested_statements, false, PGC_SUSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("auto_explain.log_timing", "Collect timing data, not just row counts.", NULL,
 			&auto_explain_log_timing, true, PGC_SUSET, 0, NULL, NULL, NULL);
 
 	EmitWarningsOnPlaceholders("auto_explain");
@@ -135,8 +125,7 @@ void _PG_fini(void) {
 static void explain_ExecutorStart(QueryDesc *queryDesc, int eflags) {
 	if (auto_explain_enabled()) {
 		/* Enable per-node instrumentation iff log_analyze is required. */
-		if (auto_explain_log_analyze
-				&& (eflags & EXEC_FLAG_EXPLAIN_ONLY) == 0) {
+		if (auto_explain_log_analyze && (eflags & EXEC_FLAG_EXPLAIN_ONLY) == 0) {
 			if (auto_explain_log_timing)
 				queryDesc->instrument_options |= INSTRUMENT_TIMER;
 			else
@@ -171,8 +160,7 @@ static void explain_ExecutorStart(QueryDesc *queryDesc, int eflags) {
 /*
  * ExecutorRun hook: all we need do is track nesting depth
  */
-static void explain_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction,
-		long count) {
+static void explain_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count) {
 	nesting_level++;
 	PG_TRY()	;
 				{
@@ -213,6 +201,7 @@ static void explain_ExecutorFinish(QueryDesc *queryDesc) {
 static void explain_ExecutorEnd(QueryDesc *queryDesc) {
 	FILE *file = fopen("memoTxt.xml", "wb");
 	FILE *file_d = fopen("durations.txt", "a+");
+	FILE *file_joins = fopen("joins.txt", "wb");
 
 	if (queryDesc->totaltime && auto_explain_enabled()) {
 		double msec;
@@ -229,17 +218,15 @@ static void explain_ExecutorEnd(QueryDesc *queryDesc) {
 			ExplainState es;
 
 			ExplainInitState(&es);
-			es.analyze = (queryDesc->instrument_options
-					&& auto_explain_log_analyze);
+			es.analyze = (queryDesc->instrument_options && auto_explain_log_analyze);
 			es.verbose = auto_explain_log_verbose;
 			es.buffers = (es.analyze && auto_explain_log_buffers);
 			es.format = auto_explain_log_format;
 
 			ExplainBeginOutput(&es);
-			
+
 			ExplainPrintPlan(&es, queryDesc);
 
-			
 			ExplainEndOutput(&es);
 			// update he time to be print
 			msec = queryDesc->totaltime->total * 1000.0;
@@ -261,19 +248,22 @@ static void explain_ExecutorEnd(QueryDesc *queryDesc) {
 			 */
 
 			else {
-				ereport(LOG,
-						(errmsg("duration: %.3f ms  plan:\n%s", msec, es.str->data), errhidestmt(true)));
+				ereport(LOG, (errmsg("duration: %.3f ms  plan:\n%s", msec, es.str->data), errhidestmt(true)));
 				fprintf(file_d, "%.3f", msec);
+
+				export_join(file_joins);
 				if (enable_memo)
 					fprintf(file_d, "\n");
 				else
 					fprintf(file_d, "	");
-				fwrite( es.str->data, 1,strlen(es.str->data),file );
+				fwrite(es.str->data, 1, strlen(es.str->data), file);
 				fclose(file);
 				fclose(file_d);
-				if(auto_explain_log_memo){
-				system("java -jar explain.jar memoTxt.xml memoTxt");
-}
+				if (auto_explain_log_memo) {
+					system("java -jar explain.jar memoTxt.xml memoTxt");
+
+
+				}
 
 			}
 			pfree(es.str->data);

@@ -14,6 +14,6 @@ include $(top_builddir)/src/Makefile.global
 
 OBJS = attoptcache.o catcache.o evtcache.o inval.o plancache.o relcache.o \
 	relmapper.o relfilenodemap.o spccache.o syscache.o lsyscache.o \
-	typcache.o ts_cache.o
+	typcache.o ts_cache.o memocache.o
 
 include $(top_srcdir)/src/backend/common.mk
