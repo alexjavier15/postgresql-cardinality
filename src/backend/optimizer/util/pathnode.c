@@ -681,10 +681,10 @@ create_index_path(PlannerInfo *root, IndexOptInfo *index, List *indexclauses, Li
 		memo_rel = get_Memorelation(rel->rel_name, root->query_level + rel->rtekind, pathnode->path.restrictList, true);
 
 		if (memo_rel != NULL) {
-			printf("Found relatin in pathnode index path and loops : %d \n", memo_rel->loops);
+			/*printf("Found relatin in pathnode index path and loops : %d \n", memo_rel->loops);
 			print(rel->rel_name);
 			print(pathnode->path.restrictList);
-			fflush(stdout);
+			fflush(stdout);*/
 			act_loop_count = memo_rel->loops;
 
 		}

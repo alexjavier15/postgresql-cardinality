@@ -112,27 +112,27 @@ void InitMemoCache(void) {
 	memo->type = M_MemoQuery;
 	memo->length = DEFAULT_MAX_JOIN_SIZE;
 	memo->content = (dlist_head *) palloc0((DEFAULT_MAX_JOIN_SIZE) * sizeof(dlist_head));
-	printf("Initializing Memo cache\n------------------------\n");
+	//printf("Initializing Memo cache\n------------------------\n");
 	if (file != NULL)
 		readAndFillFromFile(file, memo);
 	memo_query_ptr = memo;
 	dlist_push_tail(&memo_cache_ptr->content, &memo->list_node);
-	printMemoCache();
+	/*printMemoCache();
 	printf("Memo cache ending\n-----------------------\n");
-
+*/
 }
 void InitJoinCache(void) {
 
-	printf("Initializing join cache\n------------------------\n");
+	//printf("Initializing join cache\n------------------------\n");
 	join_cache_ptr->type = M_JoinCache;
 	join_cache_ptr->length = DEFAULT_MAX_JOIN_SIZE;
 	join_cache_ptr->content = (dlist_head *) palloc0((DEFAULT_MAX_JOIN_SIZE) * sizeof(dlist_head));
 	if (joincache != NULL && enable_memo)
 		readAndFillFromFile(joincache, join_cache_ptr);
-
+/*
 	printContentRelations((CacheM *) join_cache_ptr);
 
-	printf("Join cache ending\n-----------------------\n");
+	printf("Join cache ending\n-----------------------\n");*/
 
 	//printf("New join cache state:\n-----------------------\n");
 	//printContentRelations((CacheM *) join_cache_ptr);
@@ -317,8 +317,8 @@ void get_baserel_memo_size1(MemoInfoData1 *result, MemoRelation * memorelation, 
 
 void get_join_memo_size1(MemoInfoData1 *result, RelOptInfo *joinrel, int level, char *quals, bool isParameterized) {
 	/*char *str1;
-	char *str2;
-*/
+	 char *str2;
+	 */
 	dlist_iter iter;
 
 	result->found = 0;
@@ -331,9 +331,9 @@ void get_join_memo_size1(MemoInfoData1 *result, RelOptInfo *joinrel, int level, 
 		MemoRelation *memorelation = contains((CacheM *) query, joinrel->rel_name, level);
 		if (memorelation != NULL && !IsIndex(memorelation)) {
 			/*printf("Found join: \n");
-			print_relation(str1, str2, memorelation);
-			result->rows = memorelation->rows;
-			result->found = 2;*/
+			 print_relation(str1, str2, memorelation);
+			 result->rows = memorelation->rows;
+			 result->found = 2;*/
 			return;
 
 		}
@@ -341,6 +341,38 @@ void get_join_memo_size1(MemoInfoData1 *result, RelOptInfo *joinrel, int level, 
 
 }
 
+MemoRelation * get_Memorelation(List *lrelName, int level, List *clauses, bool isIndex) {
+	MemoInfoData1 result;
+	StringInfoData str;
+	int rest;
+	dlist_iter iter;
+	MemoRelation *relation = NULL;
+	/*char *str1;
+	 char *str2;*/
+
+	initStringInfo(&str);
+	build_selec_string(&str, clauses, &rest);
+	//	printf("c : %s\n",str.data);
+
+		dlist_foreach(iter, &memo_cache_ptr->content)
+	{
+		MemoQuery *query = dlist_container(MemoQuery,list_node, iter.cur);
+		relation = contains((CacheM *) query, lrelName, level);
+		if (relation != NULL) {
+
+			cmp_lists(&result, relation->clauses, build_string_list(str.data, M_CLAUSE));
+
+			if (isMatched(&result) && IsIndex(relation) == isIndex) {
+				//	printf(" Matched base relation! :\n");
+				//	print_relation(str1, str2, memorelation);
+				return relation;
+			}
+
+		}
+	}
+	return NULL;
+
+}
 int get_memo_removed(List *relation_name, List *clauses, int level) {
 
 	dlist_iter iter;
@@ -366,7 +398,6 @@ static List * build_string_list(char * stringList, ListType type) {
 	void *value = NULL;
 	List *result = NIL;
 
-
 	tmp = strtok_r(stringList, s, &save);
 	while (tmp != NULL) {
 		newstring = (char *) palloc((strlen(tmp) + 1) * sizeof(char));
@@ -390,7 +421,6 @@ static List * build_string_list(char * stringList, ListType type) {
 			result = lappend(result, value);
 
 	}
-	Assert(result != NIL);
 	return result;
 }
 
@@ -493,7 +523,7 @@ static void check_NoMemo_queries(void) {
 	MemoQuery *query = NULL;
 	bool found_new = true;
 	/*char *str1;
-	char *str2;*/
+	 char *str2;*/
 
 	int rellen;
 	dlist_mutable_iter iter;
@@ -508,8 +538,8 @@ static void check_NoMemo_queries(void) {
 				MemoRelation *target = dlist_container(MemoRelation,list_node, iter.cur);
 				rellen = list_length(target->relationname);
 				/*printf("Checking :\n**********************\n");
-				print_relation(str1, str2, target);
-				printf("********************************\n");*/
+				 print_relation(str1, str2, target);
+				 printf("********************************\n");*/
 				query = find_seeder_relations(&relation1, &relation2, &commonrelation, target->relationname,
 						target->clauses, target->level, rellen);
 
@@ -553,7 +583,7 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 
 	List *tmp1 = NIL;
 	/*char *str1 = NULL;
-	char *str2 = NULL;*/
+	 char *str2 = NULL;*/
 
 	resultName_ptr = &resultName;
 	resultClause_ptr = &resultClause;
@@ -594,7 +624,7 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 							clauses = list_union(memorelation->clauses, targetClauses);
 							/*printf("Common relation is:\n");
 
-							print_relation(str1, str2, commonrel);*/
+							 print_relation(str1, str2, commonrel);*/
 							if ((resultName_ptr->nbmatches == (joinlen - 1)) && diffrel != NULL && !IsIndex(commonrel)
 									&& !IsIndex(diffrel)) {
 								//Mark the first relation and build the resulted expected target join
@@ -604,9 +634,9 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 
 								tmp1 = list_union(targetName, memorelation->relationname);
 								/*printf("Looking for relation:\n");
-								print_list(str1, tmp1);
-								printf("With clauses :\n");
-								print_list(str1, clauses);*/
+								 print_list(str1, tmp1);
+								 printf("With clauses :\n");
+								 print_list(str1, clauses);*/
 								return find_seeder_relations(relation1, relation2, commonrelation, tmp1, clauses, level,
 										list_length(tmp1));
 
@@ -622,13 +652,13 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 
 						if (resultName_ptr->nbmatches == joinlen && isFullMatched(resultClause_ptr)) {
 							*relation2 = memorelation;
-/*
+							/*
 
-							printf("Found candidates relations : \n");
-							print_relation(str1, str2, *relation1);
-							print_relation(str1, str2, *relation2);
-							printf("-------------------------------\n");
-*/
+							 printf("Found candidates relations : \n");
+							 print_relation(str1, str2, *relation1);
+							 print_relation(str1, str2, *relation2);
+							 printf("-------------------------------\n");
+							 */
 
 							return query;
 						}
@@ -805,7 +835,7 @@ MemoRelation * set_base_rel_tuples(List *lrelName, int level, double tuples) {
 			if (relation->rows > tuples)
 				relation->rows = tuples;
 			relation->tuples = tuples;
-		//	print_relation(str1, str2, relation)
+			//	print_relation(str1, str2, relation)
 
 		}
 	}
@@ -813,38 +843,6 @@ MemoRelation * set_base_rel_tuples(List *lrelName, int level, double tuples) {
 
 }
 
-MemoRelation * get_Memorelation(List *lrelName, int level, List *clauses, bool isIndex) {
-	MemoInfoData1 result;
-	StringInfoData str;
-	int rest;
-	dlist_iter iter;
-	MemoRelation *relation = NULL;
-	/*char *str1;
-	 char *str2;*/
-
-	initStringInfo(&str);
-	build_selec_string(&str, clauses, &rest);
-
-
-	dlist_foreach(iter, &memo_cache_ptr->content) {
-		MemoQuery *query = dlist_container(MemoQuery,list_node, iter.cur);
-		relation = contains((CacheM *) query, lrelName, level);
-		if (relation != NULL) {
-
-
-			cmp_lists(&result, relation->clauses, build_string_list(str.data, M_CLAUSE));
-
-			if (isMatched(&result) && IsIndex(relation) == isIndex) {
-				//	printf(" Matched base relation! :\n");
-				//	print_relation(str1, str2, memorelation);
-				return relation;
-			}
-
-		}
-	}
-	return NULL;
-
-}
 void set_memo_join_sizes(void) {
 
 	//printf("New memo sizes for join cache state :\n-----------------------\n");
@@ -876,8 +874,8 @@ void set_memo_join_sizes(void) {
 	}
 	/*printf("New memo cache state :\n-----------------------\n");
 
-	printMemoCache();
-	printf("End\n-----------------------\n");*/
+	 printMemoCache();
+	 printf("End\n-----------------------\n");*/
 
 }
 int equals(MemoRelation *rel1, MemoRelation *rel2) {
