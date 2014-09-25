@@ -1885,6 +1885,7 @@ distribute_restrictinfo_to_rels(PlannerInfo *root,
 			/* Add clause to rel's restriction list */
 			rel->baserestrictinfo = lappend(rel->baserestrictinfo,
 											restrictinfo);
+			rel->restrictList=rel->baserestrictinfo;
 			break;
 		case BMS_MULTIPLE:
 

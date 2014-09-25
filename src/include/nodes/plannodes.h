@@ -371,6 +371,7 @@ typedef struct BitmapIndexScan
 	Oid			indexid;		/* OID of index to scan */
 	List	   *indexqual;		/* list of index quals (OpExprs) */
 	List	   *indexqualorig;	/* the same in original form */
+	List	   *scanclauses;
 } BitmapIndexScan;
 
 /* ----------------
@@ -386,6 +387,7 @@ typedef struct BitmapHeapScan
 {
 	Scan		scan;
 	List	   *bitmapqualorig; /* index quals, in standard expr form */
+	List		*scanclauses;
 } BitmapHeapScan;
 
 /* ----------------
@@ -513,6 +515,8 @@ typedef struct Join
 	Plan		plan;
 	JoinType	jointype;
 	List	   *joinqual;		/* JOIN quals (in addition to plan.qual) */
+	/*used for memo calculatioins*/
+	List	   *restrictList;
 } Join;
 
 /* ----------------

@@ -30,6 +30,7 @@
 #include "nodes/relation.h"
 #include "utils/datum.h"
 #include  "nodes/nodes.h"
+#include "utils/memocache.h"
 
 /*
  * Macros to simplify output of different kinds of fields.	Use these
@@ -121,13 +122,11 @@ static void _outToken(StringInfo str, const char *s) {
 	 */
 	/* These characters only need to be quoted at the start of the string */
 	if (*s == '<' || *s == '\"' || isdigit((unsigned char) *s)
-			|| ((*s == '+' || *s == '-')
-					&& (isdigit((unsigned char) s[1]) || s[1] == '.')))
+			|| ((*s == '+' || *s == '-') && (isdigit((unsigned char) s[1]) || s[1] == '.')))
 		appendStringInfoChar(str, '\\');
 	while (*s) {
 		/* These chars must be backslashed anywhere in the string */
-		if (*s == ' ' || *s == '\n' || *s == '\t' || *s == '(' || *s == ')'
-				|| *s == '{' || *s == '}' || *s == '\\')
+		if (*s == ' ' || *s == '\n' || *s == '\t' || *s == '(' || *s == ')' || *s == '{' || *s == '}' || *s == '\\')
 			appendStringInfoChar(str, '\\');
 		appendStringInfoChar(str, *s++);
 	}
@@ -155,26 +154,12 @@ static void _outList(ArgType type, StringInfo str, const List *node, bool sim) {
 				_outNode(str, lfirst(lc));
 			else {
 
-				switch (type) {
-				case S_AND:
-					appendStringInfoChar(str, '&');
-					break;
-				case S_OR:
-					appendStringInfoChar(str, '|');
-					break;
-				case S_NOT:
-					appendStringInfoChar(str, '!');
-					break;
-				default:
-					break;
-				}
 				_outSimNode(S_NULL, str, lfirst(lc));
 
 				if (lnext(lc)) {
 
 					switch (nodeTag(lfirst(lc))) {
 
-					case T_SubPlan:
 					case T_OpExpr:
 					case T_BoolExpr:
 					case T_RestrictInfo:
@@ -1039,8 +1024,7 @@ static void _outSubPlan(StringInfo str, const SubPlan *node) {
 	WRITE_FLOAT_FIELD(per_call_cost, "%.2f");
 }
 
-static void _outAlternativeSubPlan(StringInfo str,
-		const AlternativeSubPlan *node) {
+static void _outAlternativeSubPlan(StringInfo str, const AlternativeSubPlan *node) {
 	WRITE_NODE_TYPE("ALTERNATIVESUBPLAN");
 
 	WRITE_NODE_FIELD(subplans);
@@ -1099,8 +1083,7 @@ static void _outArrayCoerceExpr(StringInfo str, const ArrayCoerceExpr *node) {
 	WRITE_LOCATION_FIELD(location);
 }
 
-static void _outConvertRowtypeExpr(StringInfo str,
-		const ConvertRowtypeExpr *node) {
+static void _outConvertRowtypeExpr(StringInfo str, const ConvertRowtypeExpr *node) {
 	WRITE_NODE_TYPE("CONVERTROWTYPEEXPR");
 
 	WRITE_NODE_FIELD(arg);
@@ -1236,8 +1219,7 @@ static void _outCoerceToDomain(StringInfo str, const CoerceToDomain *node) {
 	WRITE_LOCATION_FIELD(location);
 }
 
-static void _outCoerceToDomainValue(StringInfo str,
-		const CoerceToDomainValue *node) {
+static void _outCoerceToDomainValue(StringInfo str, const CoerceToDomainValue *node) {
 	WRITE_NODE_TYPE("COERCETODOMAINVALUE");
 
 	WRITE_OID_FIELD(typeId);
@@ -1773,8 +1755,7 @@ static void _outCreateStmt(StringInfo str, const CreateStmt *node) {
 	_outCreateStmtInfo(str, (const CreateStmt *) node);
 }
 
-static void _outCreateForeignTableStmt(StringInfo str,
-		const CreateForeignTableStmt *node) {
+static void _outCreateForeignTableStmt(StringInfo str, const CreateForeignTableStmt *node) {
 	WRITE_NODE_TYPE("CREATEFOREIGNTABLESTMT");
 
 	_outCreateStmtInfo(str, (const CreateStmt *) node);
@@ -2420,12 +2401,16 @@ static void _outConstraint(StringInfo str, const Constraint *node) {
 		break;
 
 	default:
-		appendStringInfo(str, "<unrecognized_constraint %d>",
-				(int) node->contype);
+		appendStringInfo(str, "<unrecognized_constraint %d>", (int) node->contype);
 		break;
 	}
 }
+static void _outSimMemoClause(StringInfo str, const MemoClause *node) {
+	WRITE_OID_FIELD(opno);
+	WRITE_NODE_SIM_FIELD(S_NULL, args);
+	appendStringInfoSpaces(str, 1);
 
+}
 /*
  * _outNode -
  *	  converts a Node into ascii string and append it to 'str'
@@ -2435,8 +2420,7 @@ void _outNode(StringInfo str, const void *obj) {
 		appendStringInfoString(str, "<>");
 	else if (IsA(obj, List) || IsA(obj, IntList) || IsA(obj, OidList))
 		_outList(S_NULL, str, obj, false);
-	else if (IsA(obj, Integer) || IsA(obj, Float) || IsA(obj, String)
-			|| IsA(obj, BitString)) {
+	else if (IsA(obj, Integer) || IsA(obj, Float) || IsA(obj, String) || IsA(obj, BitString)) {
 		/* nodeRead does not want to see { } around these! */
 		_outValue(str, obj);
 	} else {
@@ -2911,6 +2895,9 @@ void _outNode(StringInfo str, const void *obj) {
 		case T_XmlSerialize:
 			_outXmlSerialize(str, obj);
 			break;
+		case T_MemoClause:
+			_outSimMemoClause(str, obj);
+			break;
 
 		default:
 
@@ -2918,8 +2905,7 @@ void _outNode(StringInfo str, const void *obj) {
 			 * This should be an ERROR, but it's too useful to be able to
 			 * dump structures that _outNode only understands part of.
 			 */
-			elog(WARNING,
-					"could not dump unrecognized node type: %d", (int) nodeTag(obj));
+			elog(WARNING, "could not dump unrecognized node type: %d", (int) nodeTag(obj));
 			break;
 		}
 		appendStringInfoChar(str, '}');
@@ -2947,30 +2933,23 @@ void nodeSimToString(const void *obj, const void *str) {
 void _outSimOpExpr(StringInfo str, const OpExpr *node) {
 	WRITE_OID_FIELD(opno);
 	WRITE_NODE_SIM_FIELD(S_NULL, args);
+	appendStringInfoSpaces(str, 1);
 
 }
+
 static void _outSimBoolExpr(StringInfo str, const BoolExpr *node) {
 
 	/* do-it-yourself enum representation */
-	switch (node->boolop) {
-	case AND_EXPR:
-		WRITE_NODE_SIM_FIELD(S_AND, args);
 
-		break;
-	case OR_EXPR:
-		WRITE_NODE_SIM_FIELD(S_OR, args);
+	WRITE_NODE_SIM_FIELD(S_AND, args);
 
-		break;
-	case NOT_EXPR:
-		WRITE_NODE_SIM_FIELD(S_NOT, args);
-
-		break;
-	}
+	appendStringInfoSpaces(str, 1);
 
 }
 void _outSimVar(StringInfo str, const Var *node) {
-
-	appendStringInfo(str, " %d", node->varoattno);
+	appendStringInfo(str, "%u", node->varnoold);
+	appendStringInfoSpaces(str, 1);
+	appendStringInfo(str, "%d", node->varoattno);
 
 }
 void _outSimConst(StringInfo str, const Const *node) {
@@ -2980,17 +2959,19 @@ void _outSimConst(StringInfo str, const Const *node) {
 		_outDatum(str, node->constvalue, node->constlen, node->constbyval);
 }
 void _outSimParam(StringInfo str, const Param *node) {
-	appendStringInfo(str, " %d", node->paramid);
+	appendStringInfo(str, "%d", node->paramid);
 
 }
 void _outSimSubPlan(StringInfo str, const SubPlan *node) {
 
 	WRITE_STRING_FIELD(plan_name);
 	WRITE_NODE_SIM_FIELD(S_NULL, args);
+	appendStringInfoSpaces(str, 1);
 
 }
 void _outSimRelabelType(StringInfo str, const RelabelType *node) {
 	WRITE_NODE_SIM_FIELD(S_NULL, arg);
+	appendStringInfoSpaces(str, 1);
 }
 void _outSimRestrictInfo(StringInfo str, const RestrictInfo *node) {
 	/* NB: this isn't a complete set of fields */
@@ -3006,13 +2987,15 @@ void _outSimNode(ArgType type, StringInfo str, const void *obj) {
 		if (IsA(obj, List) || IsA(obj, IntList) || IsA(obj, OidList))
 			_outList(type, str, obj, true);
 
-		else if (IsA(obj, Integer) || IsA(obj, Float) || IsA(obj, String)
-				|| IsA(obj, BitString)) {
+		else if (IsA(obj, Integer) || IsA(obj, Float) || IsA(obj, String) || IsA(obj, BitString)) {
 			/* nodeRead does not want to see { } around these! */
 			_outValue(str, obj);
 		} else {
-			if (nodeTag(obj) != T_RestrictInfo && nodeTag(obj) != T_BoolExpr)
+			if (nodeTag(obj) != T_RestrictInfo && nodeTag(obj) != T_BoolExpr && nodeTag(obj) != T_RelabelType) {
 				appendStringInfoChar(str, '{');
+				appendStringInfoSpaces(str, 1);
+			}
+
 			switch (nodeTag(obj)) {
 
 			case T_Var:
@@ -3038,6 +3021,11 @@ void _outSimNode(ArgType type, StringInfo str, const void *obj) {
 				break;
 			case T_RestrictInfo:
 				_outSimRestrictInfo(str, obj);
+				break;
+			case T_MemoClause:
+				_outSimMemoClause(str, obj);
+				break;
+
 				/*	case T_CurrentOfExpr:
 				 case T_Var:
 				 case T_Const:
@@ -3060,7 +3048,8 @@ void _outSimNode(ArgType type, StringInfo str, const void *obj) {
 
 				break;
 			}
-			if (nodeTag(obj) != T_RestrictInfo && nodeTag(obj) != T_BoolExpr) {
+			if (nodeTag(obj) != T_RestrictInfo && nodeTag(obj) != T_BoolExpr && nodeTag(obj) != T_RelabelType) {
+				appendStringInfoSpaces(str, 1);
 				appendStringInfoChar(str, '}');
 
 			}

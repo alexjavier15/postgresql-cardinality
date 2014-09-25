@@ -634,7 +634,6 @@ make_join_rel(PlannerInfo *root, RelOptInfo *rel1, RelOptInfo *rel2)
 	joinrel = build_join_rel(root, joinrelids, rel1, rel2, sjinfo,
 							 &restrictlist);
 
-
 	/*
 	 * If we've already proven this join is empty, we needn't consider any
 	 * more paths for it.

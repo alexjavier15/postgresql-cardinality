@@ -29,6 +29,7 @@
 #include "utils/lsyscache.h"
 #include "utils/selfuncs.h"
 #include "storage/fd.h"
+#include "utils/memocache.h"
 
 #define isFullMatched(result) \
 		(result->found == 2 ? 1 : 0)
@@ -45,11 +46,6 @@ typedef enum {
 static List *translate_sub_tlist(List *tlist, int relid);
 static bool query_is_distinct_for(Query *query, List *colnos, List *opids);
 static Oid distinct_col_search(int colno, List *colnos, List *opids);
-static void compt_lists(MemoInfoData *result, List *str1, const List *str2);
-static void check_relation_names(MemoInfoData *cmpName, char *relName2,
-		const List *relName1);
-
-static void build_string_list(List ** buff, char * stringList);
 
 /*****************************************************************************
  *		MISC. PATH UTILITIES
@@ -106,10 +102,8 @@ int compare_fractional_path_costs(Path *path1, Path *path2, double fraction) {
 
 	if (fraction <= 0.0 || fraction >= 1.0)
 		return compare_path_costs(path1, path2, TOTAL_COST);
-	cost1 = path1->startup_cost
-			+ fraction * (path1->total_cost - path1->startup_cost);
-	cost2 = path2->startup_cost
-			+ fraction * (path2->total_cost - path2->startup_cost);
+	cost1 = path1->startup_cost + fraction * (path1->total_cost - path1->startup_cost);
+	cost2 = path2->startup_cost + fraction * (path2->total_cost - path2->startup_cost);
 	if (cost1 < cost2)
 		return -1;
 	if (cost1 > cost2)
@@ -148,76 +142,66 @@ int compare_fractional_path_costs(Path *path1, Path *path2, double fraction) {
  * since we deem only total cost to be of interest for a parameterized path.
  * (Unparameterized paths are more common, so we check for this case last.)
  */
-static PathCostComparison compare_path_costs_fuzzily(Path *path1, Path *path2,
-		double fuzz_factor, bool consider_startup) {
+static PathCostComparison compare_path_costs_fuzzily(Path *path1, Path *path2, double fuzz_factor,
+		bool consider_startup) {
 	/*
 	 * Check total cost first since it's more likely to be different; many
 	 * paths have zero startup cost.
 	 */
 	if (path1->total_cost > path2->total_cost * fuzz_factor) {
 		/* path1 fuzzily worse on total cost */
-		if (consider_startup
-				&& path2->startup_cost > path1->startup_cost * fuzz_factor&&
-				path1->param_info == NULL) {
-				/* ... but path2 fuzzily worse on startup, so DIFFERENT */
-return				COSTS_DIFFERENT;
-			}
-			/* else path2 dominates */
-			return COSTS_BETTER2;
+		if (consider_startup && path2->startup_cost > path1->startup_cost * fuzz_factor && path1->param_info == NULL) {
+			/* ... but path2 fuzzily worse on startup, so DIFFERENT */
+			return COSTS_DIFFERENT;
 		}
-		if (path2->total_cost > path1->total_cost * fuzz_factor)
-		{
-			/* path2 fuzzily worse on total cost */
-			if (consider_startup &&
-					path1->startup_cost > path2->startup_cost * fuzz_factor &&
-					path2->param_info == NULL)
-			{
-				/* ... but path1 fuzzily worse on startup, so DIFFERENT */
-				return COSTS_DIFFERENT;
-			}
-			/* else path1 dominates */
-			return COSTS_BETTER1;
-		}
-		/* fuzzily the same on total cost */
-		/* (so we may as well compare startup cost, even if !consider_startup) */
-		if (path1->startup_cost > path2->startup_cost * fuzz_factor &&
-				path2->param_info == NULL)
-		{
-			/* ... but path1 fuzzily worse on startup, so path2 wins */
-			return COSTS_BETTER2;
-		}
-		if (path2->startup_cost > path1->startup_cost * fuzz_factor &&
-				path1->param_info == NULL)
-		{
-			/* ... but path2 fuzzily worse on startup, so path1 wins */
-			return COSTS_BETTER1;
-		}
-		/* fuzzily the same on both costs */
-		return COSTS_EQUAL;
+		/* else path2 dominates */
+		return COSTS_BETTER2;
 	}
+	if (path2->total_cost > path1->total_cost * fuzz_factor) {
+		/* path2 fuzzily worse on total cost */
+		if (consider_startup && path1->startup_cost > path2->startup_cost * fuzz_factor && path2->param_info == NULL) {
+			/* ... but path1 fuzzily worse on startup, so DIFFERENT */
+			return COSTS_DIFFERENT;
+		}
+		/* else path1 dominates */
+		return COSTS_BETTER1;
+	}
+	/* fuzzily the same on total cost */
+	/* (so we may as well compare startup cost, even if !consider_startup) */
+	if (path1->startup_cost > path2->startup_cost * fuzz_factor && path2->param_info == NULL) {
+		/* ... but path1 fuzzily worse on startup, so path2 wins */
+		return COSTS_BETTER2;
+	}
+	if (path2->startup_cost > path1->startup_cost * fuzz_factor && path1->param_info == NULL) {
+		/* ... but path2 fuzzily worse on startup, so path1 wins */
+		return COSTS_BETTER1;
+	}
+	/* fuzzily the same on both costs */
+	return COSTS_EQUAL;
+}
 
-		/*
-		 * set_cheapest
-		 *	  Find the minimum-cost paths from among a relation's paths,
-		 *	  and save them in the rel's cheapest-path fields.
-		 *
-		 * cheapest_total_path is normally the cheapest-total-cost unparameterized
-		 * path; but if there are no unparameterized paths, we assign it to be the
-		 * best (cheapest least-parameterized) parameterized path.	However, only
-		 * unparameterized paths are considered candidates for cheapest_startup_path,
-		 * so that will be NULL if there are no unparameterized paths.
-		 *
-		 * The cheapest_parameterized_paths list collects all parameterized paths
-		 * that have survived the add_path() tournament for this relation.	(Since
-		 * add_path ignores pathkeys and startup cost for a parameterized path,
-		 * these will be paths that have best total cost or best row count for their
-		 * parameterization.)  cheapest_parameterized_paths always includes the
-		 * cheapest-total unparameterized path, too, if there is one; the users of
-		 * that list find it more convenient if that's included.
-		 *
-		 * This is normally called only after we've finished constructing the path
-		 * list for the rel node.
-		 */
+/*
+ * set_cheapest
+ *	  Find the minimum-cost paths from among a relation's paths,
+ *	  and save them in the rel's cheapest-path fields.
+ *
+ * cheapest_total_path is normally the cheapest-total-cost unparameterized
+ * path; but if there are no unparameterized paths, we assign it to be the
+ * best (cheapest least-parameterized) parameterized path.	However, only
+ * unparameterized paths are considered candidates for cheapest_startup_path,
+ * so that will be NULL if there are no unparameterized paths.
+ *
+ * The cheapest_parameterized_paths list collects all parameterized paths
+ * that have survived the add_path() tournament for this relation.	(Since
+ * add_path ignores pathkeys and startup cost for a parameterized path,
+ * these will be paths that have best total cost or best row count for their
+ * parameterization.)  cheapest_parameterized_paths always includes the
+ * cheapest-total unparameterized path, too, if there is one; the users of
+ * that list find it more convenient if that's included.
+ *
+ * This is normally called only after we've finished constructing the path
+ * list for the rel node.
+ */
 void set_cheapest(RelOptInfo *parent_rel) {
 	Path *cheapest_startup_path;
 	Path *cheapest_total_path;
@@ -256,12 +240,10 @@ void set_cheapest(RelOptInfo *parent_rel) {
 			if (best_param_path == NULL)
 				best_param_path = path;
 			else {
-				switch (bms_subset_compare(PATH_REQ_OUTER(path),
-						PATH_REQ_OUTER(best_param_path))) {
+				switch (bms_subset_compare(PATH_REQ_OUTER(path), PATH_REQ_OUTER(best_param_path))) {
 				case BMS_EQUAL:
 					/* keep the cheaper one */
-					if (compare_path_costs(path, best_param_path, TOTAL_COST)
-							< 0)
+					if (compare_path_costs(path, best_param_path, TOTAL_COST) < 0)
 						best_param_path = path;
 					break;
 				case BMS_SUBSET1:
@@ -298,15 +280,12 @@ void set_cheapest(RelOptInfo *parent_rel) {
 			cmp = compare_path_costs(cheapest_startup_path, path, STARTUP_COST);
 			if (cmp > 0
 					|| (cmp == 0
-							&& compare_pathkeys(cheapest_startup_path->pathkeys,
-									path->pathkeys) == PATHKEYS_BETTER2))
+							&& compare_pathkeys(cheapest_startup_path->pathkeys, path->pathkeys) == PATHKEYS_BETTER2))
 				cheapest_startup_path = path;
 
 			cmp = compare_path_costs(cheapest_total_path, path, TOTAL_COST);
 			if (cmp > 0
-					|| (cmp == 0
-							&& compare_pathkeys(cheapest_total_path->pathkeys,
-									path->pathkeys) == PATHKEYS_BETTER2))
+					|| (cmp == 0 && compare_pathkeys(cheapest_total_path->pathkeys, path->pathkeys) == PATHKEYS_BETTER2))
 				cheapest_total_path = path;
 		}
 	}
@@ -417,8 +396,7 @@ void add_path(RelOptInfo *parent_rel, Path *new_path) {
 		 * Do a fuzzy cost comparison with 1% fuzziness limit.	(XXX does this
 		 * percentage need to be user-configurable?)
 		 */
-		costcmp = compare_path_costs_fuzzily(new_path, old_path, 1.01,
-				parent_rel->consider_startup);
+		costcmp = compare_path_costs_fuzzily(new_path, old_path, 1.01, parent_rel->consider_startup);
 
 		/*
 		 * If the two paths compare differently for startup and total cost,
@@ -440,15 +418,12 @@ void add_path(RelOptInfo *parent_rel, Path *new_path) {
 			if (keyscmp != PATHKEYS_DIFFERENT) {
 				switch (costcmp) {
 				case COSTS_EQUAL:
-					outercmp = bms_subset_compare(PATH_REQ_OUTER(new_path),
-							PATH_REQ_OUTER(old_path));
+					outercmp = bms_subset_compare(PATH_REQ_OUTER(new_path), PATH_REQ_OUTER(old_path));
 					if (keyscmp == PATHKEYS_BETTER1) {
-						if ((outercmp == BMS_EQUAL || outercmp == BMS_SUBSET1)
-								&& new_path->rows <= old_path->rows)
+						if ((outercmp == BMS_EQUAL || outercmp == BMS_SUBSET1) && new_path->rows <= old_path->rows)
 							remove_old = true; /* new dominates old */
 					} else if (keyscmp == PATHKEYS_BETTER2) {
-						if ((outercmp == BMS_EQUAL || outercmp == BMS_SUBSET2)
-								&& new_path->rows >= old_path->rows)
+						if ((outercmp == BMS_EQUAL || outercmp == BMS_SUBSET2) && new_path->rows >= old_path->rows)
 							accept_new = false; /* old dominates new */
 					} else /* keyscmp == PATHKEYS_EQUAL */
 					{
@@ -472,38 +447,30 @@ void add_path(RelOptInfo *parent_rel, Path *new_path) {
 								remove_old = true; /* new dominates old */
 							else if (new_path->rows > old_path->rows)
 								accept_new = false; /* old dominates new */
-							else if (compare_path_costs_fuzzily(new_path,
-									old_path, 1.0000000001,
-									parent_rel->consider_startup)
-									== COSTS_BETTER1)
+							else if (compare_path_costs_fuzzily(new_path, old_path, 1.0000000001,
+									parent_rel->consider_startup) == COSTS_BETTER1)
 								remove_old = true; /* new dominates old */
 							else
 								accept_new = false; /* old equals or
 								 * dominates new */
-						} else if (outercmp == BMS_SUBSET1
-								&& new_path->rows <= old_path->rows)
+						} else if (outercmp == BMS_SUBSET1 && new_path->rows <= old_path->rows)
 							remove_old = true; /* new dominates old */
-						else if (outercmp == BMS_SUBSET2
-								&& new_path->rows >= old_path->rows)
+						else if (outercmp == BMS_SUBSET2 && new_path->rows >= old_path->rows)
 							accept_new = false; /* old dominates new */
 						/* else different parameterizations, keep both */
 					}
 					break;
 				case COSTS_BETTER1:
 					if (keyscmp != PATHKEYS_BETTER2) {
-						outercmp = bms_subset_compare(PATH_REQ_OUTER(new_path),
-								PATH_REQ_OUTER(old_path));
-						if ((outercmp == BMS_EQUAL || outercmp == BMS_SUBSET1)
-								&& new_path->rows <= old_path->rows)
+						outercmp = bms_subset_compare(PATH_REQ_OUTER(new_path), PATH_REQ_OUTER(old_path));
+						if ((outercmp == BMS_EQUAL || outercmp == BMS_SUBSET1) && new_path->rows <= old_path->rows)
 							remove_old = true; /* new dominates old */
 					}
 					break;
 				case COSTS_BETTER2:
 					if (keyscmp != PATHKEYS_BETTER1) {
-						outercmp = bms_subset_compare(PATH_REQ_OUTER(new_path),
-								PATH_REQ_OUTER(old_path));
-						if ((outercmp == BMS_EQUAL || outercmp == BMS_SUBSET2)
-								&& new_path->rows >= old_path->rows)
+						outercmp = bms_subset_compare(PATH_REQ_OUTER(new_path), PATH_REQ_OUTER(old_path));
+						if ((outercmp == BMS_EQUAL || outercmp == BMS_SUBSET2) && new_path->rows >= old_path->rows)
 							accept_new = false; /* old dominates new */
 					}
 					break;
@@ -522,8 +489,7 @@ void add_path(RelOptInfo *parent_rel, Path *new_path) {
 		 * Remove current element from pathlist if dominated by new.
 		 */
 		if (remove_old) {
-			parent_rel->pathlist = list_delete_cell(parent_rel->pathlist, p1,
-					p1_prev);
+			parent_rel->pathlist = list_delete_cell(parent_rel->pathlist, p1, p1_prev);
 
 			/*
 			 * Delete the data pointed-to by the deleted cell, if possible
@@ -578,8 +544,8 @@ void add_path(RelOptInfo *parent_rel, Path *new_path) {
  * At the time this is called, we haven't actually built a Path structure,
  * so the required information has to be passed piecemeal.
  */
-bool add_path_precheck(RelOptInfo *parent_rel, Cost startup_cost,
-		Cost total_cost, List *pathkeys, Relids required_outer) {
+bool add_path_precheck(RelOptInfo *parent_rel, Cost startup_cost, Cost total_cost, List *pathkeys,
+		Relids required_outer) {
 	List *new_path_pathkeys;
 	ListCell *p1;
 
@@ -606,10 +572,8 @@ bool add_path_precheck(RelOptInfo *parent_rel, Cost startup_cost,
 				/* new path does not win on cost, so check pathkeys... */
 				List *old_path_pathkeys;
 
-				old_path_pathkeys =
-						old_path->param_info ? NIL : old_path->pathkeys;
-				keyscmp = compare_pathkeys(new_path_pathkeys,
-						old_path_pathkeys);
+				old_path_pathkeys = old_path->param_info ? NIL : old_path->pathkeys;
+				keyscmp = compare_pathkeys(new_path_pathkeys, old_path_pathkeys);
 				if (keyscmp == PATHKEYS_EQUAL || keyscmp == PATHKEYS_BETTER2) {
 					/* new path does not win on pathkeys... */
 					if (bms_equal(required_outer, PATH_REQ_OUTER(old_path))) {
@@ -648,6 +612,7 @@ create_seqscan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer) {
 	pathnode->parent = rel;
 	pathnode->param_info = get_baserel_parampathinfo(root, rel, required_outer);
 	pathnode->pathkeys = NIL; /* seqscan has unordered result */
+	pathnode->restrictList = list_copy(rel->restrictList);
 
 	cost_seqscan(pathnode, root, rel, pathnode->param_info);
 
@@ -679,23 +644,22 @@ create_seqscan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer) {
  * Returns the new path node.
  */
 IndexPath *
-create_index_path(PlannerInfo *root, IndexOptInfo *index, List *indexclauses,
-		List *indexclausecols, List *indexorderbys, List *indexorderbycols,
-		List *pathkeys, ScanDirection indexscandir, bool indexonly,
+create_index_path(PlannerInfo *root, IndexOptInfo *index, List *indexclauses, List *indexclausecols,
+		List *indexorderbys, List *indexorderbycols, List *pathkeys, ScanDirection indexscandir, bool indexonly,
 		Relids required_outer, double loop_count) {
 	IndexPath *pathnode = makeNode(IndexPath);
 	RelOptInfo *rel = index->rel;
 	List *indexquals, *indexqualcols;
+	MemoRelation * memo_rel = NULL;
+	double act_loop_count = loop_count;
 
 	pathnode->path.pathtype = indexonly ? T_IndexOnlyScan : T_IndexScan;
 	pathnode->path.parent = rel;
-	pathnode->path.param_info = get_baserel_parampathinfo(root, rel,
-			required_outer);
+	pathnode->path.param_info = get_baserel_parampathinfo(root, rel, required_outer);
 	pathnode->path.pathkeys = pathkeys;
 
 	/* Convert clauses to indexquals the executor can handle */
-	expand_indexqual_conditions(index, indexclauses, indexclausecols,
-			&indexquals, &indexqualcols);
+	expand_indexqual_conditions(index, indexclauses, indexclausecols, &indexquals, &indexqualcols);
 
 	/* Fill in the pathnode */
 	pathnode->indexinfo = index;
@@ -706,7 +670,29 @@ create_index_path(PlannerInfo *root, IndexOptInfo *index, List *indexclauses,
 	pathnode->indexorderbycols = indexorderbycols;
 	pathnode->indexscandir = indexscandir;
 
-	cost_index(pathnode, root, loop_count);
+	pathnode->path.restrictList = list_copy(rel->baserestrictinfo);
+	if (pathnode->path.param_info) {
+		pathnode->path.restrictList = list_concat(pathnode->path.restrictList,
+				list_copy(pathnode->path.param_info->ppi_clauses));
+
+	}
+	if (enable_memo) {
+
+		memo_rel = get_Memorelation(rel->rel_name, root->query_level + rel->rtekind, pathnode->path.restrictList, true);
+
+		if (memo_rel != NULL) {
+			printf("Found relatin in pathnode index path and loops : %d \n", memo_rel->loops);
+			print(rel->rel_name);
+			print(pathnode->path.restrictList);
+			fflush(stdout);
+			act_loop_count = memo_rel->loops;
+
+		}
+		act_loop_count = act_loop_count == 0 ? loop_count : act_loop_count;
+		pathnode->indexinfo->loop_count= act_loop_count;
+	}
+
+	cost_index(pathnode, root, act_loop_count);
 
 	return pathnode;
 }
@@ -724,20 +710,35 @@ create_index_path(PlannerInfo *root, IndexOptInfo *index, List *indexclauses,
  * IndexPaths.
  */
 BitmapHeapPath *
-create_bitmap_heap_path(PlannerInfo *root, RelOptInfo *rel, Path *bitmapqual,
-		Relids required_outer, double loop_count) {
+create_bitmap_heap_path(PlannerInfo *root, RelOptInfo *rel, Path *bitmapqual, Relids required_outer, double loop_count) {
 	BitmapHeapPath *pathnode = makeNode(BitmapHeapPath);
+	double act_loop_count = loop_count;
+	MemoRelation * memo_rel = NULL;
 
 	pathnode->path.pathtype = T_BitmapHeapScan;
 	pathnode->path.parent = rel;
-	pathnode->path.param_info = get_baserel_parampathinfo(root, rel,
-			required_outer);
-	pathnode->path.pathkeys = NIL; /* always unordered */
+	pathnode->path.param_info = get_baserel_parampathinfo(root, rel, required_outer);
+	pathnode->path.pathkeys = NIL; /* always unordereddered */
 
 	pathnode->bitmapqual = bitmapqual;
+	pathnode->path.restrictList = list_copy(rel->baserestrictinfo);
+	if (pathnode->path.param_info)
+		pathnode->path.restrictList = list_concat(pathnode->path.restrictList,
+				list_copy(pathnode->path.param_info->ppi_clauses));
+	if (enable_memo) {
 
-	cost_bitmap_heap_scan(&pathnode->path, root, rel, pathnode->path.param_info,
-			bitmapqual, loop_count);
+		memo_rel = get_Memorelation(rel->rel_name, root->query_level + rel->rtekind, pathnode->path.restrictList, true);
+
+		if (memo_rel != NULL) {
+			/*printf("Found relation in pathnode bitmap path and loops : %d \n", memo_rel->loops);
+			print(rel->rel_name);
+			print(pathnode->path.restrictList);
+			fflush(stdout);*/
+			act_loop_count = memo_rel->loops;
+			act_loop_count = act_loop_count == 0 ? loop_count : act_loop_count;
+		}
+	}
+	cost_bitmap_heap_scan(&pathnode->path, root, rel, pathnode->path.param_info, bitmapqual, act_loop_count);
 
 	return pathnode;
 }
@@ -756,6 +757,10 @@ create_bitmap_and_path(PlannerInfo *root, RelOptInfo *rel, List *bitmapquals) {
 	pathnode->path.pathkeys = NIL; /* always unordered */
 
 	pathnode->bitmapquals = bitmapquals;
+	pathnode->path.restrictList = list_copy(bitmapquals);
+	if (pathnode->path.param_info)
+		pathnode->path.restrictList = list_concat(pathnode->path.restrictList,
+				list_copy(pathnode->path.param_info->ppi_clauses));
 
 	/* this sets bitmapselectivity as well as the regular cost fields: */
 	cost_bitmap_and_node(pathnode, root);
@@ -777,6 +782,10 @@ create_bitmap_or_path(PlannerInfo *root, RelOptInfo *rel, List *bitmapquals) {
 	pathnode->path.pathkeys = NIL; /* always unordered */
 
 	pathnode->bitmapquals = bitmapquals;
+	pathnode->path.restrictList = list_copy(bitmapquals);
+	if (pathnode->path.param_info)
+		pathnode->path.restrictList = list_concat(pathnode->path.restrictList,
+				list_copy(pathnode->path.param_info->ppi_clauses));
 
 	/* this sets bitmapselectivity as well as the regular cost fields: */
 	cost_bitmap_or_node(pathnode, root);
@@ -789,20 +798,21 @@ create_bitmap_or_path(PlannerInfo *root, RelOptInfo *rel, List *bitmapquals) {
  *	  Creates a path corresponding to a scan by TID, returning the pathnode.
  */
 TidPath *
-create_tidscan_path(PlannerInfo *root, RelOptInfo *rel, List *tidquals,
-		Relids required_outer) {
+create_tidscan_path(PlannerInfo *root, RelOptInfo *rel, List *tidquals, Relids required_outer) {
 	TidPath *pathnode = makeNode(TidPath);
 
 	pathnode->path.pathtype = T_TidScan;
 	pathnode->path.parent = rel;
-	pathnode->path.param_info = get_baserel_parampathinfo(root, rel,
-			required_outer);
+	pathnode->path.param_info = get_baserel_parampathinfo(root, rel, required_outer);
 	pathnode->path.pathkeys = NIL; /* always unordered */
 
 	pathnode->tidquals = tidquals;
+	pathnode->path.restrictList = list_copy(rel->restrictList);
+	if (pathnode->path.param_info)
+		pathnode->path.restrictList = list_concat(pathnode->path.restrictList,
+				list_copy(pathnode->path.param_info->ppi_clauses));
 
-	cost_tidscan(&pathnode->path, root, rel, tidquals,
-			pathnode->path.param_info);
+	cost_tidscan(&pathnode->path, root, rel, tidquals, pathnode->path.param_info);
 
 	return pathnode;
 }
@@ -821,8 +831,7 @@ create_append_path(RelOptInfo *rel, List *subpaths, Relids required_outer) {
 
 	pathnode->path.pathtype = T_Append;
 	pathnode->path.parent = rel;
-	pathnode->path.param_info = get_appendrel_parampathinfo(rel,
-			required_outer);
+	pathnode->path.param_info = get_appendrel_parampathinfo(rel, required_outer);
 	pathnode->path.pathkeys = NIL; /* result is always considered
 	 * unsorted */
 	pathnode->subpaths = subpaths;
@@ -838,6 +847,10 @@ create_append_path(RelOptInfo *rel, List *subpaths, Relids required_outer) {
 	pathnode->path.rows = 0;
 	pathnode->path.startup_cost = 0;
 	pathnode->path.total_cost = 0;
+	pathnode->path.restrictList = list_copy(rel->restrictList);
+	if (pathnode->path.param_info)
+		pathnode->path.restrictList = list_concat(pathnode->path.restrictList,
+				list_copy(pathnode->path.param_info->ppi_clauses));
 	foreach(l, subpaths) {
 		Path *subpath = (Path *) lfirst(l);
 
@@ -860,8 +873,7 @@ create_append_path(RelOptInfo *rel, List *subpaths, Relids required_outer) {
  *	  pathnode.
  */
 MergeAppendPath *
-create_merge_append_path(PlannerInfo *root, RelOptInfo *rel, List *subpaths,
-		List *pathkeys, Relids required_outer) {
+create_merge_append_path(PlannerInfo *root, RelOptInfo *rel, List *subpaths, List *pathkeys, Relids required_outer) {
 	MergeAppendPath *pathnode = makeNode(MergeAppendPath);
 	Cost input_startup_cost;
 	Cost input_total_cost;
@@ -869,8 +881,7 @@ create_merge_append_path(PlannerInfo *root, RelOptInfo *rel, List *subpaths,
 
 	pathnode->path.pathtype = T_MergeAppend;
 	pathnode->path.parent = rel;
-	pathnode->path.param_info = get_appendrel_parampathinfo(rel,
-			required_outer);
+	pathnode->path.param_info = get_appendrel_parampathinfo(rel, required_outer);
 	pathnode->path.pathkeys = pathkeys;
 	pathnode->subpaths = subpaths;
 
@@ -902,9 +913,8 @@ create_merge_append_path(PlannerInfo *root, RelOptInfo *rel, List *subpaths,
 			/* We'll need to insert a Sort node, so include cost for that */
 			Path sort_path; /* dummy for result of cost_sort */
 
-			cost_sort(&sort_path, root, pathkeys, subpath->total_cost,
-					subpath->parent->tuples, subpath->parent->width, 0.0,
-					work_mem, pathnode->limit_tuples);
+			cost_sort(&sort_path, root, pathkeys, subpath->total_cost, subpath->parent->tuples, subpath->parent->width,
+					0.0, work_mem, pathnode->limit_tuples);
 			input_startup_cost += sort_path.startup_cost;
 			input_total_cost += sort_path.total_cost;
 		}
@@ -914,8 +924,8 @@ create_merge_append_path(PlannerInfo *root, RelOptInfo *rel, List *subpaths,
 	}
 
 	/* Now we can compute total costs of the MergeAppend */
-	cost_merge_append(&pathnode->path, root, pathkeys, list_length(subpaths),
-			input_startup_cost, input_total_cost, rel->tuples);
+	cost_merge_append(&pathnode->path, root, pathkeys, list_length(subpaths), input_startup_cost, input_total_cost,
+			rel->tuples);
 
 	return pathnode;
 }
@@ -965,11 +975,11 @@ create_material_path(RelOptInfo *rel, Path *subpath) {
 	pathnode->path.parent = rel;
 	pathnode->path.param_info = subpath->param_info;
 	pathnode->path.pathkeys = subpath->pathkeys;
+	pathnode->path.restrictList = list_copy(subpath->restrictList);
 
 	pathnode->subpath = subpath;
 
-	cost_material(&pathnode->path, subpath->startup_cost, subpath->total_cost,
-			subpath->rows, rel->width);
+	cost_material(&pathnode->path, subpath->startup_cost, subpath->total_cost, subpath->rows, rel->width);
 
 	return pathnode;
 }
@@ -986,8 +996,7 @@ create_material_path(RelOptInfo *rel, Path *subpath) {
  * for the rel).  So we cache the result.
  */
 UniquePath *
-create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
-		SpecialJoinInfo *sjinfo) {
+create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath, SpecialJoinInfo *sjinfo) {
 	UniquePath *pathnode;
 	Path sort_path; /* dummy for result of cost_sort */
 	Path agg_path; /* dummy for result of cost_agg */
@@ -1067,8 +1076,7 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 		if (!IsA(op, OpExpr) || list_length(op->args) != 2) {
 			/* No, but does it reference both sides? */
 			all_varnos = pull_varnos((Node *) op);
-			if (!bms_overlap(all_varnos, sjinfo->syn_righthand)
-					|| bms_is_subset(all_varnos, sjinfo->syn_righthand)) {
+			if (!bms_overlap(all_varnos, sjinfo->syn_righthand) || bms_is_subset(all_varnos, sjinfo->syn_righthand)) {
 				/*
 				 * Clause refers to only one rel, so ignore it --- unless it
 				 * contains volatile functions, in which case we'd better
@@ -1092,8 +1100,7 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 		opinputtype = exprType(left_expr);
 
 		/* Does it reference both sides? */
-		if (!bms_overlap(all_varnos, sjinfo->syn_righthand)
-				|| bms_is_subset(all_varnos, sjinfo->syn_righthand)) {
+		if (!bms_overlap(all_varnos, sjinfo->syn_righthand) || bms_is_subset(all_varnos, sjinfo->syn_righthand)) {
 			/*
 			 * Clause refers to only one rel, so ignore it --- unless it
 			 * contains volatile functions, in which case we'd better punt.
@@ -1104,12 +1111,10 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 		}
 
 		/* check rel membership of arguments */
-		if (!bms_is_empty(right_varnos)
-				&& bms_is_subset(right_varnos, sjinfo->syn_righthand)
+		if (!bms_is_empty(right_varnos) && bms_is_subset(right_varnos, sjinfo->syn_righthand)
 				&& !bms_overlap(left_varnos, sjinfo->syn_righthand)) {
 			/* typical case, right_expr is RHS variable */
-		} else if (!bms_is_empty(left_varnos)
-				&& bms_is_subset(left_varnos, sjinfo->syn_righthand)
+		} else if (!bms_is_empty(left_varnos) && bms_is_subset(left_varnos, sjinfo->syn_righthand)
 				&& !bms_overlap(right_varnos, sjinfo->syn_righthand)) {
 			/* flipped case, left_expr is RHS variable */
 			opno = get_commutator(opno);
@@ -1122,8 +1127,7 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 		/* all operators must be btree equality or hash equality */
 		if (all_btree) {
 			/* oprcanmerge is considered a hint... */
-			if (!op_mergejoinable(opno, opinputtype) ||
-			get_mergejoin_opfamilies(opno) == NIL)
+			if (!op_mergejoinable(opno, opinputtype) || get_mergejoin_opfamilies(opno) == NIL)
 				all_btree = false;
 		}
 		if (all_hash) {
@@ -1158,6 +1162,7 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 	pathnode->path.pathtype = T_Unique;
 	pathnode->path.parent = rel;
 	pathnode->path.param_info = subpath->param_info;
+	pathnode->path.restrictList = list_copy(subpath->restrictList);
 
 	/*
 	 * Assume the output is unsorted, since we don't necessarily have pathkeys
@@ -1176,8 +1181,7 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 	 * clauses for the rel, as well.
 	 */
 	if (rel->rtekind == RTE_RELATION && all_btree
-			&& relation_has_unique_index_for(root, rel, NIL, uniq_exprs,
-					in_operators)) {
+			&& relation_has_unique_index_for(root, rel, NIL, uniq_exprs, in_operators)) {
 		pathnode->umethod = UNIQUE_PATH_NOOP;
 		pathnode->path.rows = rel->rows;
 		pathnode->path.startup_cost = subpath->startup_cost;
@@ -1206,9 +1210,7 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 
 		sub_tlist_colnos = translate_sub_tlist(uniq_exprs, rel->relid);
 
-		if (sub_tlist_colnos
-				&& query_is_distinct_for(rte->subquery, sub_tlist_colnos,
-						in_operators)) {
+		if (sub_tlist_colnos && query_is_distinct_for(rte->subquery, sub_tlist_colnos, in_operators)) {
 			pathnode->umethod = UNIQUE_PATH_NOOP;
 			pathnode->path.rows = rel->rows;
 			pathnode->path.startup_cost = subpath->startup_cost;
@@ -1231,8 +1233,7 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 		/*
 		 * Estimate cost for sort+unique implementation
 		 */
-		cost_sort(&sort_path, root, NIL, subpath->total_cost, rel->rows,
-				rel->width, 0.0, work_mem, -1.0);
+		cost_sort(&sort_path, root, NIL, subpath->total_cost, rel->rows, rel->width, 0.0, work_mem, -1.0);
 
 		/*
 		 * Charge one cpu_operator_cost per comparison per input tuple. We
@@ -1253,8 +1254,7 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 		if (hashentrysize * pathnode->path.rows > work_mem * 1024L)
 			all_hash = false; /* don't try to hash */
 		else
-			cost_agg(&agg_path, root, AGG_HASHED, NULL, numCols,
-					pathnode->path.rows, subpath->startup_cost,
+			cost_agg(&agg_path, root, AGG_HASHED, NULL, numCols, pathnode->path.rows, subpath->startup_cost,
 					subpath->total_cost, rel->rows);
 	}
 
@@ -1353,8 +1353,7 @@ static bool query_is_distinct_for(Query *query, List *colnos, List *opids) {
 			TargetEntry *tle = get_sortgroupclause_tle(sgc, query->targetList);
 
 			opid = distinct_col_search(tle->resno, colnos, opids);
-			if (!OidIsValid(opid)
-					|| !equality_ops_are_compatible(opid, sgc->eqop))
+			if (!OidIsValid(opid) || !equality_ops_are_compatible(opid, sgc->eqop))
 				break; /* exit early if no match */
 		}
 		if (l == NULL) /* had matches for all? */
@@ -1371,8 +1370,7 @@ static bool query_is_distinct_for(Query *query, List *colnos, List *opids) {
 			TargetEntry *tle = get_sortgroupclause_tle(sgc, query->targetList);
 
 			opid = distinct_col_search(tle->resno, colnos, opids);
-			if (!OidIsValid(opid)
-					|| !equality_ops_are_compatible(opid, sgc->eqop))
+			if (!OidIsValid(opid) || !equality_ops_are_compatible(opid, sgc->eqop))
 				break; /* exit early if no match */
 		}
 		if (l == NULL) /* had matches for all? */
@@ -1414,8 +1412,7 @@ static bool query_is_distinct_for(Query *query, List *colnos, List *opids) {
 				lg = lnext(lg);
 
 				opid = distinct_col_search(tle->resno, colnos, opids);
-				if (!OidIsValid(opid)
-						|| !equality_ops_are_compatible(opid, sgc->eqop))
+				if (!OidIsValid(opid) || !equality_ops_are_compatible(opid, sgc->eqop))
 					break; /* exit early if no match */
 			}
 			if (l == NULL) /* had matches for all? */
@@ -1454,8 +1451,7 @@ static Oid distinct_col_search(int colno, List *colnos, List *opids) {
  *	  returning the pathnode.
  */
 Path *
-create_subqueryscan_path(PlannerInfo *root, RelOptInfo *rel, List *pathkeys,
-		Relids required_outer) {
+create_subqueryscan_path(PlannerInfo *root, RelOptInfo *rel, List *pathkeys, Relids required_outer) {
 	Path *pathnode = makeNode(Path);
 
 	pathnode->pathtype = T_SubqueryScan;
@@ -1474,8 +1470,7 @@ create_subqueryscan_path(PlannerInfo *root, RelOptInfo *rel, List *pathkeys,
  *	  returning the pathnode.
  */
 Path *
-create_functionscan_path(PlannerInfo *root, RelOptInfo *rel, List *pathkeys,
-		Relids required_outer) {
+create_functionscan_path(PlannerInfo *root, RelOptInfo *rel, List *pathkeys, Relids required_outer) {
 	Path *pathnode = makeNode(Path);
 
 	pathnode->pathtype = T_FunctionScan;
@@ -1494,8 +1489,7 @@ create_functionscan_path(PlannerInfo *root, RelOptInfo *rel, List *pathkeys,
  *	  returning the pathnode.
  */
 Path *
-create_valuesscan_path(PlannerInfo *root, RelOptInfo *rel,
-		Relids required_outer) {
+create_valuesscan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer) {
 	Path *pathnode = makeNode(Path);
 
 	pathnode->pathtype = T_ValuesScan;
@@ -1533,8 +1527,7 @@ create_ctescan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer) {
  *	  returning the pathnode.
  */
 Path *
-create_worktablescan_path(PlannerInfo *root, RelOptInfo *rel,
-		Relids required_outer) {
+create_worktablescan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer) {
 	Path *pathnode = makeNode(Path);
 
 	pathnode->pathtype = T_WorkTableScan;
@@ -1559,15 +1552,13 @@ create_worktablescan_path(PlannerInfo *root, RelOptInfo *rel,
  * way to calculate them in core.
  */
 ForeignPath *
-create_foreignscan_path(PlannerInfo *root, RelOptInfo *rel, double rows,
-		Cost startup_cost, Cost total_cost, List *pathkeys,
-		Relids required_outer, List *fdw_private) {
+create_foreignscan_path(PlannerInfo *root, RelOptInfo *rel, double rows, Cost startup_cost, Cost total_cost,
+		List *pathkeys, Relids required_outer, List *fdw_private) {
 	ForeignPath *pathnode = makeNode(ForeignPath);
 
 	pathnode->path.pathtype = T_ForeignScan;
 	pathnode->path.parent = rel;
-	pathnode->path.param_info = get_baserel_parampathinfo(root, rel,
-			required_outer);
+	pathnode->path.param_info = get_baserel_parampathinfo(root, rel, required_outer);
 	pathnode->path.rows = rows;
 	pathnode->path.startup_cost = startup_cost;
 	pathnode->path.total_cost = total_cost;
@@ -1597,8 +1588,7 @@ Relids calc_nestloop_required_outer(Path *outer_path, Path *inner_path) {
 	/* else, form the union ... */
 	required_outer = bms_union(outer_paramrels, inner_paramrels);
 	/* ... and remove any mention of now-satisfied outer rels */
-	required_outer = bms_del_members(required_outer,
-			outer_path->parent->relids);
+	required_outer = bms_del_members(required_outer, outer_path->parent->relids);
 	/* maintain invariant that required_outer is exactly NULL if empty */
 	if (bms_is_empty(required_outer)) {
 		bms_free(required_outer);
@@ -1646,13 +1636,11 @@ Relids calc_non_nestloop_required_outer(Path *outer_path, Path *inner_path) {
  * Returns the resulting path node.
  */
 NestPath *
-create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
-		JoinCostWorkspace *workspace, SpecialJoinInfo *sjinfo,
-		SemiAntiJoinFactors *semifactors, Path *outer_path, Path *inner_path,
+create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, JoinCostWorkspace *workspace,
+		SpecialJoinInfo *sjinfo, SemiAntiJoinFactors *semifactors, Path *outer_path, Path *inner_path,
 		List *restrict_clauses, List *pathkeys, Relids required_outer) {
 	NestPath *pathnode = makeNode(NestPath);
 	Relids inner_req_outer = PATH_REQ_OUTER(inner_path);
-
 	/*
 	 * If the inner path is parameterized by the outer, we must drop any
 	 * restrict_clauses that are due to be moved into the inner path.  We have
@@ -1661,16 +1649,14 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
 	 * estimates for this path.
 	 */
 	if (bms_overlap(inner_req_outer, outer_path->parent->relids)) {
-		Relids inner_and_outer = bms_union(inner_path->parent->relids,
-				inner_req_outer);
+		Relids inner_and_outer = bms_union(inner_path->parent->relids, inner_req_outer);
 		List *jclauses = NIL;
 		ListCell *lc;
 
 		foreach(lc, restrict_clauses) {
 			RestrictInfo *rinfo = (RestrictInfo *) lfirst(lc);
 
-			if (!join_clause_is_movable_into(rinfo, inner_path->parent->relids,
-					inner_and_outer))
+			if (!join_clause_is_movable_into(rinfo, inner_path->parent->relids, inner_and_outer))
 				jclauses = lappend(jclauses, rinfo);
 		}
 		restrict_clauses = jclauses;
@@ -1678,13 +1664,17 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
 
 	pathnode->path.pathtype = T_NestLoop;
 	pathnode->path.parent = joinrel;
-	pathnode->path.param_info = get_joinrel_parampathinfo(root, joinrel,
-			outer_path, inner_path, sjinfo, required_outer, &restrict_clauses);
+	pathnode->path.param_info = get_joinrel_parampathinfo(root, joinrel, outer_path, inner_path, sjinfo, required_outer,
+			&restrict_clauses);
 	pathnode->path.pathkeys = pathkeys;
 	pathnode->jointype = jointype;
 	pathnode->outerjoinpath = outer_path;
 	pathnode->innerjoinpath = inner_path;
 	pathnode->joinrestrictinfo = restrict_clauses;
+//	pathnode->restrictList=joinrel->restrictList;
+	pathnode->path.restrictList = list_concat(pathnode->path.restrictList, list_copy(inner_path->restrictList));
+	pathnode->path.restrictList = list_concat(pathnode->path.restrictList, list_copy(outer_path->restrictList));
+	pathnode->path.restrictList = list_concat(pathnode->path.restrictList, list_copy(restrict_clauses));
 
 	final_cost_nestloop(root, pathnode, workspace, sjinfo, semifactors);
 
@@ -1711,17 +1701,15 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
  * 'innersortkeys' are the sort varkeys for the inner relation
  */
 MergePath *
-create_mergejoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
-		JoinCostWorkspace *workspace, SpecialJoinInfo *sjinfo, Path *outer_path,
-		Path *inner_path, List *restrict_clauses, List *pathkeys,
-		Relids required_outer, List *mergeclauses, List *outersortkeys,
-		List *innersortkeys) {
+create_mergejoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, JoinCostWorkspace *workspace,
+		SpecialJoinInfo *sjinfo, Path *outer_path, Path *inner_path, List *restrict_clauses, List *pathkeys,
+		Relids required_outer, List *mergeclauses, List *outersortkeys, List *innersortkeys) {
 	MergePath *pathnode = makeNode(MergePath);
 
 	pathnode->jpath.path.pathtype = T_MergeJoin;
 	pathnode->jpath.path.parent = joinrel;
-	pathnode->jpath.path.param_info = get_joinrel_parampathinfo(root, joinrel,
-			outer_path, inner_path, sjinfo, required_outer, &restrict_clauses);
+	pathnode->jpath.path.param_info = get_joinrel_parampathinfo(root, joinrel, outer_path, inner_path, sjinfo,
+			required_outer, &restrict_clauses);
 	pathnode->jpath.path.pathkeys = pathkeys;
 	pathnode->jpath.jointype = jointype;
 	pathnode->jpath.outerjoinpath = outer_path;
@@ -1730,6 +1718,12 @@ create_mergejoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
 	pathnode->path_mergeclauses = mergeclauses;
 	pathnode->outersortkeys = outersortkeys;
 	pathnode->innersortkeys = innersortkeys;
+	pathnode->jpath.path.restrictList = list_concat(pathnode->jpath.path.restrictList,
+			list_copy(inner_path->restrictList));
+	pathnode->jpath.path.restrictList = list_concat(pathnode->jpath.path.restrictList,
+			list_copy(outer_path->restrictList));
+	pathnode->jpath.path.restrictList = list_concat(pathnode->jpath.path.restrictList, list_copy(restrict_clauses));
+
 	/* pathnode->materialize_inner will be set by final_cost_mergejoin */
 
 	final_cost_mergejoin(root, pathnode, workspace, sjinfo);
@@ -1754,16 +1748,15 @@ create_mergejoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
  *		(this should be a subset of the restrict_clauses list)
  */
 HashPath *
-create_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
-		JoinCostWorkspace *workspace, SpecialJoinInfo *sjinfo,
-		SemiAntiJoinFactors *semifactors, Path *outer_path, Path *inner_path,
+create_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, JoinCostWorkspace *workspace,
+		SpecialJoinInfo *sjinfo, SemiAntiJoinFactors *semifactors, Path *outer_path, Path *inner_path,
 		List *restrict_clauses, Relids required_outer, List *hashclauses) {
 	HashPath *pathnode = makeNode(HashPath);
 
 	pathnode->jpath.path.pathtype = T_HashJoin;
 	pathnode->jpath.path.parent = joinrel;
-	pathnode->jpath.path.param_info = get_joinrel_parampathinfo(root, joinrel,
-			outer_path, inner_path, sjinfo, required_outer, &restrict_clauses);
+	pathnode->jpath.path.param_info = get_joinrel_parampathinfo(root, joinrel, outer_path, inner_path, sjinfo,
+			required_outer, &restrict_clauses);
 
 	/*
 	 * A hashjoin never has pathkeys, since its output ordering is
@@ -1782,6 +1775,13 @@ create_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
 	pathnode->jpath.innerjoinpath = inner_path;
 	pathnode->jpath.joinrestrictinfo = restrict_clauses;
 	pathnode->path_hashclauses = hashclauses;
+
+	pathnode->jpath.path.restrictList = list_concat(pathnode->jpath.path.restrictList,
+			list_copy(inner_path->restrictList));
+	pathnode->jpath.path.restrictList = list_concat(pathnode->jpath.path.restrictList,
+			list_copy(outer_path->restrictList));
+	pathnode->jpath.path.restrictList = list_concat(pathnode->jpath.path.restrictList, list_copy(restrict_clauses));
+
 	/* final_cost_hashjoin will fill in pathnode->num_batches */
 
 	final_cost_hashjoin(root, pathnode, workspace, sjinfo, semifactors);
@@ -1807,8 +1807,7 @@ create_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
  * as members of an append path.
  */
 Path *
-reparameterize_path(PlannerInfo *root, Path *path, Relids required_outer,
-		double loop_count) {
+reparameterize_path(PlannerInfo *root, Path *path, Relids required_outer, double loop_count) {
 	RelOptInfo *rel = path->parent;
 
 	/* Can only increase, not decrease, path's parameterization */
@@ -1830,220 +1829,21 @@ reparameterize_path(PlannerInfo *root, Path *path, Relids required_outer,
 		 * the cost estimate.
 		 */
 		memcpy(newpath, ipath, sizeof(IndexPath));
-		newpath->path.param_info = get_baserel_parampathinfo(root, rel,
-				required_outer);
+		newpath->path.param_info = get_baserel_parampathinfo(root, rel, required_outer);
+			printf("Reparameterizing....\n");
 		cost_index(newpath, root, loop_count);
 		return (Path *) newpath;
 	}
 	case T_BitmapHeapScan: {
 		BitmapHeapPath *bpath = (BitmapHeapPath *) path;
 
-		return (Path *) create_bitmap_heap_path(root, rel, bpath->bitmapqual,
-				required_outer, loop_count);
+		return (Path *) create_bitmap_heap_path(root, rel, bpath->bitmapqual, required_outer, loop_count);
 	}
 	case T_SubqueryScan:
-		return create_subqueryscan_path(root, rel, path->pathkeys,
-				required_outer);
+		return create_subqueryscan_path(root, rel, path->pathkeys, required_outer);
 	default:
 		break;
 	}
 	return NULL;
-}
-static int read_line(StringInfo str, FILE *file) {
-	int ch;
-
-	while (((ch = fgetc(file)) != '\n') && (ch != EOF)) {
-
-		appendStringInfoChar(str, ch);
-
-	}
-	return ch;
-}
-
-void get_baserel_memo_size(MemoInfoData *result, const List *lrelName,
-		int level, int clauses_length, char *quals) {
-	FILE *file = AllocateFile("memoTxt.txt", "rb");
-
-	int ARG_NUM = 5;
-	char srelname[DEFAULT_SIZE];
-	char *cquals = (char *) palloc(DEFAULT_SIZE * sizeof(char));
-	int mlevel;
-	List *lquals1 = NIL;
-	List *lquals2 = NIL;
-	int qualssize;
-	int estsize;
-	int actsize;
-	StringInfoData str;
-	MemoInfoData resultName;
-	MemoInfoData *resultName_ptr;
-
-	resultName_ptr = &resultName;
-	initStringInfo(&str);
-	result->found = 0;
-	result->rows = -1;
-
-	build_string_list(&lquals2, quals);
-
-	memset(cquals, '\0', DEFAULT_SIZE);
-	if (cquals == NULL) {
-		printf("error allocating memory \n");
-		fflush(stdout);
-
-		return;
-
-	}
-
-	fflush(stdout);
-
-	while (read_line(&str, file) != EOF) {
-
-		//Make sure that we have enough space allocatd to read the quals
-		if (sscanf(str.data, "%d\t%s\t%d\t%d\t%d", &mlevel, srelname, &estsize,
-				&actsize, &qualssize) == ARG_NUM) {
-			//printf("checkpoint 1");
-			//printf("found argss for %s at level %d\n", relname, level);
-
-			//fflush(stdout);
-			if (mlevel == level) {
-				check_relation_names(&resultName, srelname, lrelName);
-
-				if (isFullMatched(resultName_ptr)) {
-					if (qualssize >= DEFAULT_SIZE) {
-
-						cquals = (char *) repalloc(cquals,
-								(qualssize + 1) * sizeof(char));
-						if (cquals == NULL) {
-							printf("error allocating memory \n");
-							fflush(stdout);
-
-							return;
-
-						}
-						memset(cquals, '0', qualssize + 1);
-						cquals[qualssize] = '\0';
-
-						fflush(stdout);
-					}
-
-					if (sscanf(str.data, "%*d\t%*s\t%*d\t%*d\t%*d\t%[^\n]",
-							cquals) == 1) {
-						//printf("checkpoint 2");
-						build_string_list(&lquals1, cquals);
-
-						compt_lists(result, lquals1, lquals2);
-
-						if (isMatched(result)) {
-							printf(" found rel: %s at level %d with %d clauses et %d rows \n",
-							 srelname, mlevel, clauses_length, actsize);
-
-							 printf("Clauses were :\n ");
-
-							 print(lquals1);
-							 print(lquals2);
-							 fflush(stdout);
-							pfree(cquals);
-							result->rows = actsize;
-							return;
-
-						}
-
-					}
-				}
-			}
-		}
-
-		memset(srelname, '\0', strlen(srelname) + 1);
-		memset(cquals, '\0', DEFAULT_SIZE);
-		resetStringInfo(&str);
-		mlevel = 0;
-
-	}
-	pfree(cquals);
-
-}
-
-void get_join_memo_size(MemoInfoData *result, const List *lrelName, int level,
-		char *quals) {
-
-	FILE *file = AllocateFile("memoTxt.txt", "rb");
-
-	int mlevel;
-	int estsize;
-	int actsize;
-	StringInfoData str;
-	char srelname[DEFAULT_SIZE];
-	MemoInfoData resultName;
-	MemoInfoData *resultName_ptr;
-
-	resultName_ptr = &resultName;
-	//Default values for the MemoinfoData struct
-	result->found = 0;
-	result->rows = -1;
-
-	//initialize  de file reader buffer;
-	initStringInfo(&str);
-
-	fflush(stdout);
-	while (read_line(&str, file) != EOF) {
-
-		if (sscanf(str.data, "%d\t%s\t%d\t%d", &mlevel, srelname,
-				&estsize, &actsize) == 4) {
-
-			if (level == mlevel) {
-				check_relation_names(&resultName, srelname, lrelName);
-
-				if (isFullMatched(resultName_ptr)) {
-					printf("found  join rel: %s at level %d and rows %d\n",
-							srelname, mlevel, actsize);
-					fflush(stdout);
-					result->rows = actsize;
-					return;
-				}
-
-			}
-		}
-		memset(srelname, '\0', strlen(srelname) + 1);
-		resetStringInfo(&str);
-		mlevel = 0;
-
-	}
-
-}
-
-void compt_lists(MemoInfoData * result, List *lleft, const List *lright) {
-	List * ldiff = NIL;
-
-	if (list_length(lleft) >= list_length(lright)) {
-		ldiff = list_difference(lleft, lright);
-		result->found =
-				(ldiff == NIL)
-						+ ((ldiff == NIL)
-								&& (list_length(lleft) == list_length(lright)))
-						+ ((ldiff != NIL)
-								&& (list_length(lleft) > list_length(lright)));
-	}
-}
-
-static void build_string_list(List ** buff, char * stringList) {
-	char *save;
-	char *s = ",";
-	char *tmp = NULL;
-	Value *value;
-
-	tmp = strtok_r(stringList, s, &save);
-	while (tmp != NULL) {
-		value = makeString(tmp);
-		*buff = lappend(*buff, value);
-		tmp = strtok_r(NULL, s, &save);
-
-	}
-	Assert(*buff != NIL);
-}
-void check_relation_names(MemoInfoData *cmpName, char *relName2,
-		const List *relName1) {
-	List * lrelname = NIL;
-	build_string_list(&lrelname, relName2);
-	compt_lists(cmpName, lrelname, relName1);
-
 }
 
