@@ -650,8 +650,7 @@ create_index_path(PlannerInfo *root, IndexOptInfo *index, List *indexclauses, Li
 	IndexPath *pathnode = makeNode(IndexPath);
 	RelOptInfo *rel = index->rel;
 	List *indexquals, *indexqualcols;
-	MemoRelation * memo_rel = NULL;
-	double act_loop_count = loop_count;
+	double act_loop_count = 0;
 
 	pathnode->path.pathtype = indexonly ? T_IndexOnlyScan : T_IndexScan;
 	pathnode->path.parent = rel;
@@ -670,28 +669,9 @@ create_index_path(PlannerInfo *root, IndexOptInfo *index, List *indexclauses, Li
 	pathnode->indexorderbycols = indexorderbycols;
 	pathnode->indexscandir = indexscandir;
 
-	pathnode->path.restrictList = list_copy(rel->baserestrictinfo);
-	if (pathnode->path.param_info) {
-		pathnode->path.restrictList = list_concat(pathnode->path.restrictList,
-				list_copy(pathnode->path.param_info->ppi_clauses));
-
-	}
-	if (enable_memo) {
-
-		memo_rel = get_Memorelation(rel->rel_name, root->query_level + rel->rtekind, pathnode->path.restrictList, true);
-
-		if (memo_rel != NULL) {
-			/*printf("Found relatin in pathnode index path and loops : %d \n", memo_rel->loops);
-			print(rel->rel_name);
-			print(pathnode->path.restrictList);
-			fflush(stdout);*/
-			act_loop_count = memo_rel->loops;
-
-		}
-		act_loop_count = act_loop_count == 0 ? loop_count : act_loop_count;
-		pathnode->indexinfo->loop_count= act_loop_count;
-	}
-
+	set_plain_rel_sizes_from_memo(root, rel, &pathnode->path, &act_loop_count,true);
+	act_loop_count = act_loop_count == 0 ? loop_count : act_loop_count;
+	pathnode->indexinfo->loop_count = act_loop_count;
 	cost_index(pathnode, root, act_loop_count);
 
 	return pathnode;
@@ -712,8 +692,7 @@ create_index_path(PlannerInfo *root, IndexOptInfo *index, List *indexclauses, Li
 BitmapHeapPath *
 create_bitmap_heap_path(PlannerInfo *root, RelOptInfo *rel, Path *bitmapqual, Relids required_outer, double loop_count) {
 	BitmapHeapPath *pathnode = makeNode(BitmapHeapPath);
-	double act_loop_count = loop_count;
-	MemoRelation * memo_rel = NULL;
+	double act_loop_count = 0;
 
 	pathnode->path.pathtype = T_BitmapHeapScan;
 	pathnode->path.parent = rel;
@@ -721,23 +700,9 @@ create_bitmap_heap_path(PlannerInfo *root, RelOptInfo *rel, Path *bitmapqual, Re
 	pathnode->path.pathkeys = NIL; /* always unordereddered */
 
 	pathnode->bitmapqual = bitmapqual;
-	pathnode->path.restrictList = list_copy(rel->baserestrictinfo);
-	if (pathnode->path.param_info)
-		pathnode->path.restrictList = list_concat(pathnode->path.restrictList,
-				list_copy(pathnode->path.param_info->ppi_clauses));
-	if (enable_memo) {
+	set_plain_rel_sizes_from_memo(root, rel, &pathnode->path, &act_loop_count,true);
+	act_loop_count = act_loop_count == 0 ? loop_count : act_loop_count;
 
-		memo_rel = get_Memorelation(rel->rel_name, root->query_level + rel->rtekind, pathnode->path.restrictList, true);
-
-		if (memo_rel != NULL) {
-			/*printf("Found relation in pathnode bitmap path and loops : %d \n", memo_rel->loops);
-			print(rel->rel_name);
-			print(pathnode->path.restrictList);
-			fflush(stdout);*/
-			act_loop_count = memo_rel->loops;
-			act_loop_count = act_loop_count == 0 ? loop_count : act_loop_count;
-		}
-	}
 	cost_bitmap_heap_scan(&pathnode->path, root, rel, pathnode->path.param_info, bitmapqual, act_loop_count);
 
 	return pathnode;
@@ -1671,10 +1636,7 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 	pathnode->outerjoinpath = outer_path;
 	pathnode->innerjoinpath = inner_path;
 	pathnode->joinrestrictinfo = restrict_clauses;
-//	pathnode->restrictList=joinrel->restrictList;
-	pathnode->path.restrictList = list_concat(pathnode->path.restrictList, list_copy(inner_path->restrictList));
-	pathnode->path.restrictList = list_concat(pathnode->path.restrictList, list_copy(outer_path->restrictList));
-	pathnode->path.restrictList = list_concat(pathnode->path.restrictList, list_copy(restrict_clauses));
+	set_join_sizes_from_memo(root,joinrel,pathnode);
 
 	final_cost_nestloop(root, pathnode, workspace, sjinfo, semifactors);
 
@@ -1718,11 +1680,7 @@ create_mergejoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
 	pathnode->path_mergeclauses = mergeclauses;
 	pathnode->outersortkeys = outersortkeys;
 	pathnode->innersortkeys = innersortkeys;
-	pathnode->jpath.path.restrictList = list_concat(pathnode->jpath.path.restrictList,
-			list_copy(inner_path->restrictList));
-	pathnode->jpath.path.restrictList = list_concat(pathnode->jpath.path.restrictList,
-			list_copy(outer_path->restrictList));
-	pathnode->jpath.path.restrictList = list_concat(pathnode->jpath.path.restrictList, list_copy(restrict_clauses));
+	set_join_sizes_from_memo(root,joinrel,&pathnode->jpath);
 
 	/* pathnode->materialize_inner will be set by final_cost_mergejoin */
 
@@ -1775,12 +1733,7 @@ create_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 	pathnode->jpath.innerjoinpath = inner_path;
 	pathnode->jpath.joinrestrictinfo = restrict_clauses;
 	pathnode->path_hashclauses = hashclauses;
-
-	pathnode->jpath.path.restrictList = list_concat(pathnode->jpath.path.restrictList,
-			list_copy(inner_path->restrictList));
-	pathnode->jpath.path.restrictList = list_concat(pathnode->jpath.path.restrictList,
-			list_copy(outer_path->restrictList));
-	pathnode->jpath.path.restrictList = list_concat(pathnode->jpath.path.restrictList, list_copy(restrict_clauses));
+	set_join_sizes_from_memo(root,joinrel,&pathnode->jpath);
 
 	/* final_cost_hashjoin will fill in pathnode->num_batches */
 
@@ -1830,7 +1783,7 @@ reparameterize_path(PlannerInfo *root, Path *path, Relids required_outer, double
 		 */
 		memcpy(newpath, ipath, sizeof(IndexPath));
 		newpath->path.param_info = get_baserel_parampathinfo(root, rel, required_outer);
-			printf("Reparameterizing....\n");
+		printf("Reparameterizing....\n");
 		cost_index(newpath, root, loop_count);
 		return (Path *) newpath;
 	}

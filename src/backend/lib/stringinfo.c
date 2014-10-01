@@ -49,6 +49,7 @@ initStringInfo(StringInfo str)
 
 	str->data = (char *) palloc(size);
 	str->maxlen = size;
+	str->reduced =false;
 	resetStringInfo(str);
 }
 

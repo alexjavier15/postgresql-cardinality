@@ -20,6 +20,9 @@
 #include "storage/block.h"
 
 
+
+struct MemoRelation;
+
 /*
  * Relids
  *		Set of relation identifiers (indexes into the rangetable).
@@ -528,9 +531,10 @@ typedef struct RelOptInfo
 	List *		restrictList;
 	List		*rel_name;
 	bool		memo_checked;
-	double 		loops;
-	double 		total_rows;
-	double 		removed;
+	List		*last_restrictList;
+	int			last_level;
+	bool		last_index_type;
+	MemoRelation		*last_memorel;
 
 
 } RelOptInfo;
@@ -812,6 +816,8 @@ typedef struct Path
 		/* pathkeys is a List of PathKey nodes; see above */
 	/*Used for memo calculations*/
 	List	   *restrictList;
+	double		total_rows;
+	double 		removed_rows;
 } Path;
 
 /* Macro for extracting a path's parameterization relids; beware double eval */

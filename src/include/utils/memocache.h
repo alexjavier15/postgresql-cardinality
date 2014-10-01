@@ -8,9 +8,10 @@
 #ifndef MEMOCACHE_H_
 #define MEMOCACHE_H_
 
-#include "nodes/parsenodes.h"
-#include "nodes/relation.h"
+
 #include "lib/ilist.h"
+#include "nodes/relation.h"
+
 
 #define cacheTag(cacheptr)		(((const CacheM*)(cacheptr))->type)
 #define IsACache(cacheptr,_type_)		(cacheTag(cacheptr) == M_##_type_)
@@ -30,23 +31,11 @@ typedef struct MemoInfoData1 {
 	List *unmatches;
 	List *matches;
 	double loops;
-	double removed;
+	double removed_rows;
 
 } MemoInfoData1;
 
-typedef struct MemoRelation {
-	dlist_node list_node;
-	int nodeType;
-	int level;
-	List* relationname;
-	double rows;
-	int clauseslength;
-	List * clauses;
-	double tuples;
-	double removed;
-	int loops;
-	bool test;
-} MemoRelation;
+
 typedef enum CacheTag {
 	M_Invalid = 0,
 
@@ -75,7 +64,10 @@ extern void export_join(FILE *file);
 extern MemoRelation * set_base_rel_tuples(List *lrelName, int level, double tuples);
 extern void set_memo_join_sizes(void);
 extern int  get_memo_loop_count(List *relation_name, List *clauses, int level);
-extern get_memo_removed(List *relation_name, List *clauses, int level);
+extern int get_memo_removed(List *relation_name, List *clauses, int level);
 extern MemoRelation *  get_Memorelation(List *lrelName, int level, List *clauses, bool isIndex);
+extern void set_plain_rel_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, Path *path,double *loop_count, bool isIndex);
+extern void set_join_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, JoinPath *pathnode);
+
 #endif /* MEMOCACHE_H_ */
 

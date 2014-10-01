@@ -242,8 +242,6 @@ void cost_index(IndexPath *path, PlannerInfo *root, double loop_count) {
 	Cost cpu_per_tuple;
 	double tuples_fetched;
 	double pages_fetched;
-	MemoRelation *memo_rel = NULL;
-	;
 
 	/* Should only be applied to base relations */
 	Assert(IsA(baserel, RelOptInfo) && IsA(index, IndexOptInfo));
@@ -262,10 +260,6 @@ void cost_index(IndexPath *path, PlannerInfo *root, double loop_count) {
 		/* allclauses should just be the rel's restriction clauses */
 		allclauses = baserel->baserestrictinfo;
 	}
-	if (enable_memo)
-		memo_rel = get_Memorelation(baserel->rel_name, root->query_level + baserel->rtekind, allclauses, true);
-	if (enable_memo && memo_rel != NULL)
-		path->path.rows = memo_rel->rows;
 
 	if (!enable_indexscan)
 		startup_cost += disable_cost;
@@ -281,9 +275,9 @@ void cost_index(IndexPath *path, PlannerInfo *root, double loop_count) {
 			PointerGetDatum(&indexStartupCost), PointerGetDatum(&indexTotalCost), PointerGetDatum(&indexSelectivity),
 			PointerGetDatum(&indexCorrelation));
 	/*StringInfoData str;
-	initStringInfo(&str);
+	 initStringInfo(&str);
 
-	printf("loops for %s in index  are-> : %lf  \n", nodeToString(path->path.parent->rel_name), loop_count);*/
+	 printf("loops for %s in index  are-> : %lf  \n", nodeToString(path->path.parent->rel_name), loop_count);*/
 	/*
 	 * Save amcostestimate's results for possible use in bitmap scan planning.
 	 * We don't bother to save indexStartupCost or indexCorrelation, because a
@@ -297,8 +291,8 @@ void cost_index(IndexPath *path, PlannerInfo *root, double loop_count) {
 	run_cost += indexTotalCost - indexStartupCost;
 
 	/* estimate number of main-table tuples fetched */
-	if (enable_memo && baserel->loops) {
-		tuples_fetched = clamp_row_est(memo_rel->rows / memo_rel->loops);
+	if (enable_memo && path->path.total_rows) {
+		tuples_fetched = clamp_row_est(path->path.total_rows / loop_count);
 	} else
 		tuples_fetched = clamp_row_est(indexSelectivity * baserel->tuples);
 
@@ -573,7 +567,6 @@ void cost_bitmap_heap_scan(Path *path, PlannerInfo *root, RelOptInfo *baserel, P
 	double pages_fetched;
 	double spc_seq_page_cost, spc_random_page_cost;
 	double T;
-	MemoRelation * memo_rel = NULL;
 
 	/* Should only be applied to base relations */
 	Assert(IsA(baserel, RelOptInfo));
@@ -585,10 +578,7 @@ void cost_bitmap_heap_scan(Path *path, PlannerInfo *root, RelOptInfo *baserel, P
 		path->rows = param_info->ppi_rows;
 	else
 		path->rows = baserel->rows;
-	if (enable_memo)
-		memo_rel = get_Memorelation(baserel->rel_name, root->query_level + baserel->rtekind, path->restrictList, true);
-	if (enable_memo && memo_rel != NULL)
-		path->rows = memo_rel->rows;
+
 	if (!enable_bitmapscan)
 		startup_cost += disable_cost;
 
@@ -3121,6 +3111,7 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 		//maybe memo hacked
 		if (list_length(rel->baserestrictinfo) != 0 && memorelation != NULL) {
 			initStringInfo(&str);
+			str.reduced=true;
 			build_selec_string(&str, rel->baserestrictinfo, &rest);
 			/* printf("checking base relation  ");
 			 printf("Names for base relation are: \n");
@@ -3180,6 +3171,7 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 
 	allclauses = list_concat(list_copy(param_clauses), rel->baserestrictinfo);
 	initStringInfo(&str);
+	str.reduced=true;
 	build_selec_string(&str, allclauses, &rest);
 	//printf(" quals at cost plan level \n %s : \n", (char *) res);
 	//fflush(stdout);
@@ -3266,43 +3258,43 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *outer_rel, RelOptInfo *inner_rel,
 		SpecialJoinInfo *sjinfo, List *restrictlist) {
 	double nrows;
-	Relids tmpset = bms_copy(rel->relids);
-	ListCell *lc;
-	int rest = 0;
+	//Relids tmpset = bms_copy(rel->relids);
+	//ListCell *lc;
+	//int rest = 0;
 	StringInfoData str;
-	int x = -1;
+	//int x = -1;
 	MemoInfoData1 result;
 	initStringInfo(&str);
 
 	/*printf("relids base join are:\n---------------------------------\n");
 
-	while ((x = bms_first_member(tmpset)) >= 0)
-		printf("%d,", x);
-	bms_free(tmpset);
-	build_selec_string(&str, restrictlist, &rest);
-	printf("\n");
-	printf("End relids:\n---------------------------------\n");
-	printf("Clauses are %s:\n---------------------------------\n", str.data);
+	 while ((x = bms_first_member(tmpset)) >= 0)
+	 printf("%d,", x);
+	 bms_free(tmpset);
+	 build_selec_string(&str, restrictlist, &rest);
+	 printf("\n");
+	 printf("End relids:\n---------------------------------\n");
+	 printf("Clauses are %s:\n---------------------------------\n", str.data);
 
-	printf("End clauses\n---------------------------------\n");
-	resetStringInfo(&str);
-	build_selec_string(&str, sjinfo->join_quals, &rest);
-	printf("join quals are %s:\n---------------------------------\n", str.data);
-	printf("End quals \n---------------------------------\n");*/
+	 printf("End clauses\n---------------------------------\n");
+	 resetStringInfo(&str);
+	 build_selec_string(&str, sjinfo->join_quals, &rest);
+	 printf("join quals are %s:\n---------------------------------\n", str.data);
+	 printf("End quals \n---------------------------------\n");*/
 	if (!enable_memo)
 		store_join(rel->rel_name, root->query_level, list_copy(rel->restrictList));
 
 	if (enable_memo) {
-/*
-		printf("checking join relation  ");
-		foreach (lc, rel->rel_name) {
+		/*
+		 printf("checking join relation  ");
+		 foreach (lc, rel->rel_name) {
 
-			printf("%s ,", ((Value *) lfirst(lc))->val.str);
-			fflush(stdout);
-		}
-		printf("\n");
+		 printf("%s ,", ((Value *) lfirst(lc))->val.str);
+		 fflush(stdout);
+		 }
+		 printf("\n");
 
-		fflush(stdout);*/
+		 fflush(stdout);*/
 
 		get_join_memo_size1(&result, rel, root->query_level, NULL, false);
 		nrows = result.rows;
@@ -3339,35 +3331,35 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double outer_rows, double inner_rows,
 		SpecialJoinInfo *sjinfo, List *restrict_clauses) {
 	double nrows = -1;
-	int rest = 0;
+	//int rest = 0;
 	MemoInfoData1 result;
 	StringInfoData str;
-	ListCell *lc;
+	//ListCell *lc;
 
-	int x = -1;
+	//int x = -1;
 
-	Relids tmpset = bms_copy(rel->relids);
+	//Relids tmpset = bms_copy(rel->relids);
 	initStringInfo(&str);
 
 	if (!enable_memo)
 		store_join(rel->rel_name, root->query_level, list_copy(rel->restrictList));
-/*
-	printf("\t\t\trelids parameterized join are:\n---------------------------------\n");
+	/*
+	 printf("\t\t\trelids parameterized join are:\n---------------------------------\n");
 
-	while ((x = bms_first_member(tmpset)) >= 0)
-		printf("%d,", x);
-	bms_free(tmpset);
-	build_selec_string(&str, restrict_clauses, &rest);
-	printf("\n");
-	printf("End relids:\n---------------------------------\n");
-	printf("Clauses are %s:\n---------------------------------\n", str.data);
+	 while ((x = bms_first_member(tmpset)) >= 0)
+	 printf("%d,", x);
+	 bms_free(tmpset);
+	 build_selec_string(&str, restrict_clauses, &rest);
+	 printf("\n");
+	 printf("End relids:\n---------------------------------\n");
+	 printf("Clauses are %s:\n---------------------------------\n", str.data);
 
-	printf("End clauses\n---------------------------------\n");
-	resetStringInfo(&str);
-	build_selec_string(&str, sjinfo->join_quals, &rest);
-	printf("join quals are %s:\n---------------------------------\n", str.data);
+	 printf("End clauses\n---------------------------------\n");
+	 resetStringInfo(&str);
+	 build_selec_string(&str, sjinfo->join_quals, &rest);
+	 printf("join quals are %s:\n---------------------------------\n", str.data);
 
-	printf("End quals \n---------------------------------\n");*/
+	 printf("End quals \n---------------------------------\n");*/
 
 	/* Estimate the number of rows returned by the parameterized join as the
 	 * sizes of the input paths times the selectivity of the clauses that have
@@ -3379,13 +3371,13 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 	 */
 	if (enable_memo && rel->rel_name != NULL) {
 		/*printf("checking parameterized join relation  ");
-		foreach (lc, rel->rel_name) {
+		 foreach (lc, rel->rel_name) {
 
-			printf("%s ,", ((Value *) lfirst(lc))->val.str);
-			fflush(stdout);
-		}
-		printf("\n");
-		fflush(stdout);*/
+		 printf("%s ,", ((Value *) lfirst(lc))->val.str);
+		 fflush(stdout);
+		 }
+		 printf("\n");
+		 fflush(stdout);*/
 		//rest = list_length(restrict_clauses);
 		get_join_memo_size1(&result, rel, root->query_level, NULL, true);
 		nrows = result.rows;
@@ -3892,8 +3884,8 @@ void build_selec_string(const void * str, List *clauses, int * lenght) {
 	*lenght = list_length(clauses);
 
 	if (*lenght != 0) {
-		node = (Node *) make_ands_explicit(clauses);
-		nodeSimToString(node, str);
+
+		nodeSimToString(clauses, str);
 
 	}
 

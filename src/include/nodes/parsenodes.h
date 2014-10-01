@@ -23,6 +23,8 @@
 #include "nodes/bitmapset.h"
 #include "nodes/primnodes.h"
 #include "nodes/value.h"
+#include "lib/ilist.h"
+
 
 /* Possible sources of a Query */
 typedef enum QuerySource
@@ -2769,5 +2771,17 @@ typedef struct AlterTSConfigurationStmt
 	bool		replace;		/* if true - replace dictionary by another */
 	bool		missing_ok;		/* for DROP - skip error if missing? */
 } AlterTSConfigurationStmt;
-
+typedef struct MemoRelation {
+	dlist_node list_node;
+	int nodeType;
+	int level;
+	List* relationname;
+	double rows;
+	int clauseslength;
+	List * clauses;
+	double tuples;
+	double removed_rows;
+	int loops;
+	bool test;
+} MemoRelation;
 #endif   /* PARSENODES_H */

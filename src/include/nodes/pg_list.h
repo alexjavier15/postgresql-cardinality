@@ -192,6 +192,7 @@ list_length(const List *l)
 		 (cell1) = lnext(cell1), (cell2) = lnext(cell2), (cell3) = lnext(cell3))
 
 extern List *lappend(List *list, void *datum);
+extern bool *lequalSet(List *list1, List *list2);
 extern List *lappend_int(List *list, int datum);
 extern List *lappend_oid(List *list, Oid datum);
 
@@ -214,13 +215,18 @@ extern bool list_member(const List *list, const void *datum);
 extern bool list_member_ptr(const List *list, const void *datum);
 extern bool list_member_int(const List *list, int datum);
 extern bool list_member_oid(const List *list, Oid datum);
+extern bool list_member_remove(const List *list, const void *datum);
+
 
 extern List *list_delete(List *list, void *datum);
+extern List *list_remove(List *list, void *datum);
+
 extern List *list_delete_ptr(List *list, void *datum);
 extern List *list_delete_int(List *list, int datum);
 extern List *list_delete_oid(List *list, Oid datum);
 extern List *list_delete_first(List *list);
 extern List *list_delete_cell(List *list, ListCell *cell, ListCell *prev);
+extern List *list_remove_cell(List *list, ListCell *cell, ListCell *prev);
 
 extern List *list_union(const List *list1, const List *list2);
 extern List *list_union_ptr(const List *list1, const List *list2);

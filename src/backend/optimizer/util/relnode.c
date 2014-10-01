@@ -126,9 +126,10 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptKind reloptkind) {
 	rel->joininfo = NIL;
 	rel->has_eclass_joins = false;
 	rel->rel_name = NIL;
-	rel->loops = 0;
-	rel->total_rows = 0;
-	rel->removed = 0;
+	rel->last_index_type=0;
+	rel->last_level=0;
+	rel->last_memorel=NULL;
+	rel->last_restrictList=NIL;
 
 	/* Check type of rtable entry */
 	switch (rte->rtekind) {
@@ -314,6 +315,7 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 	RelOptInfo *joinrel;
 	//Relation relation;
 	List *restrictlist;
+	//ListCell *lc;
 
 	/*
 	 * See if we already have a joinrel for this set of base rels.
@@ -328,15 +330,15 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 		if (restrictlist_ptr) {
 			*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
 
-			restrictlist = list_copy(inner_rel->restrictList);
+			/*restrictlist = list_copy(inner_rel->restrictList);
 			restrictlist = list_concat(restrictlist, list_copy(outer_rel->restrictList));
 			restrictlist = list_concat(restrictlist,
 					generate_join_implied_equalities(root, joinrel->relids, outer_rel->relids, inner_rel));
-			store_join(joinrel->rel_name, root->query_level, restrictlist);
+			store_join(joinrel->rel_name, root->query_level, restrictlist);*/
 
 			if (!joinrel->memo_checked && enable_memo) {
 
-				set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo, *restrictlist_ptr);
+				//set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo, *restrictlist_ptr);
 
 			}
 		}
@@ -388,12 +390,19 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 	joinrel->rel_name = NIL;
 	joinrel->restrictList = NIL;
 
+
+
 	/* We build the join mane  separated by colons using names of childs*/
 	/* see stringinfo.h for an explanation of this maneuver */
 //	if (enable_memo) {
 	joinrel->rel_name = list_copy(inner_rel->rel_name);
-	joinrel->rel_name = list_concat(joinrel->rel_name, outer_rel->rel_name);
+	joinrel->rel_name = list_concat(joinrel->rel_name, list_copy(outer_rel->rel_name));
 	joinrel->memo_checked = false;
+	joinrel->last_index_type=0;
+	joinrel->last_level=0;
+	joinrel->last_memorel=NULL;
+	joinrel->last_restrictList=NIL;
+
 	//}
 
 	/*
@@ -430,9 +439,9 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 	 * Set estimates of the joinrel's size.
 	 */
 
-	joinrel->restrictList = list_concat(joinrel->restrictList, list_copy(inner_rel->restrictList));
-	joinrel->restrictList = list_concat(joinrel->restrictList, list_copy(outer_rel->restrictList));
-	joinrel->restrictList = list_concat(joinrel->restrictList,
+	joinrel->restrictList = list_concat_unique(joinrel->restrictList, list_copy(inner_rel->restrictList));
+	joinrel->restrictList = list_concat_unique(joinrel->restrictList, list_copy(outer_rel->restrictList));
+	joinrel->restrictList = list_concat_unique(joinrel->restrictList,
 			generate_join_implied_equalities(root, joinrel->relids, outer_rel->relids, inner_rel));
 
 	set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo, restrictlist);

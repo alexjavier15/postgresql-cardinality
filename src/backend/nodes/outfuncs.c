@@ -30,6 +30,7 @@
 #include "nodes/relation.h"
 #include "utils/datum.h"
 #include  "nodes/nodes.h"
+#include "nodes/readfuncs.h"
 #include "utils/memocache.h"
 
 /*
@@ -121,21 +122,22 @@ static void _outToken(StringInfo str, const char *s) {
 	 * protective backslash.
 	 */
 	/* These characters only need to be quoted at the start of the string */
-	if (*s == '<' || *s == '\"' || isdigit((unsigned char) *s)
-			|| ((*s == '+' || *s == '-') && (isdigit((unsigned char) s[1]) || s[1] == '.')))
-		appendStringInfoChar(str, '\\');
-	while (*s) {
-		/* These chars must be backslashed anywhere in the string */
-		if (*s == ' ' || *s == '\n' || *s == '\t' || *s == '(' || *s == ')' || *s == '{' || *s == '}' || *s == '\\')
+
+		if (*s == '<' || *s == '\"' || isdigit((unsigned char) *s)
+				|| ((*s == '+' || *s == '-') && (isdigit((unsigned char) s[1]) || s[1] == '.')))
 			appendStringInfoChar(str, '\\');
-		appendStringInfoChar(str, *s++);
-	}
+		while (*s) {
+			/* These chars must be backslashed anywhere in the string */
+			if (*s == ' ' || *s == '\n' || *s == '\t' || *s == '(' || *s == ')' || *s == '{' || *s == '}' || *s == '\\')
+				appendStringInfoChar(str, '\\');
+			appendStringInfoChar(str, *s++);
+		}
+
 }
 
 static void _outList(ArgType type, StringInfo str, const List *node, bool sim) {
 	const ListCell *lc;
-	if (!sim)
-		appendStringInfoChar(str, '(');
+	appendStringInfoChar(str, '(');
 
 	if (IsA(node, IntList))
 		appendStringInfoChar(str, 'i');
@@ -183,8 +185,7 @@ static void _outList(ArgType type, StringInfo str, const List *node, bool sim) {
 		else
 			elog(ERROR, "unrecognized list node type: %d", (int) node->type);
 	}
-	if (!sim)
-		appendStringInfoChar(str, ')');
+	appendStringInfoChar(str, ')');
 
 }
 
@@ -774,10 +775,12 @@ static void _outPlanInvalItem(StringInfo str, const PlanInvalItem *node) {
  *****************************************************************************/
 
 static void _outAlias(StringInfo str, const Alias *node) {
-	WRITE_NODE_TYPE("ALIAS");
+	if (!str->reduced)
+		WRITE_NODE_TYPE("ALIAS");
 
 	WRITE_STRING_FIELD(aliasname);
-	WRITE_NODE_FIELD(colnames);
+	if (!str->reduced)
+		WRITE_NODE_FIELD(colnames);
 }
 
 static void _outRangeVar(StringInfo str, const RangeVar *node) {
@@ -2930,6 +2933,16 @@ void nodeSimToString(const void *obj, const void *str) {
 	_outSimNode(S_NULL, (StringInfoData *) str, obj);
 
 }
+char * nodeSimToString_(const void *obj) {
+	StringInfoData str;
+	/* see stringinfo.h for an explanation of this maneuver */
+	initStringInfo(&str);
+	str.reduced=true;
+
+	_outSimNode(S_NULL, &str, obj);
+	return debackslash(str.data,str.len);
+}
+
 void _outSimOpExpr(StringInfo str, const OpExpr *node) {
 	WRITE_OID_FIELD(opno);
 	WRITE_NODE_SIM_FIELD(S_NULL, args);
@@ -2991,7 +3004,7 @@ void _outSimNode(ArgType type, StringInfo str, const void *obj) {
 			/* nodeRead does not want to see { } around these! */
 			_outValue(str, obj);
 		} else {
-			if (nodeTag(obj) != T_RestrictInfo && nodeTag(obj) != T_BoolExpr && nodeTag(obj) != T_RelabelType) {
+			if (nodeTag(obj) != T_RestrictInfo && nodeTag(obj) != T_BoolExpr) {
 				appendStringInfoChar(str, '{');
 				appendStringInfoSpaces(str, 1);
 			}
@@ -3025,20 +3038,124 @@ void _outSimNode(ArgType type, StringInfo str, const void *obj) {
 			case T_MemoClause:
 				_outSimMemoClause(str, obj);
 				break;
-
-				/*	case T_CurrentOfExpr:
-				 case T_Var:
-				 case T_Const:
-				 case T_Param:
-				 case T_DistinctExpr:
-				 case T_FuncExpr:
-				 case T_ScalarArrayOpExpr:
-				 case T_RowCompareExpr:
-				 case T_NullTest:
-				 case T_BooleanTest:
-				 case T_RelabelType:
-				 case T_CoerceToDomain:*/
+			case T_Alias:
+				_outAlias(str, obj);
 				break;
+			case T_RangeVar:
+				_outRangeVar(str, obj);
+				break;
+			case T_IntoClause:
+				_outIntoClause(str, obj);
+				break;
+			case T_Aggref:
+				_outAggref(str, obj);
+				break;
+			case T_WindowFunc:
+				_outWindowFunc(str, obj);
+				break;
+			case T_ArrayRef:
+				_outArrayRef(str, obj);
+				break;
+			case T_FuncExpr:
+				_outFuncExpr(str, obj);
+				break;
+			case T_NamedArgExpr:
+				_outNamedArgExpr(str, obj);
+				break;
+
+			case T_DistinctExpr:
+				_outDistinctExpr(str, obj);
+				break;
+			case T_NullIfExpr:
+				_outNullIfExpr(str, obj);
+				break;
+			case T_ScalarArrayOpExpr:
+				_outScalarArrayOpExpr(str, obj);
+				break;
+
+			case T_SubLink:
+				_outSubLink(str, obj);
+				break;
+
+			case T_AlternativeSubPlan:
+				_outAlternativeSubPlan(str, obj);
+				break;
+			case T_FieldSelect:
+				_outFieldSelect(str, obj);
+				break;
+			case T_FieldStore:
+				_outFieldStore(str, obj);
+				break;
+				case T_CoerceViaIO:
+				_outCoerceViaIO(str, obj);
+				break;
+			case T_ArrayCoerceExpr:
+				_outArrayCoerceExpr(str, obj);
+				break;
+			case T_ConvertRowtypeExpr:
+				_outConvertRowtypeExpr(str, obj);
+				break;
+			case T_CollateExpr:
+				_outCollateExpr(str, obj);
+				break;
+			case T_CaseExpr:
+				_outCaseExpr(str, obj);
+				break;
+			case T_CaseWhen:
+				_outCaseWhen(str, obj);
+				break;
+			case T_CaseTestExpr:
+				_outCaseTestExpr(str, obj);
+				break;
+			case T_ArrayExpr:
+				_outArrayExpr(str, obj);
+				break;
+			case T_RowExpr:
+				_outRowExpr(str, obj);
+				break;
+			case T_RowCompareExpr:
+				_outRowCompareExpr(str, obj);
+				break;
+			case T_CoalesceExpr:
+				_outCoalesceExpr(str, obj);
+				break;
+			case T_MinMaxExpr:
+				_outMinMaxExpr(str, obj);
+				break;
+			case T_XmlExpr:
+				_outXmlExpr(str, obj);
+				break;
+			case T_NullTest:
+				_outNullTest(str, obj);
+				break;
+			case T_BooleanTest:
+				_outBooleanTest(str, obj);
+				break;
+			case T_CoerceToDomain:
+				_outCoerceToDomain(str, obj);
+				break;
+			case T_CoerceToDomainValue:
+				_outCoerceToDomainValue(str, obj);
+				break;
+			case T_SetToDefault:
+				_outSetToDefault(str, obj);
+				break;
+			case T_CurrentOfExpr:
+				_outCurrentOfExpr(str, obj);
+				break;
+			case T_TargetEntry:
+				_outTargetEntry(str, obj);
+				break;
+			case T_RangeTblRef:
+				_outRangeTblRef(str, obj);
+				break;
+			case T_JoinExpr:
+				_outJoinExpr(str, obj);
+				break;
+			case T_FromExpr:
+				_outFromExpr(str, obj);
+				break;
+
 			default:
 
 				/*
@@ -3048,7 +3165,7 @@ void _outSimNode(ArgType type, StringInfo str, const void *obj) {
 
 				break;
 			}
-			if (nodeTag(obj) != T_RestrictInfo && nodeTag(obj) != T_BoolExpr && nodeTag(obj) != T_RelabelType) {
+			if (nodeTag(obj) != T_RestrictInfo && nodeTag(obj) != T_BoolExpr ) {
 				appendStringInfoSpaces(str, 1);
 				appendStringInfoChar(str, '}');
 
