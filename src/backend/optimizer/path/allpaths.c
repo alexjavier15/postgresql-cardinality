@@ -112,9 +112,7 @@ make_one_rel(PlannerInfo *root, List *joinlist) {
 	 */
 
 	set_base_rel_sizes(root);
-	if (enable_memo) {
-		set_memo_join_sizes();
-	}
+
 
 	set_base_rel_pathlists(root);
 

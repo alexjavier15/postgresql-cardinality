@@ -250,13 +250,13 @@ void cost_index(IndexPath *path, PlannerInfo *root, double loop_count) {
 
 	/* Mark the path with the correct row estimate */
 	if (path->path.param_info) {
-		path->path.rows = path->path.param_info->ppi_rows;
+		//path->path.rows = path->path.param_info->ppi_rows;
 
 		/* also get the set of clauses that should be enforced by the scan */
 		allclauses = list_concat(list_copy(path->path.param_info->ppi_clauses), baserel->baserestrictinfo);
 
 	} else {
-		path->path.rows = baserel->rows;
+		//path->path.rows = baserel->rows;
 		/* allclauses should just be the rel's restriction clauses */
 		allclauses = baserel->baserestrictinfo;
 	}
@@ -574,10 +574,10 @@ void cost_bitmap_heap_scan(Path *path, PlannerInfo *root, RelOptInfo *baserel, P
 	Assert(baserel->rtekind == RTE_RELATION);
 
 	/* Mark the path with the correct row estimate */
-	if (param_info)
-		path->rows = param_info->ppi_rows;
-	else
-		path->rows = baserel->rows;
+	/*if (param_info)
+	 path->rows = param_info->ppi_rows;
+	 else
+	 path->rows = baserel->rows;*/
 
 	if (!enable_bitmapscan)
 		startup_cost += disable_cost;
@@ -1626,10 +1626,6 @@ void final_cost_nestloop(PlannerInfo *root, NestPath *path, JoinCostWorkspace *w
 	double ntuples;
 
 	/* Mark the path with the correct row estimate */
-	if (path->path.param_info)
-		path->path.rows = path->path.param_info->ppi_rows;
-	else
-		path->path.rows = path->path.parent->rows;
 
 	/*
 	 * We could include disable_cost in the preliminary estimate, but that
@@ -1926,11 +1922,11 @@ void final_cost_mergejoin(PlannerInfo *root, MergePath *path, JoinCostWorkspace 
 		inner_path_rows = 1;
 
 	/* Mark the path with the correct row estimate */
-	if (path->jpath.path.param_info)
-		path->jpath.path.rows = path->jpath.path.param_info->ppi_rows;
-	else
-		path->jpath.path.rows = path->jpath.path.parent->rows;
-
+	/*if (path->jpath.path.param_info)
+	 path->jpath.path.rows = path->jpath.path.param_info->ppi_rows;
+	 else
+	 path->jpath.path.rows = path->jpath.path.parent->rows;
+	 */
 	/*
 	 * We could include disable_cost in the preliminary estimate, but that
 	 * would amount to optimizing for the case where the join method is
@@ -2280,10 +2276,10 @@ void final_cost_hashjoin(PlannerInfo *root, HashPath *path, JoinCostWorkspace *w
 	ListCell *hcl;
 
 	/* Mark the path with the correct row estimate */
-	if (path->jpath.path.param_info)
-		path->jpath.path.rows = path->jpath.path.param_info->ppi_rows;
-	else
-		path->jpath.path.rows = path->jpath.path.parent->rows;
+	/*if (path->jpath.path.param_info)
+	 path->jpath.path.rows = path->jpath.path.param_info->ppi_rows;
+	 else
+	 path->jpath.path.rows = path->jpath.path.parent->rows;*/
 
 	/*
 	 * We could include disable_cost in the preliminary estimate, but that
@@ -3094,11 +3090,9 @@ static double approx_tuple_count(PlannerInfo *root, JoinPath *path, List *quals)
  */
 void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 	double nrows;
-	int rest = 0;
 	int mrows = -1;
 	MemoInfoData1 result;
 
-	StringInfoData str;
 //	ListCell *lc;
 
 	/* Should only be applied to base relations */
@@ -3106,13 +3100,10 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 	Assert(rel ->rel_name != NIL);
 
 	if (enable_memo) {
-		MemoRelation *memorelation = set_base_rel_tuples(rel->rel_name, root->query_level + rel->rtekind, rel->tuples);
 
 		//maybe memo hacked
-		if (list_length(rel->baserestrictinfo) != 0 && memorelation != NULL) {
-			initStringInfo(&str);
-			str.reduced=true;
-			build_selec_string(&str, rel->baserestrictinfo, &rest);
+		if (list_length(rel->baserestrictinfo)) {
+
 			/* printf("checking base relation  ");
 			 printf("Names for base relation are: \n");
 			 fflush(stdout);
@@ -3127,10 +3118,9 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 			 printf(" with %d  clauses  \n", rest);
 			 fflush(stdout);*/
 
-			get_baserel_memo_size1(&result, memorelation, rest, str.data, false);
+			get_baserel_memo_size1(&result, rel->rel_name, root->query_level + rel->rtekind, rel->baserestrictinfo,
+					false);
 			mrows = result.rows;
-
-			resetStringInfo(&str);
 
 		}
 
@@ -3163,16 +3153,12 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *param_clauses) {
 	List *allclauses;
 	double nrows;
-	int rest = 0;
 	double mrows = -1;
-	StringInfoData str;
 	MemoInfoData1 result;
 	//ListCell *lc;
 
 	allclauses = list_concat(list_copy(param_clauses), rel->baserestrictinfo);
-	initStringInfo(&str);
-	str.reduced=true;
-	build_selec_string(&str, allclauses, &rest);
+
 	//printf(" quals at cost plan level \n %s : \n", (char *) res);
 	//fflush(stdout);
 
@@ -3184,7 +3170,6 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 	 */
 
 	if (enable_memo && rel->rel_name != NIL) {
-		MemoRelation *memorelation = set_base_rel_tuples(rel->rel_name, root->query_level + rel->rtekind, 0);
 
 		/*printf("checking parameterized base relation  ");
 		 foreach (lc, rel->rel_name) {
@@ -3199,15 +3184,10 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 
 		 printf("%s \n", str.data);
 		 fflush(stdout);*/
-		if (memorelation != NULL) {
-			get_baserel_memo_size1(&result, memorelation, rest, str.data, true);
-			if (result.loops > 0) {
-				mrows = result.rows / result.loops;
 
-			}
-		}
-
-		resetStringInfo(&str);
+		get_baserel_memo_size1(&result, rel->rel_name, root->query_level + rel->rtekind, rel->baserestrictinfo, false);
+		if (result.loops > 0)
+			mrows = result.rows / result.loops;
 
 	}
 
@@ -3258,11 +3238,11 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *outer_rel, RelOptInfo *inner_rel,
 		SpecialJoinInfo *sjinfo, List *restrictlist) {
 	double nrows;
-	//Relids tmpset = bms_copy(rel->relids);
-	//ListCell *lc;
-	//int rest = 0;
+//Relids tmpset = bms_copy(rel->relids);
+//ListCell *lc;
+//int rest = 0;
 	StringInfoData str;
-	//int x = -1;
+//int x = -1;
 	MemoInfoData1 result;
 	initStringInfo(&str);
 
@@ -3281,8 +3261,6 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 	 build_selec_string(&str, sjinfo->join_quals, &rest);
 	 printf("join quals are %s:\n---------------------------------\n", str.data);
 	 printf("End quals \n---------------------------------\n");*/
-	if (!enable_memo)
-		store_join(rel->rel_name, root->query_level, list_copy(rel->restrictList));
 
 	if (enable_memo) {
 		/*
@@ -3310,7 +3288,8 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 	/*	printf("selectivity was  parameterized : %f \n", calc_joinrel_size_estimate(root, outer_rel->rows, inner_rel->rows, sjinfo, restrictlist));*/
 //	printf("outer : %lf, inner %lf, rows: %lf\n", outer_rel->rows, inner_rel->rows, nrows);
 	rel->rows = clamp_row_est(nrows);
-
+	if (!enable_memo)
+		store_join(rel->rel_name, root->query_level, list_copy(rel->restrictList), rel->rows);
 }
 
 /*
@@ -3331,18 +3310,16 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double outer_rows, double inner_rows,
 		SpecialJoinInfo *sjinfo, List *restrict_clauses) {
 	double nrows = -1;
-	//int rest = 0;
+//int rest = 0;
 	MemoInfoData1 result;
 	StringInfoData str;
-	//ListCell *lc;
+//ListCell *lc;
 
-	//int x = -1;
+//int x = -1;
 
-	//Relids tmpset = bms_copy(rel->relids);
+//Relids tmpset = bms_copy(rel->relids);
 	initStringInfo(&str);
 
-	if (!enable_memo)
-		store_join(rel->rel_name, root->query_level, list_copy(rel->restrictList));
 	/*
 	 printf("\t\t\trelids parameterized join are:\n---------------------------------\n");
 
@@ -3395,6 +3372,9 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 	/* For safety, make sure result is not more than the base estimate */
 	if (nrows > rel->rows)
 		nrows = rel->rows;
+	if (!enable_memo)
+		store_join(rel->rel_name, root->query_level, list_copy(rel->restrictList), nrows);
+
 	return nrows;
 }
 
@@ -3879,7 +3859,6 @@ void set_default_effective_cache_size(void) {
 	Assert(effective_cache_size > 0);
 }
 void build_selec_string(const void * str, List *clauses, int * lenght) {
-	Node *node = NULL;
 
 	*lenght = list_length(clauses);
 
