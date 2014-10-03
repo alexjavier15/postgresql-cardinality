@@ -2423,9 +2423,7 @@ void final_cost_hashjoin(PlannerInfo *root, HashPath *path, JoinCostWorkspace *w
 		 * JOIN_INNER semantics.
 		 */
 
-		if (enable_memo)
-			hashjointuples = path->jpath.path.rows;
-		else
+
 			hashjointuples = approx_tuple_count(root, &path->jpath, hashclauses);
 	}
 
