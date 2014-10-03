@@ -1126,6 +1126,9 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 		char *str1;
 		printf("not injected : \n ");
 		print_list(str1,rel->rel_name );
+		print_list(str1,path->restrictList );
+		printf("estimated : %lf \n", path->rows);
+
 	}
 
 }
