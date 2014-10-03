@@ -3122,7 +3122,7 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 
 			get_baserel_memo_size1(&result, rel->rel_name, root->query_level + rel->rtekind, rel->baserestrictinfo,
 					false);
-			mrows = result.rows;
+			mrows =  result.rows / result.loops;
 
 		}
 
@@ -3277,7 +3277,7 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 		 fflush(stdout);*/
 
 		get_join_memo_size1(&result, rel, root->query_level, NULL, false);
-		nrows = result.rows;
+		nrows = result.rows / result.loops;
 	}
 	if (!enable_memo || nrows == -1) {
 
@@ -3359,7 +3359,7 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 		 fflush(stdout);*/
 		//rest = list_length(restrict_clauses);
 		get_join_memo_size1(&result, rel, root->query_level, NULL, true);
-		nrows = result.rows;
+		nrows = result.rows / result.loops;;
 
 	}
 	if (!enable_memo || nrows == -1) {
