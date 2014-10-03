@@ -26,7 +26,7 @@
 #define isFullMatched(result) \
 		((result)->found == 2 ? 1 : 0)
 #define isMatched(result) \
-		((result)->found > 0 ? 1 : 0)
+		((result)->found = 1  ? 1 : 0)
 
 typedef struct MemoQuery {
 	CacheTag type;
@@ -349,7 +349,7 @@ void get_baserel_memo_size1(MemoInfoData1 *result, List * relname, int level, Li
 
 	/*char *str1;
 	 char *str2;*/
-	result->loops = 0;
+	result->loops = 1;
 	result->found = 0;
 	result->rows = -1;
 
@@ -365,26 +365,22 @@ void get_baserel_memo_size1(MemoInfoData1 *result, List * relname, int level, Li
 }
 
 void get_join_memo_size1(MemoInfoData1 *result, RelOptInfo *joinrel, int level, char *quals, bool isParameterized) {
+	MemoRelation * memo_rel = NULL;
 
-	dlist_iter iter;
-
+	/*char *str1;
+	 char *str2;*/
+	result->loops = 1;
 	result->found = 0;
 	result->rows = -1;
 
-	dlist_foreach(iter, &memo_cache_ptr->content) {
-		MemoRelation *memorelation = NULL;
-		MemoQuery *query = dlist_container(MemoQuery,list_node, iter.cur);
+	memo_rel = get_Memorelation(result, joinrel->rel_name, level, quals, 2);
 
-		contains(&memorelation, (CacheM *) query, joinrel->rel_name, level);
-		if (memorelation != NULL && !IsIndex(memorelation)) {
-			/*printf("Found join: \n");
-			 print_relation( memorelation);*/
-			result->rows = memorelation->rows;
-			result->found = 2;
-
-			return;
-
-		}
+	if (memo_rel) {
+		//	printf(" Matched base relation! :\n");
+		//	print_relation(str1, str2, memorelation);
+		result->loops = memo_rel->loops;
+		result->rows = memo_rel->rows;
+		return;
 	}
 
 }
@@ -1107,10 +1103,10 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 			if (path->param_info)
 				path->rows =
 						path->param_info->ppi_rows < clamp_row_est(memo_rel->rows / memo_rel->loops) ?
-								memo_rel->rows : path->param_info->ppi_rows;
+								clamp_row_est(memo_rel->rows / memo_rel->loops) : path->param_info->ppi_rows;
 			else
 				path->rows =
-						path->parent->rows < memo_rel->rows ?
+						path->parent->rows < clamp_row_est(memo_rel->rows / memo_rel->loops) ?
 								clamp_row_est(memo_rel->rows / memo_rel->loops) : path->parent->rows;
 
 		} else {
