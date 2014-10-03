@@ -1073,6 +1073,7 @@ void set_join_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, JoinPath *path
 void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop_count, bool isIndex) {
 	MemoRelation * memo_rel = NULL;
 	MemoInfoData1 result;
+	char *str1;
 	/*	char *str1, *str2;*/
 	bool isFetched = false;
 	int level = rel->rtekind == RTE_JOIN ? root->query_level : root->query_level + rel->rtekind;
@@ -1111,7 +1112,8 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 			rel->last_memorel = memo_rel;
 		}
 		printf("injected\n");
-		print_relation(memo_rel);
+		print_list(str1, rel->rel_name);
+		printClause(path->restrictList);
 		double re = 0;
 		if (path->param_info)
 			re = path->param_info->ppi_rows;
@@ -1123,10 +1125,10 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 			path->rows = path->param_info->ppi_rows;
 		else
 			path->rows = path->parent->rows;
-		char *str1;
+
 		printf("not injected : \n ");
-		print_list(str1,rel->rel_name );
-		printClause(path->restrictList );
+		print_list(str1, rel->rel_name);
+		printClause(path->restrictList);
 		printf("estimated : %lf \n", path->rows);
 		fflush(stdout);
 
