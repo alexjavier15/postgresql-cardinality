@@ -1110,7 +1110,7 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 			rel->last_index_type = isIndex;
 			rel->last_memorel = memo_rel;
 		}
-		printtf("injected\n");
+		printf("injected\n");
 		print_relation(memo_rel);
 		double re = 0;
 		if (path->param_info)
@@ -1123,7 +1123,7 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 			path->rows = path->param_info->ppi_rows;
 		else
 			path->rows = path->parent->rows;
-		char str1;
+		char *str1;
 		printf("not injected : \n ");
 		print_list(str1,rel->rel_name );
 	}
