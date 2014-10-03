@@ -1257,6 +1257,8 @@ grouping_planner(PlannerInfo *root, double tuple_fraction) {
 			best_path = cheapest_path;
 		else
 			best_path = sorted_path;
+
+		printf("Best path cost : %lf \n", best_path->total_cost);
 		//
 		/*
 		 * Check to see if it's possible to optimize MIN/MAX aggregates. If
