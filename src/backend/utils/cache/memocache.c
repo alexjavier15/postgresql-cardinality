@@ -1096,7 +1096,7 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 
 		 print_relation(str1, str2, memo_rel);*/
 		if (loop_count != NULL) {
-			if (level > 1)
+			if (level == 1)
 				*loop_count = *loop_count < memo_rel->loops ? memo_rel->loops : *loop_count;
 		}
 
