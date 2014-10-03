@@ -18,12 +18,6 @@
 
 #include <openssl/md5.h>
 
-#define print_list(str1,list) \
-		str1 = nodeToString(list);	\
-		printf("%s\n",debackslash(str1, strlen(str1)));\
-		pfree(str1);\
-		fflush(stdout);
-
 #define IsIndex(relation)	((relation)->nodeType == T_IndexOnlyScan  \
 		|| (relation)->nodeType == T_IndexScan || (relation)->nodeType == T_BitmapHeapScan)
 #define IsUntaged(relation) ((relation)->nodeType == T_Invalid )
@@ -64,6 +58,7 @@ static struct CachedJoins join_cache;
 MemoQuery *memo_query_ptr;
 CachedJoins *join_cache_ptr = &join_cache;
 MemoCache *memo_cache_ptr = &memo_cache;
+bool initialized = false;
 
 static int read_line(StringInfo str, FILE *file);
 static void InitJoinCache(void);
@@ -123,13 +118,17 @@ static List * restictInfoToMemoClauses(List *clauses) {
 //int md5(FILE *inFile);
 void InitCachesForMemo(void) {
 
-	dlist_init(&memo_cache_ptr->content);
-
-	file = AllocateFile("memoTxt.txt", "rb");
 	joincache = AllocateFile("joins.txt", "rb");
-	if (enable_memo)
+	if (enable_memo && !initialized) {
+		dlist_init(&memo_cache_ptr->content);
+
+		file = AllocateFile("memoTxt.txt", "rb");
 		InitMemoCache();
-	InitJoinCache();
+		initialized = true;
+
+	}
+	if (join_cache_ptr->type != M_JoinCache)
+		InitJoinCache();
 }
 
 void InitMemoCache(void) {
@@ -295,7 +294,8 @@ static int read_line(StringInfo str, FILE *file) {
 }
 static void delete_memorelation(MemoRelation *memorelation) {
 	pfree(memorelation->relationname);
-	pfree(memorelation->clauses);
+	if (memorelation->clauses != NIL)
+		pfree(memorelation->clauses);
 	pfree(memorelation);
 
 }
@@ -425,7 +425,7 @@ MemoRelation * get_Memorelation(MemoInfoData1 *result, List *lrelName, int level
 				return relation;
 
 			}
-			if (isIndex == 2 && isMatched(result))
+			if (isIndex == 2 && isMatched(result) && !IsIndex(relation))
 
 			{
 				pfree(str1.data);
@@ -871,7 +871,6 @@ void printMemoCache(void) {
 }
 void printContentRelations(CacheM *cache) {
 
-
 	dlist_iter iter;
 
 	int i;
@@ -976,7 +975,29 @@ void set_memo_join_sizes(void) {
 	join_cache_ptr->size = 0;
 
 }
+void free_memo_cache(void) {
+	int i = 1;
+	dlist_mutable_iter iter;
+	if (memo_query_ptr != NULL) {
+		for (i = 1; i < memo_query_ptr->length; ++i) {
 
+			dlist_foreach_modify (iter, &memo_query_ptr->content[i]) {
+
+				MemoRelation *target = dlist_container(MemoRelation,list_node, iter.cur);
+				if (target != NULL) {
+					dlist_delete(&(target->list_node));
+
+					delete_memorelation(target);
+
+				}
+			}
+		}
+		pfree(memo_query_ptr->content);
+		memo_query_ptr->content = NULL;
+		memo_query_ptr->size = 0;
+	}
+
+}
 static bool isAlreadyFetched(RelOptInfo *rel, int level, List *restrictList, bool isIndex) {
 	List *b = list_copy(rel->restrictList);
 	bool result = false;
@@ -1074,7 +1095,7 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 
 		 print_relation(str1, str2, memo_rel);*/
 		if (loop_count != NULL)
-			*loop_count = memo_rel->loops;
+			*loop_count = *loop_count < memo_rel->loops ? memo_rel->loops : *loop_count;
 
 		path->rows = clamp_row_est(memo_rel->rows / memo_rel->loops);
 		path->total_rows = memo_rel->rows;
@@ -1097,4 +1118,22 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 			path->rows = path->parent->rows;
 	}
 
+}
+void set_agg_sizes_from_memo(PlannerInfo *root, Path *path) {
+	MemoRelation * memo_rel = NULL;
+	MemoInfoData1 result;
+	char *str1 = NULL;
+
+	if (enable_memo) {
+		memo_rel = get_Memorelation(&result, path->nodename, root->query_level, path->restrictList, false);
+
+	}
+	if (memo_rel != NULL) {
+		print_list(str1, path->nodename);
+		path->rows = clamp_row_est(memo_rel->rows / memo_rel->loops);
+
+	} else {
+
+		path->rows = 0;
+	}
 }

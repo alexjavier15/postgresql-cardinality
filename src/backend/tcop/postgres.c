@@ -768,7 +768,7 @@ static void exec_simple_query(const char *query_string) {
 	bool isTopLevel;
 	char msec_str[32];
 			//printf("%s\n", query_string);
-		InitCachesForMemo();
+
 
 	/*
 	 * Report query to various monitoring facilities.

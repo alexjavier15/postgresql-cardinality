@@ -93,7 +93,6 @@
 	 _outNode(str, node->fldname))
 /* Write a Node field */
 #define WRITE_NODE_SIM_FIELD(type,fldname) \
-	if(!type)\
 	appendStringInfo(str, " :" CppAsString(fldname) " ") ;  _outSimNode(type,str, node->fldname)
 
 /* Write a bitmapset field */
@@ -123,15 +122,15 @@ static void _outToken(StringInfo str, const char *s) {
 	 */
 	/* These characters only need to be quoted at the start of the string */
 
-		if (*s == '<' || *s == '\"' || isdigit((unsigned char) *s)
-				|| ((*s == '+' || *s == '-') && (isdigit((unsigned char) s[1]) || s[1] == '.')))
+	if (*s == '<' || *s == '\"' || isdigit((unsigned char) *s)
+			|| ((*s == '+' || *s == '-') && (isdigit((unsigned char) s[1]) || s[1] == '.')))
+		appendStringInfoChar(str, '\\');
+	while (*s) {
+		/* These chars must be backslashed anywhere in the string */
+		if (*s == ' ' || *s == '\n' || *s == '\t' || *s == '(' || *s == ')' || *s == '{' || *s == '}' || *s == '\\')
 			appendStringInfoChar(str, '\\');
-		while (*s) {
-			/* These chars must be backslashed anywhere in the string */
-			if (*s == ' ' || *s == '\n' || *s == '\t' || *s == '(' || *s == ')' || *s == '{' || *s == '}' || *s == '\\')
-				appendStringInfoChar(str, '\\');
-			appendStringInfoChar(str, *s++);
-		}
+		appendStringInfoChar(str, *s++);
+	}
 
 }
 
@@ -166,7 +165,8 @@ static void _outList(ArgType type, StringInfo str, const List *node, bool sim) {
 					case T_BoolExpr:
 					case T_RestrictInfo:
 					case T_ScalarArrayOpExpr:
-						appendStringInfoChar(str, ',');
+						if (type == S_NULL)
+							appendStringInfoChar(str, ',');
 
 						break;
 					default:
@@ -2937,10 +2937,10 @@ char * nodeSimToString_(const void *obj) {
 	StringInfoData str;
 	/* see stringinfo.h for an explanation of this maneuver */
 	initStringInfo(&str);
-	str.reduced=true;
+	str.reduced = true;
 
 	_outSimNode(S_NULL, &str, obj);
-	return debackslash(str.data,str.len);
+	return debackslash(str.data, str.len);
 }
 
 void _outSimOpExpr(StringInfo str, const OpExpr *node) {
@@ -2949,12 +2949,29 @@ void _outSimOpExpr(StringInfo str, const OpExpr *node) {
 	appendStringInfoSpaces(str, 1);
 
 }
+static void _outSimScalarArrayOpExpr(StringInfo str, const ScalarArrayOpExpr *node) {
+	WRITE_OID_FIELD(opno);
+	WRITE_NODE_SIM_FIELD(S_NULL, args);
+	appendStringInfoSpaces(str, 1);
 
+}
 static void _outSimBoolExpr(StringInfo str, const BoolExpr *node) {
+	ArgType opstr = S_NULL;
 
+	switch (node->boolop) {
+	case AND_EXPR:
+		opstr = S_AND;
+		break;
+	case OR_EXPR:
+		opstr = S_OR;
+		break;
+	case NOT_EXPR:
+		opstr = S_NOT;
+		break;
+	}
 	/* do-it-yourself enum representation */
-
-	WRITE_NODE_SIM_FIELD(S_AND, args);
+	appendStringInfo(str, " :" "opno" " %d", node->boolop);
+	WRITE_NODE_SIM_FIELD(opstr, args);
 
 	appendStringInfoSpaces(str, 1);
 
@@ -3004,7 +3021,7 @@ void _outSimNode(ArgType type, StringInfo str, const void *obj) {
 			/* nodeRead does not want to see { } around these! */
 			_outValue(str, obj);
 		} else {
-			if (nodeTag(obj) != T_RestrictInfo && nodeTag(obj) != T_BoolExpr) {
+			if (nodeTag(obj) != T_RestrictInfo) {
 				appendStringInfoChar(str, '{');
 				appendStringInfoSpaces(str, 1);
 			}
@@ -3070,7 +3087,7 @@ void _outSimNode(ArgType type, StringInfo str, const void *obj) {
 				_outNullIfExpr(str, obj);
 				break;
 			case T_ScalarArrayOpExpr:
-				_outScalarArrayOpExpr(str, obj);
+				_outSimScalarArrayOpExpr(str, obj);
 				break;
 
 			case T_SubLink:
@@ -3086,7 +3103,7 @@ void _outSimNode(ArgType type, StringInfo str, const void *obj) {
 			case T_FieldStore:
 				_outFieldStore(str, obj);
 				break;
-				case T_CoerceViaIO:
+			case T_CoerceViaIO:
 				_outCoerceViaIO(str, obj);
 				break;
 			case T_ArrayCoerceExpr:
@@ -3165,7 +3182,7 @@ void _outSimNode(ArgType type, StringInfo str, const void *obj) {
 
 				break;
 			}
-			if (nodeTag(obj) != T_RestrictInfo && nodeTag(obj) != T_BoolExpr ) {
+			if (nodeTag(obj) != T_RestrictInfo) {
 				appendStringInfoSpaces(str, 1);
 				appendStringInfoChar(str, '}');
 

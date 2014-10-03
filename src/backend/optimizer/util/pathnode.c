@@ -650,7 +650,7 @@ create_index_path(PlannerInfo *root, IndexOptInfo *index, List *indexclauses, Li
 	IndexPath *pathnode = makeNode(IndexPath);
 	RelOptInfo *rel = index->rel;
 	List *indexquals, *indexqualcols;
-	double act_loop_count = 0;
+	double act_loop_count = loop_count;
 
 	pathnode->path.pathtype = indexonly ? T_IndexOnlyScan : T_IndexScan;
 	pathnode->path.parent = rel;
@@ -669,7 +669,7 @@ create_index_path(PlannerInfo *root, IndexOptInfo *index, List *indexclauses, Li
 	pathnode->indexorderbycols = indexorderbycols;
 	pathnode->indexscandir = indexscandir;
 
-	set_plain_rel_sizes_from_memo(root, rel, &pathnode->path, &act_loop_count,true);
+	set_plain_rel_sizes_from_memo(root, rel, &pathnode->path, &act_loop_count, true);
 	act_loop_count = act_loop_count == 0 ? loop_count : act_loop_count;
 	pathnode->indexinfo->loop_count = act_loop_count;
 	cost_index(pathnode, root, act_loop_count);
@@ -692,7 +692,7 @@ create_index_path(PlannerInfo *root, IndexOptInfo *index, List *indexclauses, Li
 BitmapHeapPath *
 create_bitmap_heap_path(PlannerInfo *root, RelOptInfo *rel, Path *bitmapqual, Relids required_outer, double loop_count) {
 	BitmapHeapPath *pathnode = makeNode(BitmapHeapPath);
-	double act_loop_count = 0;
+	double act_loop_count = loop_count;
 
 	pathnode->path.pathtype = T_BitmapHeapScan;
 	pathnode->path.parent = rel;
@@ -700,7 +700,7 @@ create_bitmap_heap_path(PlannerInfo *root, RelOptInfo *rel, Path *bitmapqual, Re
 	pathnode->path.pathkeys = NIL; /* always unordereddered */
 
 	pathnode->bitmapqual = bitmapqual;
-	set_plain_rel_sizes_from_memo(root, rel, &pathnode->path, &act_loop_count,true);
+	set_plain_rel_sizes_from_memo(root, rel, &pathnode->path, &act_loop_count, true);
 	act_loop_count = act_loop_count == 0 ? loop_count : act_loop_count;
 
 	cost_bitmap_heap_scan(&pathnode->path, root, rel, pathnode->path.param_info, bitmapqual, act_loop_count);
@@ -1128,6 +1128,9 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath, SpecialJoi
 	pathnode->path.parent = rel;
 	pathnode->path.param_info = subpath->param_info;
 	pathnode->path.restrictList = list_copy(subpath->restrictList);
+	pathnode->path.nodename = NIL;
+	pathnode->path.nodename = lappend(pathnode->path.nodename, makeString("AGG"));
+	pathnode->path.nodename = list_concat(pathnode->path.nodename, list_copy(subpath->parent->rel_name));
 
 	/*
 	 * Assume the output is unsorted, since we don't necessarily have pathkeys
@@ -1191,7 +1194,11 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath, SpecialJoi
 	}
 
 	/* Estimate number of output rows */
-	pathnode->path.rows = estimate_num_groups(root, uniq_exprs, rel->rows);
+
+	set_agg_sizes_from_memo(root, &pathnode->path);
+
+	if (pathnode->path.rows == 0)
+		pathnode->path.rows = estimate_num_groups(root, uniq_exprs, rel->rows);
 	numCols = list_length(uniq_exprs);
 
 	if (all_btree) {
@@ -1636,7 +1643,7 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 	pathnode->outerjoinpath = outer_path;
 	pathnode->innerjoinpath = inner_path;
 	pathnode->joinrestrictinfo = restrict_clauses;
-	set_join_sizes_from_memo(root,joinrel,pathnode);
+	set_join_sizes_from_memo(root, joinrel, pathnode);
 
 	final_cost_nestloop(root, pathnode, workspace, sjinfo, semifactors);
 
@@ -1680,7 +1687,7 @@ create_mergejoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
 	pathnode->path_mergeclauses = mergeclauses;
 	pathnode->outersortkeys = outersortkeys;
 	pathnode->innersortkeys = innersortkeys;
-	set_join_sizes_from_memo(root,joinrel,&pathnode->jpath);
+	set_join_sizes_from_memo(root, joinrel, &pathnode->jpath);
 
 	/* pathnode->materialize_inner will be set by final_cost_mergejoin */
 
@@ -1733,7 +1740,7 @@ create_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 	pathnode->jpath.innerjoinpath = inner_path;
 	pathnode->jpath.joinrestrictinfo = restrict_clauses;
 	pathnode->path_hashclauses = hashclauses;
-	set_join_sizes_from_memo(root,joinrel,&pathnode->jpath);
+	set_join_sizes_from_memo(root, joinrel, &pathnode->jpath);
 
 	/* final_cost_hashjoin will fill in pathnode->num_batches */
 

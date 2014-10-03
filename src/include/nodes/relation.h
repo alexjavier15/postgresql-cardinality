@@ -818,6 +818,7 @@ typedef struct Path
 	List	   *restrictList;
 	double		total_rows;
 	double 		removed_rows;
+	List       *nodename;
 } Path;
 
 /* Macro for extracting a path's parameterization relids; beware double eval */
@@ -1055,6 +1056,8 @@ typedef struct UniquePath
 	UniquePathMethod umethod;
 	List	   *in_operators;	/* equality operators of the IN clause */
 	List	   *uniq_exprs;		/* expressions to be made unique */
+
+	char 	   *name;
 } UniquePath;
 
 /*
