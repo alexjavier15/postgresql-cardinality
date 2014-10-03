@@ -3187,7 +3187,7 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 		 printf("%s \n", str.data);
 		 fflush(stdout);*/
 
-		get_baserel_memo_size1(&result, rel->rel_name, root->query_level + rel->rtekind, rel->baserestrictinfo, false);
+		get_baserel_memo_size1(&result, rel->rel_name, root->query_level + rel->rtekind, allclauses, false);
 		if (result.loops > 0)
 			mrows = result.rows / result.loops;
 
