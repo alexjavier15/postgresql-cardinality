@@ -674,7 +674,7 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 	MemoInfoData1 *resultName_ptr;
 
 	List *tmp1 = NIL;
-	//char *str2 = NULL;
+//	char *str1, *str2 = NULL;
 
 	resultName_ptr = &resultName;
 
@@ -712,11 +712,14 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 						if (commonrel != NULL) {
 							contains(&diffrel, (CacheM *) query, resultName_ptr->unmatches, level);
 							clauses = list_union(memorelation->clauses, targetClauses);
+							bool diff_realIndex = IsIndex(diffrel) && diffrel->loops > 1;
+							bool com_realIndex = IsIndex(commonrel) && commonrel->loops > 1;
+
 							/*printf("Common relation is:\n");
 
 							 print_relation(str1, str2, commonrel);*/
-							if ((resultName_ptr->nbmatches == (joinlen - 1)) && diffrel != NULL && !IsIndex(commonrel)
-									&& !IsIndex(diffrel)) {
+							if ((resultName_ptr->nbmatches == (joinlen - 1)) && diffrel != NULL && !com_realIndex
+									&& !diff_realIndex) {
 								//Mark the first relation and build the resulted expected target join
 								//relation for matching
 								*relation1 = memorelation;
@@ -724,9 +727,9 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 
 								tmp1 = list_union(targetName, memorelation->relationname);
 								/*printf("Looking for relation:\n");
-								 print_list(str1, tmp1);
-								 printf("With clauses :\n");
-								 print_list(str1, clauses);*/
+								print_list(str1, tmp1);
+
+								printClause(clauses);*/
 								return find_seeder_relations(relation1, relation2, commonrelation, tmp1, clauses, level,
 										list_length(tmp1));
 
@@ -735,21 +738,19 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 
 					} else {
 						List *b = list_copy(targetClauses);
-						//printf("chcking second loop");
+/*						printf("chcking second loop");*/
 						Assert(*relation2 == NULL);
 						//In the second pass we have  to match a full join  then
 						//the number of base realtion matches are equal to joinlen
-
+/*						print_relation(memorelation);*/
 						if (resultName_ptr->nbmatches == joinlen && equalSet(memorelation->clauses, b)) {
 							pfree(b);
 							*relation2 = memorelation;
-							/*
 
-							 printf("Found candidates relations : \n");
-							 print_relation(str1, str2, *relation1);
-							 print_relation(str1, str2, *relation2);
-							 printf("-------------------------------\n");
-							 */
+							/*printf("Found candidates relations : \n");
+							print_relation(*relation1);
+							print_relation(*relation2);
+							printf("-------------------------------\n");*/
 
 							return query;
 						}
@@ -953,26 +954,28 @@ void set_memo_join_sizes(void) {
 		check_NoMemo_queries();
 	}
 
-	/*	printf("New memo cache state :\n-----------------------\n");
+	printf("New memo cache state :\n-----------------------\n");
 
-	 printMemoCache();
-	 printf("End\n-----------------------\n");*/
-	for (i = 1; i < join_cache_ptr->length; ++i) {
+	printMemoCache();
+	printf("End\n-----------------------\n");
+	if (enable_memo) {
+		for (i = 1; i < join_cache_ptr->length; ++i) {
 
-		dlist_foreach_modify (iter, &join_cache_ptr->content[i]) {
+			dlist_foreach_modify (iter, &join_cache_ptr->content[i]) {
 
-			MemoRelation *target = dlist_container(MemoRelation,list_node, iter.cur);
-			if (target != NULL) {
-				dlist_delete(&(target->list_node));
+				MemoRelation *target = dlist_container(MemoRelation,list_node, iter.cur);
+				if (target != NULL) {
+					dlist_delete(&(target->list_node));
 
-				delete_memorelation(target);
+					delete_memorelation(target);
 
+				}
 			}
 		}
+		pfree(join_cache_ptr->content);
+		join_cache_ptr->content = NULL;
+		join_cache_ptr->size = 0;
 	}
-	pfree(join_cache_ptr->content);
-	join_cache_ptr->content = NULL;
-	join_cache_ptr->size = 0;
 
 }
 void free_memo_cache(void) {
@@ -1073,7 +1076,7 @@ void set_join_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, JoinPath *path
 void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop_count, bool isIndex) {
 	MemoRelation * memo_rel = NULL;
 	MemoInfoData1 result;
-	char *str1;
+	//char *str1;
 	/*	char *str1, *str2;*/
 	bool isFetched = false;
 	int level = rel->rtekind == RTE_JOIN ? root->query_level : root->query_level + rel->rtekind;
@@ -1126,26 +1129,26 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 			rel->last_index_type = isIndex;
 			rel->last_memorel = memo_rel;
 		}
-		printf("injected\n");
-		print_list(str1, rel->rel_name);
+	/*	printf("injected\n");
+		print_relation(memo_rel);
 		printClause(path->restrictList);
 		double re = 0;
 		if (path->param_info)
 			re = path->param_info->ppi_rows;
 		else
 			re = path->parent->rows;
-		printf("estimated : %lf \n", re);
+		printf("estimated : %lf \n", re);*/
 	} else {
 		if (path->param_info)
 			path->rows = path->param_info->ppi_rows;
 		else
 			path->rows = path->parent->rows;
 
-		printf("not injected : \n ");
+	/*	printf("not injected : \n ");
 		print_list(str1, rel->rel_name);
 		printClause(path->restrictList);
 		printf("estimated : %lf \n", path->rows);
-		fflush(stdout);
+		fflush(stdout);*/
 
 	}
 
