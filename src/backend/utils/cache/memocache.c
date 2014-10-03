@@ -1095,8 +1095,10 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 		/*	printf(" Setting path sizes for! :\n");
 
 		 print_relation(str1, str2, memo_rel);*/
-		if (loop_count != NULL)
-			*loop_count = *loop_count < memo_rel->loops ? memo_rel->loops : *loop_count;
+		if (loop_count != NULL) {
+			if (level > 1)
+				*loop_count = *loop_count < memo_rel->loops ? memo_rel->loops : *loop_count;
+		}
 
 		path->rows = clamp_row_est(memo_rel->rows / memo_rel->loops);
 		path->total_rows = memo_rel->rows;
