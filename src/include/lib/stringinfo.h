@@ -38,6 +38,7 @@ typedef struct StringInfoData
 	int			len;
 	int			maxlen;
 	int			cursor;
+	bool		reduced;
 } StringInfoData;
 
 typedef StringInfoData *StringInfo;

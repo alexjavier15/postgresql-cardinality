@@ -807,6 +807,7 @@ _readRelabelType(void)
 	READ_DONE();
 }
 
+
 /*
  * _readCoerceViaIO
  */

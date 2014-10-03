@@ -432,7 +432,9 @@ typedef enum NodeTag
 	T_WindowObjectData,			/* private in nodeWindowAgg.c */
 	T_TIDBitmap,				/* in nodes/tidbitmap.h */
 	T_InlineCodeBlock,			/* in nodes/parsenodes.h */
-	T_FdwRoutine				/* in foreign/fdwapi.h */
+	T_FdwRoutine,				/* in foreign/fdwapi.h */
+	/*Tags for Memo*/
+	T_MemoClause
 } NodeTag;
 
 /*
@@ -505,6 +507,7 @@ extern PGDLLIMPORT Node *newNodeMacroHolder;
 extern char *nodeToString(const void *obj);
 
 extern void nodeSimToString(const void *obj, const void  *str);
+extern char *nodeSimToString_(const void *obj);
 
 /*
  * nodes/{readfuncs.c,read.c}

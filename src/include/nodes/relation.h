@@ -20,6 +20,9 @@
 #include "storage/block.h"
 
 
+
+struct MemoRelation;
+
 /*
  * Relids
  *		Set of relation identifiers (indexes into the rangetable).
@@ -495,7 +498,6 @@ typedef struct RelOptInfo
 
 	/* information about a base rel (not set for join rels!) */
 	Index		relid;
-	List		*rel_name;
 	Oid			reltablespace;	/* containing tablespace */
 	RTEKind		rtekind;		/* RELATION, SUBQUERY, or FUNCTION */
 	AttrNumber	min_attr;		/* smallest attrno of rel (often <0) */
@@ -525,6 +527,16 @@ typedef struct RelOptInfo
 	List	   *joininfo;		/* RestrictInfo structures for join clauses
 								 * involving this rel */
 	bool		has_eclass_joins;		/* T means joininfo is incomplete */
+	/* used by memo calculations */
+	List *		restrictList;
+	List		*rel_name;
+	bool		memo_checked;
+	List		*last_restrictList;
+	int			last_level;
+	bool		last_index_type;
+	MemoRelation		*last_memorel;
+
+
 } RelOptInfo;
 
 /*
@@ -750,6 +762,8 @@ typedef struct ParamPathInfo
 	Relids		ppi_req_outer;	/* rels supplying parameters used by path */
 	double		ppi_rows;		/* estimated number of result tuples */
 	List	   *ppi_clauses;	/* join clauses available from outer rels */
+	/* used for memo calculations */
+	List	   *restrictList;
 } ParamPathInfo;
 
 
@@ -799,7 +813,12 @@ typedef struct Path
 	Cost		mstartup_cost;
 	Cost        mtotal_cost;
 	List	   *pathkeys;		/* sort ordering of path's output */
-	/* pathkeys is a List of PathKey nodes; see above */
+		/* pathkeys is a List of PathKey nodes; see above */
+	/*Used for memo calculations*/
+	List	   *restrictList;
+	double		total_rows;
+	double 		removed_rows;
+	List       *nodename;
 } Path;
 
 /* Macro for extracting a path's parameterization relids; beware double eval */
@@ -1037,6 +1056,8 @@ typedef struct UniquePath
 	UniquePathMethod umethod;
 	List	   *in_operators;	/* equality operators of the IN clause */
 	List	   *uniq_exprs;		/* expressions to be made unique */
+
+	char 	   *name;
 } UniquePath;
 
 /*
@@ -1052,6 +1073,8 @@ typedef struct JoinPath
 	Path	   *innerjoinpath;	/* path for the inner side of the join */
 
 	List	   *joinrestrictinfo;		/* RestrictInfos to apply to join */
+	/*used by memo calculations*/
+
 
 	/*
 	 * See the notes for RelOptInfo and ParamPathInfo to understand why

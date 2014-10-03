@@ -38,67 +38,43 @@
 #include "parser/parsetree.h"
 #include "rewrite/rewriteManip.h"
 #include "utils/lsyscache.h"
-
+#include "utils/memocache.h"
 
 /* These parameters are set by GUC */
-bool		enable_geqo = false;	/* just in case GUC doesn't set it */
-int			geqo_threshold;
+bool enable_geqo = false; /* just in case GUC doesn't set it */
+int geqo_threshold;
 
 /* Hook for plugins to replace standard_join_search() */
 join_search_hook_type join_search_hook = NULL;
 
-
 static void set_base_rel_sizes(PlannerInfo *root);
 static void set_base_rel_pathlists(PlannerInfo *root);
-static void set_rel_size(PlannerInfo *root, RelOptInfo *rel,
-			 Index rti, RangeTblEntry *rte);
-static void set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
-				 Index rti, RangeTblEntry *rte);
-static void set_plain_rel_size(PlannerInfo *root, RelOptInfo *rel,
-				   RangeTblEntry *rte);
-static void set_plain_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
-					   RangeTblEntry *rte);
-static void set_foreign_size(PlannerInfo *root, RelOptInfo *rel,
-				 RangeTblEntry *rte);
-static void set_foreign_pathlist(PlannerInfo *root, RelOptInfo *rel,
-					 RangeTblEntry *rte);
-static void set_append_rel_size(PlannerInfo *root, RelOptInfo *rel,
-					Index rti, RangeTblEntry *rte);
-static void set_append_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
-						Index rti, RangeTblEntry *rte);
-static void generate_mergeappend_paths(PlannerInfo *root, RelOptInfo *rel,
-						   List *live_childrels,
-						   List *all_child_pathkeys);
-static Path *get_cheapest_parameterized_child_path(PlannerInfo *root,
-									  RelOptInfo *rel,
-									  Relids required_outer);
+static void set_rel_size(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntry *rte);
+static void set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntry *rte);
+static void set_plain_rel_size(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte);
+static void set_plain_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte);
+static void set_foreign_size(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte);
+static void set_foreign_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte);
+static void set_append_rel_size(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntry *rte);
+static void set_append_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntry *rte);
+static void generate_mergeappend_paths(PlannerInfo *root, RelOptInfo *rel, List *live_childrels,
+		List *all_child_pathkeys);
+static Path *get_cheapest_parameterized_child_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer);
 static List *accumulate_append_subpath(List *subpaths, Path *path);
 static void set_dummy_rel_pathlist(RelOptInfo *rel);
-static void set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
-					  Index rti, RangeTblEntry *rte);
-static void set_function_pathlist(PlannerInfo *root, RelOptInfo *rel,
-					  RangeTblEntry *rte);
-static void set_values_pathlist(PlannerInfo *root, RelOptInfo *rel,
-					RangeTblEntry *rte);
-static void set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel,
-				 RangeTblEntry *rte);
-static void set_worktable_pathlist(PlannerInfo *root, RelOptInfo *rel,
-					   RangeTblEntry *rte);
+static void set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntry *rte);
+static void set_function_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte);
+static void set_values_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte);
+static void set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte);
+static void set_worktable_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte);
 static RelOptInfo *make_rel_from_joinlist(PlannerInfo *root, List *joinlist);
-static bool subquery_is_pushdown_safe(Query *subquery, Query *topquery,
-						  bool *unsafeColumns);
-static bool recurse_pushdown_safe(Node *setOp, Query *topquery,
-					  bool *unsafeColumns);
+static bool subquery_is_pushdown_safe(Query *subquery, Query *topquery, bool *unsafeColumns);
+static bool recurse_pushdown_safe(Node *setOp, Query *topquery, bool *unsafeColumns);
 static void check_output_expressions(Query *subquery, bool *unsafeColumns);
-static void compare_tlist_datatypes(List *tlist, List *colTypes,
-						bool *unsafeColumns);
-static bool qual_is_pushdown_safe(Query *subquery, Index rti, Node *qual,
-					  bool *unsafeColumns);
-static void subquery_push_qual(Query *subquery,
-				   RangeTblEntry *rte, Index rti, Node *qual);
-static void recurse_push_qual(Node *setOp, Query *topquery,
-				  RangeTblEntry *rte, Index rti, Node *qual);
-
+static void compare_tlist_datatypes(List *tlist, List *colTypes, bool *unsafeColumns);
+static bool qual_is_pushdown_safe(Query *subquery, Index rti, Node *qual, bool *unsafeColumns);
+static void subquery_push_qual(Query *subquery, RangeTblEntry *rte, Index rti, Node *qual);
+static void recurse_push_qual(Node *setOp, Query *topquery, RangeTblEntry *rte, Index rti, Node *qual);
 
 /*
  * make_one_rel
@@ -106,24 +82,23 @@ static void recurse_push_qual(Node *setOp, Query *topquery,
  *	  single rel that represents the join of all base rels in the query.
  */
 RelOptInfo *
-make_one_rel(PlannerInfo *root, List *joinlist)
-{
+make_one_rel(PlannerInfo *root, List *joinlist) {
 	RelOptInfo *rel;
-	Index		rti;
+	Index rti;
 
 	/*
 	 * Construct the all_baserels Relids set.
 	 */
 	root->all_baserels = NULL;
-	for (rti = 1; rti < root->simple_rel_array_size; rti++)
-	{
+	for (rti = 1; rti < root->simple_rel_array_size; rti++) {
 		RelOptInfo *brel = root->simple_rel_array[rti];
 
 		/* there may be empty slots corresponding to non-baserel RTEs */
 		if (brel == NULL)
 			continue;
 
-		Assert(brel->relid == rti);		/* sanity check on array */
+		Assert(brel->relid == rti);
+		/* sanity check on array */
 
 		/* ignore RTEs that are "other rels" */
 		if (brel->reloptkind != RELOPT_BASEREL)
@@ -135,7 +110,10 @@ make_one_rel(PlannerInfo *root, List *joinlist)
 	/*
 	 * Generate access paths for the base rels.
 	 */
+
 	set_base_rel_sizes(root);
+
+
 	set_base_rel_pathlists(root);
 
 	/*
@@ -158,20 +136,18 @@ make_one_rel(PlannerInfo *root, List *joinlist)
  * We do this in a separate pass over the base rels so that rowcount
  * estimates are available for parameterized path generation.
  */
-static void
-set_base_rel_sizes(PlannerInfo *root)
-{
-	Index		rti;
+static void set_base_rel_sizes(PlannerInfo *root) {
+	Index rti;
 
-	for (rti = 1; rti < root->simple_rel_array_size; rti++)
-	{
+	for (rti = 1; rti < root->simple_rel_array_size; rti++) {
 		RelOptInfo *rel = root->simple_rel_array[rti];
 
 		/* there may be empty slots corresponding to non-baserel RTEs */
 		if (rel == NULL)
 			continue;
 
-		Assert(rel->relid == rti);		/* sanity check on array */
+		Assert(rel->relid == rti);
+		/* sanity check on array */
 
 		/* ignore RTEs that are "other rels" */
 		if (rel->reloptkind != RELOPT_BASEREL)
@@ -187,20 +163,18 @@ set_base_rel_sizes(PlannerInfo *root)
  *	  Sequential scan and any available indices are considered.
  *	  Each useful path is attached to its relation's 'pathlist' field.
  */
-static void
-set_base_rel_pathlists(PlannerInfo *root)
-{
-	Index		rti;
+static void set_base_rel_pathlists(PlannerInfo *root) {
+	Index rti;
 
-	for (rti = 1; rti < root->simple_rel_array_size; rti++)
-	{
+	for (rti = 1; rti < root->simple_rel_array_size; rti++) {
 		RelOptInfo *rel = root->simple_rel_array[rti];
 
 		/* there may be empty slots corresponding to non-baserel RTEs */
 		if (rel == NULL)
 			continue;
 
-		Assert(rel->relid == rti);		/* sanity check on array */
+		Assert(rel->relid == rti);
+		/* sanity check on array */
 
 		/* ignore RTEs that are "other rels" */
 		if (rel->reloptkind != RELOPT_BASEREL)
@@ -214,13 +188,8 @@ set_base_rel_pathlists(PlannerInfo *root)
  * set_rel_size
  *	  Set size estimates for a base relation
  */
-static void
-set_rel_size(PlannerInfo *root, RelOptInfo *rel,
-			 Index rti, RangeTblEntry *rte)
-{
-	if (rel->reloptkind == RELOPT_BASEREL &&
-		relation_excluded_by_constraints(root, rel, rte))
-	{
+static void set_rel_size(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntry *rte) {
+	if (rel->reloptkind == RELOPT_BASEREL && relation_excluded_by_constraints(root, rel, rte)) {
 		/*
 		 * We proved we don't need to scan the rel via constraint exclusion,
 		 * so set up a single dummy path for it.  Here we only check this for
@@ -233,58 +202,50 @@ set_rel_size(PlannerInfo *root, RelOptInfo *rel,
 		 * assigning a dummy path to it.
 		 */
 		set_dummy_rel_pathlist(rel);
-	}
-	else if (rte->inh)
-	{
+	} else if (rte->inh) {
 		/* It's an "append relation", process accordingly */
 		set_append_rel_size(root, rel, rti, rte);
-	}
-	else
-	{
-		switch (rel->rtekind)
-		{
-			case RTE_RELATION:
-				if (rte->relkind == RELKIND_FOREIGN_TABLE)
-				{
-					/* Foreign table */
-					set_foreign_size(root, rel, rte);
-				}
-				else
-				{
-					/* Plain relation */
-					set_plain_rel_size(root, rel, rte);
-				}
-				break;
-			case RTE_SUBQUERY:
+	} else {
+		switch (rel->rtekind) {
+		case RTE_RELATION:
+			if (rte->relkind == RELKIND_FOREIGN_TABLE) {
+				/* Foreign table */
+				set_foreign_size(root, rel, rte);
+			} else {
+				/* Plain relation */
+				set_plain_rel_size(root, rel, rte);
+			}
+			break;
+		case RTE_SUBQUERY:
 
-				/*
-				 * Subqueries don't support making a choice between
-				 * parameterized and unparameterized paths, so just go ahead
-				 * and build their paths immediately.
-				 */
-				set_subquery_pathlist(root, rel, rti, rte);
-				break;
-			case RTE_FUNCTION:
-				set_function_size_estimates(root, rel);
-				break;
-			case RTE_VALUES:
-				set_values_size_estimates(root, rel);
-				break;
-			case RTE_CTE:
+			/*
+			 * Subqueries don't support making a choice between
+			 * parameterized and unparameterized paths, so just go ahead
+			 * and build their paths immediately.
+			 */
+			set_subquery_pathlist(root, rel, rti, rte);
+			break;
+		case RTE_FUNCTION:
+			set_function_size_estimates(root, rel);
+			break;
+		case RTE_VALUES:
+			set_values_size_estimates(root, rel);
+			break;
+		case RTE_CTE:
 
-				/*
-				 * CTEs don't support making a choice between parameterized
-				 * and unparameterized paths, so just go ahead and build their
-				 * paths immediately.
-				 */
-				if (rte->self_reference)
-					set_worktable_pathlist(root, rel, rte);
-				else
-					set_cte_pathlist(root, rel, rte);
-				break;
-			default:
-				elog(ERROR, "unexpected rtekind: %d", (int) rel->rtekind);
-				break;
+			/*
+			 * CTEs don't support making a choice between parameterized
+			 * and unparameterized paths, so just go ahead and build their
+			 * paths immediately.
+			 */
+			if (rte->self_reference)
+				set_worktable_pathlist(root, rel, rte);
+			else
+				set_cte_pathlist(root, rel, rte);
+			break;
+		default:
+			elog(ERROR, "unexpected rtekind: %d", (int) rel->rtekind);
+			break;
 		}
 	}
 }
@@ -293,52 +254,40 @@ set_rel_size(PlannerInfo *root, RelOptInfo *rel,
  * set_rel_pathlist
  *	  Build access paths for a base relation
  */
-static void
-set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
-				 Index rti, RangeTblEntry *rte)
-{
-	if (IS_DUMMY_REL(rel))
-	{
+static void set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntry *rte) {
+	if (IS_DUMMY_REL(rel)) {
 		/* We already proved the relation empty, so nothing more to do */
-	}
-	else if (rte->inh)
-	{
+	} else if (rte->inh) {
 		/* It's an "append relation", process accordingly */
 		set_append_rel_pathlist(root, rel, rti, rte);
-	}
-	else
-	{
-		switch (rel->rtekind)
-		{
-			case RTE_RELATION:
-				if (rte->relkind == RELKIND_FOREIGN_TABLE)
-				{
-					/* Foreign table */
-					set_foreign_pathlist(root, rel, rte);
-				}
-				else
-				{
-					/* Plain relation */
-					set_plain_rel_pathlist(root, rel, rte);
-				}
-				break;
-			case RTE_SUBQUERY:
-				/* Subquery --- fully handled during set_rel_size */
-				break;
-			case RTE_FUNCTION:
-				/* RangeFunction */
-				set_function_pathlist(root, rel, rte);
-				break;
-			case RTE_VALUES:
-				/* Values list */
-				set_values_pathlist(root, rel, rte);
-				break;
-			case RTE_CTE:
-				/* CTE reference --- fully handled during set_rel_size */
-				break;
-			default:
-				elog(ERROR, "unexpected rtekind: %d", (int) rel->rtekind);
-				break;
+	} else {
+		switch (rel->rtekind) {
+		case RTE_RELATION:
+			if (rte->relkind == RELKIND_FOREIGN_TABLE) {
+				/* Foreign table */
+				set_foreign_pathlist(root, rel, rte);
+			} else {
+				/* Plain relation */
+				set_plain_rel_pathlist(root, rel, rte);
+			}
+			break;
+		case RTE_SUBQUERY:
+			/* Subquery --- fully handled during set_rel_size */
+			break;
+		case RTE_FUNCTION:
+			/* RangeFunction */
+			set_function_pathlist(root, rel, rte);
+			break;
+		case RTE_VALUES:
+			/* Values list */
+			set_values_pathlist(root, rel, rte);
+			break;
+		case RTE_CTE:
+			/* CTE reference --- fully handled during set_rel_size */
+			break;
+		default:
+			elog(ERROR, "unexpected rtekind: %d", (int) rel->rtekind);
+			break;
 		}
 	}
 
@@ -351,9 +300,7 @@ set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
  * set_plain_rel_size
  *	  Set size estimates for a plain relation (no subquery, no inheritance)
  */
-static void
-set_plain_rel_size(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
-{
+static void set_plain_rel_size(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte) {
 	/*
 	 * Test any partial indexes of rel for applicability.  We must do this
 	 * first since partial unique indexes can affect size estimates.
@@ -368,10 +315,8 @@ set_plain_rel_size(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
  * set_plain_rel_pathlist
  *	  Build access paths for a plain relation (no subquery, no inheritance)
  */
-static void
-set_plain_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
-{
-	Relids		required_outer;
+static void set_plain_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte) {
+	Relids required_outer;
 
 	/*
 	 * We don't support pushing join clauses into the quals of a seqscan, but
@@ -397,9 +342,7 @@ set_plain_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
  * set_foreign_size
  *		Set size estimates for a foreign table RTE
  */
-static void
-set_foreign_size(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
-{
+static void set_foreign_size(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte) {
 	/* Mark rel with estimated output rows, width, etc */
 	set_foreign_size_estimates(root, rel);
 
@@ -411,9 +354,7 @@ set_foreign_size(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
  * set_foreign_pathlist
  *		Build access paths for a foreign table RTE
  */
-static void
-set_foreign_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
-{
+static void set_foreign_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte) {
 	/* Call the FDW's GetForeignPaths function to generate path(s) */
 	rel->fdwroutine->GetForeignPaths(root, rel, rte->relid);
 
@@ -432,16 +373,13 @@ set_foreign_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
  * the parent RTE ... but it has a different RTE and RelOptInfo.  This is
  * a good thing because their outputs are not the same size.
  */
-static void
-set_append_rel_size(PlannerInfo *root, RelOptInfo *rel,
-					Index rti, RangeTblEntry *rte)
-{
-	int			parentRTindex = rti;
-	double		parent_rows;
-	double		parent_size;
-	double	   *parent_attrsizes;
-	int			nattrs;
-	ListCell   *l;
+static void set_append_rel_size(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntry *rte) {
+	int parentRTindex = rti;
+	double parent_rows;
+	double parent_size;
+	double *parent_attrsizes;
+	int nattrs;
+	ListCell *l;
 
 	/*
 	 * Initialize to compute size estimates for whole append relation.
@@ -462,16 +400,15 @@ set_append_rel_size(PlannerInfo *root, RelOptInfo *rel,
 	nattrs = rel->max_attr - rel->min_attr + 1;
 	parent_attrsizes = (double *) palloc0(nattrs * sizeof(double));
 
-	foreach(l, root->append_rel_list)
-	{
+	foreach(l, root->append_rel_list) {
 		AppendRelInfo *appinfo = (AppendRelInfo *) lfirst(l);
-		int			childRTindex;
+		int childRTindex;
 		RangeTblEntry *childRTE;
 		RelOptInfo *childrel;
-		List	   *childquals;
-		Node	   *childqual;
-		ListCell   *parentvars;
-		ListCell   *childvars;
+		List *childquals;
+		Node *childqual;
+		ListCell *parentvars;
+		ListCell *childvars;
 
 		/* append_rel_list contains all append rels; ignore others */
 		if (appinfo->parent_relid != parentRTindex)
@@ -502,15 +439,10 @@ set_append_rel_size(PlannerInfo *root, RelOptInfo *rel,
 		 * reconstitute the RestrictInfo layer.
 		 */
 		childquals = get_all_actual_clauses(rel->baserestrictinfo);
-		childquals = (List *) adjust_appendrel_attrs(root,
-													 (Node *) childquals,
-													 appinfo);
-		childqual = eval_const_expressions(root, (Node *)
-										   make_ands_explicit(childquals));
-		if (childqual && IsA(childqual, Const) &&
-			(((Const *) childqual)->constisnull ||
-			 !DatumGetBool(((Const *) childqual)->constvalue)))
-		{
+		childquals = (List *) adjust_appendrel_attrs(root, (Node *) childquals, appinfo);
+		childqual = eval_const_expressions(root, (Node *) make_ands_explicit(childquals));
+		if (childqual && IsA(childqual, Const)
+				&& (((Const *) childqual)->constisnull || !DatumGetBool(((Const *) childqual)->constvalue))) {
 			/*
 			 * Restriction reduces to constant FALSE or constant NULL after
 			 * substitution, so this child need not be scanned.
@@ -519,12 +451,10 @@ set_append_rel_size(PlannerInfo *root, RelOptInfo *rel,
 			continue;
 		}
 		childquals = make_ands_implicit((Expr *) childqual);
-		childquals = make_restrictinfos_from_actual_clauses(root,
-															childquals);
+		childquals = make_restrictinfos_from_actual_clauses(root, childquals);
 		childrel->baserestrictinfo = childquals;
 
-		if (relation_excluded_by_constraints(root, childrel, childRTE))
-		{
+		if (relation_excluded_by_constraints(root, childrel, childRTE)) {
 			/*
 			 * This child need not be scanned, so we can omit it from the
 			 * appendrel.
@@ -542,14 +472,8 @@ set_append_rel_size(PlannerInfo *root, RelOptInfo *rel,
 		 * such.  (Normally, a reltargetlist would only include Vars and
 		 * PlaceHolderVars.)
 		 */
-		childrel->joininfo = (List *)
-			adjust_appendrel_attrs(root,
-								   (Node *) rel->joininfo,
-								   appinfo);
-		childrel->reltargetlist = (List *)
-			adjust_appendrel_attrs(root,
-								   (Node *) rel->reltargetlist,
-								   appinfo);
+		childrel->joininfo = (List *) adjust_appendrel_attrs(root, (Node *) rel->joininfo, appinfo);
+		childrel->reltargetlist = (List *) adjust_appendrel_attrs(root, (Node *) rel->reltargetlist, appinfo);
 
 		/*
 		 * We have to make child entries in the EquivalenceClass data
@@ -587,8 +511,7 @@ set_append_rel_size(PlannerInfo *root, RelOptInfo *rel,
 		/*
 		 * Accumulate size information from each live child.
 		 */
-		if (childrel->rows > 0)
-		{
+		if (childrel->rows > 0) {
 			parent_rows += childrel->rows;
 			parent_size += childrel->width * childrel->rows;
 
@@ -601,26 +524,21 @@ set_append_rel_size(PlannerInfo *root, RelOptInfo *rel,
 			 * By construction, child's reltargetlist is 1-to-1 with parent's.
 			 */
 			forboth(parentvars, rel->reltargetlist,
-					childvars, childrel->reltargetlist)
-			{
-				Var		   *parentvar = (Var *) lfirst(parentvars);
-				Node	   *childvar = (Node *) lfirst(childvars);
+					childvars, childrel->reltargetlist) {
+				Var *parentvar = (Var *) lfirst(parentvars);
+				Node *childvar = (Node *) lfirst(childvars);
 
-				if (IsA(parentvar, Var))
-				{
-					int			pndx = parentvar->varattno - rel->min_attr;
-					int32		child_width = 0;
+				if (IsA(parentvar, Var)) {
+					int pndx = parentvar->varattno - rel->min_attr;
+					int32 child_width = 0;
 
-					if (IsA(childvar, Var) &&
-						((Var *) childvar)->varno == childrel->relid)
-					{
-						int			cndx = ((Var *) childvar)->varattno - childrel->min_attr;
+					if (IsA(childvar, Var) && ((Var *) childvar)->varno == childrel->relid) {
+						int cndx = ((Var *) childvar)->varattno - childrel->min_attr;
 
 						child_width = childrel->attr_widths[cndx];
 					}
 					if (child_width <= 0)
-						child_width = get_typavgwidth(exprType(childvar),
-													  exprTypmod(childvar));
+						child_width = get_typavgwidth(exprType(childvar), exprTypmod(childvar));
 					Assert(child_width > 0);
 					parent_attrsizes[pndx] += child_width * childrel->rows;
 				}
@@ -632,16 +550,14 @@ set_append_rel_size(PlannerInfo *root, RelOptInfo *rel,
 	 * Save the finished size estimates.
 	 */
 	rel->rows = parent_rows;
-	if (parent_rows > 0)
-	{
-		int			i;
+	if (parent_rows > 0) {
+		int i;
 
 		rel->width = rint(parent_size / parent_rows);
 		for (i = 0; i < nattrs; i++)
 			rel->attr_widths[i] = rint(parent_attrsizes[i] / parent_rows);
-	}
-	else
-		rel->width = 0;			/* attr_widths should be zero already */
+	} else
+		rel->width = 0; /* attr_widths should be zero already */
 
 	/*
 	 * Set "raw tuples" count equal to "rows" for the appendrel; needed
@@ -656,31 +572,26 @@ set_append_rel_size(PlannerInfo *root, RelOptInfo *rel,
  * set_append_rel_pathlist
  *	  Build access paths for an "append relation"
  */
-static void
-set_append_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
-						Index rti, RangeTblEntry *rte)
-{
-	int			parentRTindex = rti;
-	List	   *live_childrels = NIL;
-	List	   *subpaths = NIL;
-	bool		subpaths_valid = true;
-	List	   *all_child_pathkeys = NIL;
-	List	   *all_child_outers = NIL;
-	ListCell   *l;
+static void set_append_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntry *rte) {
+	int parentRTindex = rti;
+	List *live_childrels = NIL;
+	List *subpaths = NIL;
+	bool subpaths_valid = true;
+	List *all_child_pathkeys = NIL;
+	List *all_child_outers = NIL;
+	ListCell *l;
 
 	/*
 	 * Generate access paths for each member relation, and remember the
 	 * cheapest path for each one.	Also, identify all pathkeys (orderings)
 	 * and parameterizations (required_outer sets) available for the member
 	 * relations.
-	 */
-	foreach(l, root->append_rel_list)
-	{
+	 */foreach(l, root->append_rel_list) {
 		AppendRelInfo *appinfo = (AppendRelInfo *) lfirst(l);
-		int			childRTindex;
+		int childRTindex;
 		RangeTblEntry *childRTE;
 		RelOptInfo *childrel;
-		ListCell   *lcp;
+		ListCell *lcp;
 
 		/* append_rel_list contains all append rels; ignore others */
 		if (appinfo->parent_relid != parentRTindex)
@@ -713,8 +624,7 @@ set_append_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
 		 * If not, there's no workable unparameterized path.
 		 */
 		if (childrel->cheapest_total_path->param_info == NULL)
-			subpaths = accumulate_append_subpath(subpaths,
-											  childrel->cheapest_total_path);
+			subpaths = accumulate_append_subpath(subpaths, childrel->cheapest_total_path);
 		else
 			subpaths_valid = false;
 
@@ -724,60 +634,46 @@ set_append_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
 		 * heuristic to indicate which sort orderings and parameterizations we
 		 * should build Append and MergeAppend paths for.
 		 */
-		foreach(lcp, childrel->pathlist)
-		{
-			Path	   *childpath = (Path *) lfirst(lcp);
-			List	   *childkeys = childpath->pathkeys;
-			Relids		childouter = PATH_REQ_OUTER(childpath);
+		foreach(lcp, childrel->pathlist) {
+			Path *childpath = (Path *) lfirst(lcp);
+			List *childkeys = childpath->pathkeys;
+			Relids childouter = PATH_REQ_OUTER(childpath);
 
 			/* Unsorted paths don't contribute to pathkey list */
-			if (childkeys != NIL)
-			{
-				ListCell   *lpk;
-				bool		found = false;
+			if (childkeys != NIL) {
+				ListCell *lpk;
+				bool found = false;
 
-				/* Have we already seen this ordering? */
-				foreach(lpk, all_child_pathkeys)
-				{
-					List	   *existing_pathkeys = (List *) lfirst(lpk);
+				/* Have we already seen this ordering? */foreach(lpk, all_child_pathkeys) {
+					List *existing_pathkeys = (List *) lfirst(lpk);
 
-					if (compare_pathkeys(existing_pathkeys,
-										 childkeys) == PATHKEYS_EQUAL)
-					{
+					if (compare_pathkeys(existing_pathkeys, childkeys) == PATHKEYS_EQUAL) {
 						found = true;
 						break;
 					}
 				}
-				if (!found)
-				{
+				if (!found) {
 					/* No, so add it to all_child_pathkeys */
-					all_child_pathkeys = lappend(all_child_pathkeys,
-												 childkeys);
+					all_child_pathkeys = lappend(all_child_pathkeys, childkeys);
 				}
 			}
 
 			/* Unparameterized paths don't contribute to param-set list */
-			if (childouter)
-			{
-				ListCell   *lco;
-				bool		found = false;
+			if (childouter) {
+				ListCell *lco;
+				bool found = false;
 
-				/* Have we already seen this param set? */
-				foreach(lco, all_child_outers)
-				{
-					Relids		existing_outers = (Relids) lfirst(lco);
+				/* Have we already seen this param set? */foreach(lco, all_child_outers) {
+					Relids existing_outers = (Relids) lfirst(lco);
 
-					if (bms_equal(existing_outers, childouter))
-					{
+					if (bms_equal(existing_outers, childouter)) {
 						found = true;
 						break;
 					}
 				}
-				if (!found)
-				{
+				if (!found) {
 					/* No, so add it to all_child_outers */
-					all_child_outers = lappend(all_child_outers,
-											   childouter);
+					all_child_outers = lappend(all_child_outers, childouter);
 				}
 			}
 		}
@@ -796,8 +692,7 @@ set_append_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
 	 * list of child pathkeys.
 	 */
 	if (subpaths_valid)
-		generate_mergeappend_paths(root, rel, live_childrels,
-								   all_child_pathkeys);
+		generate_mergeappend_paths(root, rel, live_childrels, all_child_pathkeys);
 
 	/*
 	 * Build Append paths for each parameterization seen among the child rels.
@@ -811,25 +706,19 @@ set_append_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
 	 * child path; otherwise some children might be failing to check the
 	 * moved-down quals.  To make them match up, we can try to increase the
 	 * parameterization of lesser-parameterized paths.
-	 */
-	foreach(l, all_child_outers)
-	{
-		Relids		required_outer = (Relids) lfirst(l);
-		ListCell   *lcr;
+	 */foreach(l, all_child_outers) {
+		Relids required_outer = (Relids) lfirst(l);
+		ListCell *lcr;
 
 		/* Select the child paths for an Append with this parameterization */
 		subpaths = NIL;
 		subpaths_valid = true;
-		foreach(lcr, live_childrels)
-		{
+		foreach(lcr, live_childrels) {
 			RelOptInfo *childrel = (RelOptInfo *) lfirst(lcr);
-			Path	   *subpath;
+			Path *subpath;
 
-			subpath = get_cheapest_parameterized_child_path(root,
-															childrel,
-															required_outer);
-			if (subpath == NULL)
-			{
+			subpath = get_cheapest_parameterized_child_path(root, childrel, required_outer);
+			if (subpath == NULL) {
 				/* failed to make a suitable path for this child */
 				subpaths_valid = false;
 				break;
@@ -838,8 +727,7 @@ set_append_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
 		}
 
 		if (subpaths_valid)
-			add_path(rel, (Path *)
-					 create_append_path(rel, subpaths, required_outer));
+			add_path(rel, (Path *) create_append_path(rel, subpaths, required_outer));
 	}
 
 	/* Select cheapest paths */
@@ -869,48 +757,31 @@ set_append_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
  * parameterized MergeAppends to feed such joins.  (See notes in
  * optimizer/README for why that might not ever happen, though.)
  */
-static void
-generate_mergeappend_paths(PlannerInfo *root, RelOptInfo *rel,
-						   List *live_childrels,
-						   List *all_child_pathkeys)
-{
-	ListCell   *lcp;
+static void generate_mergeappend_paths(PlannerInfo *root, RelOptInfo *rel, List *live_childrels,
+		List *all_child_pathkeys) {
+	ListCell *lcp;
 
-	foreach(lcp, all_child_pathkeys)
-	{
-		List	   *pathkeys = (List *) lfirst(lcp);
-		List	   *startup_subpaths = NIL;
-		List	   *total_subpaths = NIL;
-		bool		startup_neq_total = false;
-		ListCell   *lcr;
+	foreach(lcp, all_child_pathkeys) {
+		List *pathkeys = (List *) lfirst(lcp);
+		List *startup_subpaths = NIL;
+		List *total_subpaths = NIL;
+		bool startup_neq_total = false;
+		ListCell *lcr;
 
-		/* Select the child paths for this ordering... */
-		foreach(lcr, live_childrels)
-		{
+		/* Select the child paths for this ordering... */foreach(lcr, live_childrels) {
 			RelOptInfo *childrel = (RelOptInfo *) lfirst(lcr);
-			Path	   *cheapest_startup,
-					   *cheapest_total;
+			Path *cheapest_startup, *cheapest_total;
 
 			/* Locate the right paths, if they are available. */
-			cheapest_startup =
-				get_cheapest_path_for_pathkeys(childrel->pathlist,
-											   pathkeys,
-											   NULL,
-											   STARTUP_COST);
-			cheapest_total =
-				get_cheapest_path_for_pathkeys(childrel->pathlist,
-											   pathkeys,
-											   NULL,
-											   TOTAL_COST);
+			cheapest_startup = get_cheapest_path_for_pathkeys(childrel->pathlist, pathkeys, NULL, STARTUP_COST);
+			cheapest_total = get_cheapest_path_for_pathkeys(childrel->pathlist, pathkeys, NULL, TOTAL_COST);
 
 			/*
 			 * If we can't find any paths with the right order just use the
 			 * cheapest-total path; we'll have to sort it later.
 			 */
-			if (cheapest_startup == NULL || cheapest_total == NULL)
-			{
-				cheapest_startup = cheapest_total =
-					childrel->cheapest_total_path;
+			if (cheapest_startup == NULL || cheapest_total == NULL) {
+				cheapest_startup = cheapest_total = childrel->cheapest_total_path;
 				/* Assert we do have an unparameterized path for this child */
 				Assert(cheapest_total->param_info == NULL);
 			}
@@ -923,24 +794,14 @@ generate_mergeappend_paths(PlannerInfo *root, RelOptInfo *rel,
 			if (cheapest_startup != cheapest_total)
 				startup_neq_total = true;
 
-			startup_subpaths =
-				accumulate_append_subpath(startup_subpaths, cheapest_startup);
-			total_subpaths =
-				accumulate_append_subpath(total_subpaths, cheapest_total);
+			startup_subpaths = accumulate_append_subpath(startup_subpaths, cheapest_startup);
+			total_subpaths = accumulate_append_subpath(total_subpaths, cheapest_total);
 		}
 
 		/* ... and build the MergeAppend paths */
-		add_path(rel, (Path *) create_merge_append_path(root,
-														rel,
-														startup_subpaths,
-														pathkeys,
-														NULL));
+		add_path(rel, (Path *) create_merge_append_path(root, rel, startup_subpaths, pathkeys, NULL));
 		if (startup_neq_total)
-			add_path(rel, (Path *) create_merge_append_path(root,
-															rel,
-															total_subpaths,
-															pathkeys,
-															NULL));
+			add_path(rel, (Path *) create_merge_append_path(root, rel, total_subpaths, pathkeys, NULL));
 	}
 }
 
@@ -952,21 +813,16 @@ generate_mergeappend_paths(PlannerInfo *root, RelOptInfo *rel,
  * Returns NULL if unable to create such a path.
  */
 static Path *
-get_cheapest_parameterized_child_path(PlannerInfo *root, RelOptInfo *rel,
-									  Relids required_outer)
-{
-	Path	   *cheapest;
-	ListCell   *lc;
+get_cheapest_parameterized_child_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer) {
+	Path *cheapest;
+	ListCell *lc;
 
 	/*
 	 * Look up the cheapest existing path with no more than the needed
 	 * parameterization.  If it has exactly the needed parameterization, we're
 	 * done.
 	 */
-	cheapest = get_cheapest_path_for_pathkeys(rel->pathlist,
-											  NIL,
-											  required_outer,
-											  TOTAL_COST);
+	cheapest = get_cheapest_path_for_pathkeys(rel->pathlist, NIL, required_outer, TOTAL_COST);
 	Assert(cheapest != NULL);
 	if (bms_equal(PATH_REQ_OUTER(cheapest), required_outer))
 		return cheapest;
@@ -980,9 +836,8 @@ get_cheapest_parameterized_child_path(PlannerInfo *root, RelOptInfo *rel,
 	 * reparameterization.	We have to go through them all and find out.
 	 */
 	cheapest = NULL;
-	foreach(lc, rel->pathlist)
-	{
-		Path	   *path = (Path *) lfirst(lc);
+	foreach(lc, rel->pathlist) {
+		Path *path = (Path *) lfirst(lc);
 
 		/* Can't use it if it needs more than requested parameterization */
 		if (!bms_is_subset(PATH_REQ_OUTER(path), required_outer))
@@ -992,20 +847,17 @@ get_cheapest_parameterized_child_path(PlannerInfo *root, RelOptInfo *rel,
 		 * Reparameterization can only increase the path's cost, so if it's
 		 * already more expensive than the current cheapest, forget it.
 		 */
-		if (cheapest != NULL &&
-			compare_path_costs(cheapest, path, TOTAL_COST) <= 0)
+		if (cheapest != NULL && compare_path_costs(cheapest, path, TOTAL_COST) <= 0)
 			continue;
 
 		/* Reparameterize if needed, then recheck cost */
-		if (!bms_equal(PATH_REQ_OUTER(path), required_outer))
-		{
+		if (!bms_equal(PATH_REQ_OUTER(path), required_outer)) {
 			path = reparameterize_path(root, path, required_outer, 1.0);
 			if (path == NULL)
-				continue;		/* failed to reparameterize this one */
+				continue; /* failed to reparameterize this one */
 			Assert(bms_equal(PATH_REQ_OUTER(path), required_outer));
 
-			if (cheapest != NULL &&
-				compare_path_costs(cheapest, path, TOTAL_COST) <= 0)
+			if (cheapest != NULL && compare_path_costs(cheapest, path, TOTAL_COST) <= 0)
 				continue;
 		}
 
@@ -1032,23 +884,18 @@ get_cheapest_parameterized_child_path(PlannerInfo *root, RelOptInfo *rel,
  * MergeAppend, there's no point in a separate sort on a child.
  */
 static List *
-accumulate_append_subpath(List *subpaths, Path *path)
-{
-	if (IsA(path, AppendPath))
-	{
+accumulate_append_subpath(List *subpaths, Path *path) {
+	if (IsA(path, AppendPath)) {
 		AppendPath *apath = (AppendPath *) path;
 
 		/* list_copy is important here to avoid sharing list substructure */
 		return list_concat(subpaths, list_copy(apath->subpaths));
-	}
-	else if (IsA(path, MergeAppendPath))
-	{
+	} else if (IsA(path, MergeAppendPath)) {
 		MergeAppendPath *mpath = (MergeAppendPath *) path;
 
 		/* list_copy is important here to avoid sharing list substructure */
 		return list_concat(subpaths, list_copy(mpath->subpaths));
-	}
-	else
+	} else
 		return lappend(subpaths, path);
 }
 
@@ -1059,9 +906,7 @@ accumulate_append_subpath(List *subpaths, Path *path)
  * Rather than inventing a special "dummy" path type, we represent this as an
  * AppendPath with no members (see also IS_DUMMY_PATH/IS_DUMMY_REL macros).
  */
-static void
-set_dummy_rel_pathlist(RelOptInfo *rel)
-{
+static void set_dummy_rel_pathlist(RelOptInfo *rel) {
 	/* Set dummy size estimates --- we leave attr_widths[] as zeroes */
 	rel->rows = 0;
 	rel->width = 0;
@@ -1076,14 +921,11 @@ set_dummy_rel_pathlist(RelOptInfo *rel)
 }
 
 /* quick-and-dirty test to see if any joining is needed */
-static bool
-has_multiple_baserels(PlannerInfo *root)
-{
-	int			num_base_rels = 0;
-	Index		rti;
+static bool has_multiple_baserels(PlannerInfo *root) {
+	int num_base_rels = 0;
+	Index rti;
 
-	for (rti = 1; rti < root->simple_rel_array_size; rti++)
-	{
+	for (rti = 1; rti < root->simple_rel_array_size; rti++) {
 		RelOptInfo *brel = root->simple_rel_array[rti];
 
 		if (brel == NULL)
@@ -1109,17 +951,14 @@ has_multiple_baserels(PlannerInfo *root)
  * no freedom of action here, there's no need for a separate set_subquery_size
  * phase: we just make the path right away.
  */
-static void
-set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
-					  Index rti, RangeTblEntry *rte)
-{
-	Query	   *parse = root->parse;
-	Query	   *subquery = rte->subquery;
-	Relids		required_outer;
-	bool	   *unsafeColumns;
-	double		tuple_fraction;
+static void set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntry *rte) {
+	Query *parse = root->parse;
+	Query *subquery = rte->subquery;
+	Relids required_outer;
+	bool *unsafeColumns;
+	double tuple_fraction;
 	PlannerInfo *subroot;
-	List	   *pathkeys;
+	List *pathkeys;
 
 	/*
 	 * Must copy the Query so that planning doesn't mess up the RTE contents
@@ -1140,8 +979,7 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 	 * unsafeColumns[i] is set TRUE if we've found that output column i of the
 	 * subquery is unsafe to use in a pushed-down qual.
 	 */
-	unsafeColumns = (bool *)
-		palloc0((list_length(subquery->targetList) + 1) * sizeof(bool));
+	unsafeColumns = (bool *) palloc0((list_length(subquery->targetList) + 1) * sizeof(bool));
 
 	/*
 	 * If there are any restriction clauses that have been attached to the
@@ -1167,28 +1005,20 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 	 * XXX Are there any cases where we want to make a policy decision not to
 	 * push down a pushable qual, because it'd result in a worse plan?
 	 */
-	if (rel->baserestrictinfo != NIL &&
-		subquery_is_pushdown_safe(subquery, subquery, unsafeColumns))
-	{
+	if (rel->baserestrictinfo != NIL && subquery_is_pushdown_safe(subquery, subquery, unsafeColumns)) {
 		/* OK to consider pushing down individual quals */
-		List	   *upperrestrictlist = NIL;
-		ListCell   *l;
+		List *upperrestrictlist = NIL;
+		ListCell *l;
 
-		foreach(l, rel->baserestrictinfo)
-		{
+		foreach(l, rel->baserestrictinfo) {
 			RestrictInfo *rinfo = (RestrictInfo *) lfirst(l);
-			Node	   *clause = (Node *) rinfo->clause;
+			Node *clause = (Node *) rinfo->clause;
 
-			if (!rinfo->pseudoconstant &&
-				(!rte->security_barrier ||
-				 !contain_leaky_functions(clause)) &&
-				qual_is_pushdown_safe(subquery, rti, clause, unsafeColumns))
-			{
+			if (!rinfo->pseudoconstant && (!rte->security_barrier || !contain_leaky_functions(clause))
+					&& qual_is_pushdown_safe(subquery, rti, clause, unsafeColumns)) {
 				/* Push it down */
 				subquery_push_qual(subquery, rte, rti, clause);
-			}
-			else
-			{
+			} else {
 				/* Keep it in the upper query */
 				upperrestrictlist = lappend(upperrestrictlist, rinfo);
 			}
@@ -1204,13 +1034,9 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 	 * we'd better tell the subquery to plan for full retrieval. (XXX This
 	 * could probably be made more intelligent ...)
 	 */
-	if (parse->hasAggs ||
-		parse->groupClause ||
-		parse->havingQual ||
-		parse->distinctClause ||
-		parse->sortClause ||
-		has_multiple_baserels(root))
-		tuple_fraction = 0.0;	/* default case */
+	if (parse->hasAggs || parse->groupClause || parse->havingQual || parse->distinctClause || parse->sortClause
+			|| has_multiple_baserels(root))
+		tuple_fraction = 0.0; /* default case */
 	else
 		tuple_fraction = root->tuple_fraction;
 
@@ -1218,10 +1044,7 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 	Assert(root->plan_params == NIL);
 
 	/* Generate the plan for the subquery */
-	rel->subplan = subquery_planner(root->glob, subquery,
-									root,
-									false, tuple_fraction,
-									&subroot);
+	rel->subplan = subquery_planner(root->glob, subquery, root, false, tuple_fraction, &subroot);
 	rel->subroot = subroot;
 
 	/* Isolate the params needed by this specific subplan */
@@ -1233,8 +1056,7 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 	 * so, it's convenient to turn it back into a dummy path so that we will
 	 * recognize appropriate optimizations at this query level.
 	 */
-	if (is_dummy_plan(rel->subplan))
-	{
+	if (is_dummy_plan(rel->subplan)) {
 		set_dummy_rel_pathlist(rel);
 		return;
 	}
@@ -1256,11 +1078,9 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
  * set_function_pathlist
  *		Build the (single) access path for a function RTE
  */
-static void
-set_function_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
-{
-	Relids		required_outer;
-	List	   *pathkeys = NIL;
+static void set_function_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte) {
+	Relids required_outer;
+	List *pathkeys = NIL;
 
 	/*
 	 * We don't support pushing join clauses into the quals of a function
@@ -1274,27 +1094,20 @@ set_function_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	 * case it is ordered by the ordinal column (the last one).  See if we
 	 * care, by checking for uses of that Var in equivalence classes.
 	 */
-	if (rte->funcordinality)
-	{
-		AttrNumber	ordattno = rel->max_attr;
-		Var		   *var = NULL;
-		ListCell   *lc;
+	if (rte->funcordinality) {
+		AttrNumber ordattno = rel->max_attr;
+		Var *var = NULL;
+		ListCell *lc;
 
 		/*
 		 * Is there a Var for it in reltargetlist?	If not, the query did not
 		 * reference the ordinality column, or at least not in any way that
 		 * would be interesting for sorting.
-		 */
-		foreach(lc, rel->reltargetlist)
-		{
-			Var		   *node = (Var *) lfirst(lc);
+		 */foreach(lc, rel->reltargetlist) {
+			Var *node = (Var *) lfirst(lc);
 
 			/* checking varno/varlevelsup is just paranoia */
-			if (IsA(node, Var) &&
-				node->varattno == ordattno &&
-				node->varno == rel->relid &&
-				node->varlevelsup == 0)
-			{
+			if (IsA(node, Var) && node->varattno == ordattno && node->varno == rel->relid && node->varlevelsup == 0) {
 				var = node;
 				break;
 			}
@@ -1307,17 +1120,12 @@ set_function_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		 * cares about the ordering.
 		 */
 		if (var)
-			pathkeys = build_expression_pathkey(root,
-												(Expr *) var,
-												NULL,	/* below outer joins */
-												Int8LessOperator,
-												rel->relids,
-												false);
+			pathkeys = build_expression_pathkey(root, (Expr *) var, NULL, /* below outer joins */
+			Int8LessOperator, rel->relids, false);
 	}
 
 	/* Generate appropriate path */
-	add_path(rel, create_functionscan_path(root, rel,
-										   pathkeys, required_outer));
+	add_path(rel, create_functionscan_path(root, rel, pathkeys, required_outer));
 
 	/* Select cheapest path (pretty easy in this case...) */
 	set_cheapest(rel);
@@ -1327,10 +1135,8 @@ set_function_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
  * set_values_pathlist
  *		Build the (single) access path for a VALUES RTE
  */
-static void
-set_values_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
-{
-	Relids		required_outer;
+static void set_values_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte) {
+	Relids required_outer;
 
 	/*
 	 * We don't support pushing join clauses into the quals of a values scan,
@@ -1353,26 +1159,23 @@ set_values_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
  * There's no need for a separate set_cte_size phase, since we don't
  * support join-qual-parameterized paths for CTEs.
  */
-static void
-set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
-{
-	Plan	   *cteplan;
+static void set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte) {
+	Plan *cteplan;
 	PlannerInfo *cteroot;
-	Index		levelsup;
-	int			ndx;
-	ListCell   *lc;
-	int			plan_id;
-	Relids		required_outer;
+	Index levelsup;
+	int ndx;
+	ListCell *lc;
+	int plan_id;
+	Relids required_outer;
 
 	/*
 	 * Find the referenced CTE, and locate the plan previously made for it.
 	 */
 	levelsup = rte->ctelevelsup;
 	cteroot = root;
-	while (levelsup-- > 0)
-	{
+	while (levelsup-- > 0) {
 		cteroot = cteroot->parent_root;
-		if (!cteroot)			/* shouldn't happen */
+		if (!cteroot) /* shouldn't happen */
 			elog(ERROR, "bad levelsup for CTE \"%s\"", rte->ctename);
 	}
 
@@ -1382,15 +1185,14 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	 * So we mustn't use forboth here.
 	 */
 	ndx = 0;
-	foreach(lc, cteroot->parse->cteList)
-	{
+	foreach(lc, cteroot->parse->cteList) {
 		CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
 
 		if (strcmp(cte->ctename, rte->ctename) == 0)
 			break;
 		ndx++;
 	}
-	if (lc == NULL)				/* shouldn't happen */
+	if (lc == NULL) /* shouldn't happen */
 		elog(ERROR, "could not find CTE \"%s\"", rte->ctename);
 	if (ndx >= list_length(cteroot->cte_plan_ids))
 		elog(ERROR, "could not find plan for CTE \"%s\"", rte->ctename);
@@ -1422,13 +1224,11 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
  * There's no need for a separate set_worktable_size phase, since we don't
  * support join-qual-parameterized paths for CTEs.
  */
-static void
-set_worktable_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
-{
-	Plan	   *cteplan;
+static void set_worktable_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte) {
+	Plan *cteplan;
 	PlannerInfo *cteroot;
-	Index		levelsup;
-	Relids		required_outer;
+	Index levelsup;
+	Relids required_outer;
 
 	/*
 	 * We need to find the non-recursive term's plan, which is in the plan
@@ -1436,18 +1236,17 @@ set_worktable_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	 * where the CTE comes from.
 	 */
 	levelsup = rte->ctelevelsup;
-	if (levelsup == 0)			/* shouldn't happen */
+	if (levelsup == 0) /* shouldn't happen */
 		elog(ERROR, "bad levelsup for CTE \"%s\"", rte->ctename);
 	levelsup--;
 	cteroot = root;
-	while (levelsup-- > 0)
-	{
+	while (levelsup-- > 0) {
 		cteroot = cteroot->parent_root;
-		if (!cteroot)			/* shouldn't happen */
+		if (!cteroot) /* shouldn't happen */
 			elog(ERROR, "bad levelsup for CTE \"%s\"", rte->ctename);
 	}
 	cteplan = cteroot->non_recursive_plan;
-	if (!cteplan)				/* shouldn't happen */
+	if (!cteplan) /* shouldn't happen */
 		elog(ERROR, "could not find plan for CTE \"%s\"", rte->ctename);
 
 	/* Mark rel with estimated output rows, width, etc */
@@ -1476,11 +1275,10 @@ set_worktable_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
  * data structure.
  */
 static RelOptInfo *
-make_rel_from_joinlist(PlannerInfo *root, List *joinlist)
-{
-	int			levels_needed;
-	List	   *initial_rels;
-	ListCell   *jl;
+make_rel_from_joinlist(PlannerInfo *root, List *joinlist) {
+	int levels_needed;
+	List *initial_rels;
+	ListCell *jl;
 
 	/*
 	 * Count the number of child joinlist nodes.  This is the depth of the
@@ -1490,7 +1288,7 @@ make_rel_from_joinlist(PlannerInfo *root, List *joinlist)
 	levels_needed = list_length(joinlist);
 
 	if (levels_needed <= 0)
-		return NULL;			/* nothing to do? */
+		return NULL; /* nothing to do? */
 
 	/*
 	 * Construct a list of rels corresponding to the child joinlist nodes.
@@ -1498,41 +1296,31 @@ make_rel_from_joinlist(PlannerInfo *root, List *joinlist)
 	 * sub-joinlists.
 	 */
 	initial_rels = NIL;
-	foreach(jl, joinlist)
-	{
-		Node	   *jlnode = (Node *) lfirst(jl);
+	foreach(jl, joinlist) {
+		Node *jlnode = (Node *) lfirst(jl);
 		RelOptInfo *thisrel;
 
-		if (IsA(jlnode, RangeTblRef))
-		{
-			int			varno = ((RangeTblRef *) jlnode)->rtindex;
+		if (IsA(jlnode, RangeTblRef)) {
+			int varno = ((RangeTblRef *) jlnode)->rtindex;
 
 			thisrel = find_base_rel(root, varno);
-		}
-		else if (IsA(jlnode, List))
-		{
+		} else if (IsA(jlnode, List)) {
 			/* Recurse to handle subproblem */
 			thisrel = make_rel_from_joinlist(root, (List *) jlnode);
-		}
-		else
-		{
-			elog(ERROR, "unrecognized joinlist node type: %d",
-				 (int) nodeTag(jlnode));
-			thisrel = NULL;		/* keep compiler quiet */
+		} else {
+			elog(ERROR, "unrecognized joinlist node type: %d", (int) nodeTag(jlnode));
+			thisrel = NULL; /* keep compiler quiet */
 		}
 
 		initial_rels = lappend(initial_rels, thisrel);
 	}
 
-	if (levels_needed == 1)
-	{
+	if (levels_needed == 1) {
 		/*
 		 * Single joinlist node, so we're done.
 		 */
 		return (RelOptInfo *) linitial(initial_rels);
-	}
-	else
-	{
+	} else {
 		/*
 		 * Consider the different orders in which we could join the rels,
 		 * using a plugin, GEQO, or the regular join search code.
@@ -1543,7 +1331,7 @@ make_rel_from_joinlist(PlannerInfo *root, List *joinlist)
 		root->initial_rels = initial_rels;
 
 		if (join_search_hook)
-			return (*join_search_hook) (root, levels_needed, initial_rels);
+			return (*join_search_hook)(root, levels_needed, initial_rels);
 		else if (enable_geqo && levels_needed >= geqo_threshold)
 			return geqo(root, levels_needed, initial_rels);
 		else
@@ -1581,9 +1369,8 @@ make_rel_from_joinlist(PlannerInfo *root, List *joinlist)
  * original states of those data structures.  See geqo_eval() for an example.
  */
 RelOptInfo *
-standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels)
-{
-	int			lev;
+standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels) {
+	int lev;
 	RelOptInfo *rel;
 
 	/*
@@ -1607,9 +1394,8 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels)
 
 	root->join_rel_level[1] = initial_rels;
 
-	for (lev = 2; lev <= levels_needed; lev++)
-	{
-		ListCell   *lc;
+	for (lev = 2; lev <= levels_needed; lev++) {
+		ListCell *lc;
 
 		/*
 		 * Determine all possible pairs of relations to be joined at this
@@ -1621,8 +1407,7 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels)
 		/*
 		 * Do cleanup work on each just-processed rel.
 		 */
-		foreach(lc, root->join_rel_level[lev])
-		{
+		foreach(lc, root->join_rel_level[lev]) {
 			rel = (RelOptInfo *) lfirst(lc);
 
 			/* Find and save the cheapest paths for this rel */
@@ -1680,10 +1465,7 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels)
  * when the subquery involves set operations we have to check the output
  * expressions in each arm of the set op.
  */
-static bool
-subquery_is_pushdown_safe(Query *subquery, Query *topquery,
-						  bool *unsafeColumns)
-{
+static bool subquery_is_pushdown_safe(Query *subquery, Query *topquery, bool *unsafeColumns) {
 	SetOperationStmt *topop;
 
 	/* Check point 1 */
@@ -1704,25 +1486,19 @@ subquery_is_pushdown_safe(Query *subquery, Query *topquery,
 		check_output_expressions(subquery, unsafeColumns);
 
 	/* Are we at top level, or looking at a setop component? */
-	if (subquery == topquery)
-	{
+	if (subquery == topquery) {
 		/* Top level, so check any component queries */
 		if (subquery->setOperations != NULL)
-			if (!recurse_pushdown_safe(subquery->setOperations, topquery,
-									   unsafeColumns))
+			if (!recurse_pushdown_safe(subquery->setOperations, topquery, unsafeColumns))
 				return false;
-	}
-	else
-	{
+	} else {
 		/* Setop component must not have more components (too weird) */
 		if (subquery->setOperations != NULL)
 			return false;
 		/* Check whether setop component output types match top level */
 		topop = (SetOperationStmt *) topquery->setOperations;
 		Assert(topop && IsA(topop, SetOperationStmt));
-		compare_tlist_datatypes(subquery->targetList,
-								topop->colTypes,
-								unsafeColumns);
+		compare_tlist_datatypes(subquery->targetList, topop->colTypes, unsafeColumns);
 	}
 	return true;
 }
@@ -1730,21 +1506,15 @@ subquery_is_pushdown_safe(Query *subquery, Query *topquery,
 /*
  * Helper routine to recurse through setOperations tree
  */
-static bool
-recurse_pushdown_safe(Node *setOp, Query *topquery,
-					  bool *unsafeColumns)
-{
-	if (IsA(setOp, RangeTblRef))
-	{
+static bool recurse_pushdown_safe(Node *setOp, Query *topquery, bool *unsafeColumns) {
+	if (IsA(setOp, RangeTblRef)) {
 		RangeTblRef *rtr = (RangeTblRef *) setOp;
 		RangeTblEntry *rte = rt_fetch(rtr->rtindex, topquery->rtable);
-		Query	   *subquery = rte->subquery;
+		Query *subquery = rte->subquery;
 
 		Assert(subquery != NULL);
 		return subquery_is_pushdown_safe(subquery, topquery, unsafeColumns);
-	}
-	else if (IsA(setOp, SetOperationStmt))
-	{
+	} else if (IsA(setOp, SetOperationStmt)) {
 		SetOperationStmt *op = (SetOperationStmt *) setOp;
 
 		/* EXCEPT is no good (point 3 for subquery_is_pushdown_safe) */
@@ -1755,11 +1525,8 @@ recurse_pushdown_safe(Node *setOp, Query *topquery,
 			return false;
 		if (!recurse_pushdown_safe(op->rarg, topquery, unsafeColumns))
 			return false;
-	}
-	else
-	{
-		elog(ERROR, "unrecognized node type: %d",
-			 (int) nodeTag(setOp));
+	} else {
+		elog(ERROR, "unrecognized node type: %d", (int) nodeTag(setOp));
 	}
 	return true;
 }
@@ -1790,40 +1557,33 @@ recurse_pushdown_safe(Node *setOp, Query *topquery,
  * for the case, and it's unlikely enough that we shouldn't refuse the
  * optimization just because it could theoretically happen.)
  */
-static void
-check_output_expressions(Query *subquery, bool *unsafeColumns)
-{
-	ListCell   *lc;
+static void check_output_expressions(Query *subquery, bool *unsafeColumns) {
+	ListCell *lc;
 
-	foreach(lc, subquery->targetList)
-	{
+	foreach(lc, subquery->targetList) {
 		TargetEntry *tle = (TargetEntry *) lfirst(lc);
 
 		if (tle->resjunk)
-			continue;			/* ignore resjunk columns */
+			continue; /* ignore resjunk columns */
 
 		/* We need not check further if output col is already known unsafe */
 		if (unsafeColumns[tle->resno])
 			continue;
 
 		/* Functions returning sets are unsafe (point 1) */
-		if (expression_returns_set((Node *) tle->expr))
-		{
+		if (expression_returns_set((Node *) tle->expr)) {
 			unsafeColumns[tle->resno] = true;
 			continue;
 		}
 
 		/* Volatile functions are unsafe (point 2) */
-		if (contain_volatile_functions((Node *) tle->expr))
-		{
+		if (contain_volatile_functions((Node *) tle->expr)) {
 			unsafeColumns[tle->resno] = true;
 			continue;
 		}
 
 		/* If subquery uses DISTINCT ON, check point 3 */
-		if (subquery->hasDistinctOn &&
-			!targetIsInSortList(tle, InvalidOid, subquery->distinctClause))
-		{
+		if (subquery->hasDistinctOn && !targetIsInSortList(tle, InvalidOid, subquery->distinctClause)) {
 			/* non-DISTINCT column, so mark it unsafe */
 			unsafeColumns[tle->resno] = true;
 			continue;
@@ -1848,19 +1608,15 @@ check_output_expressions(Query *subquery, bool *unsafeColumns)
  * colTypes is an OID list of the top-level setop's output column types.
  * unsafeColumns[] is the result array.
  */
-static void
-compare_tlist_datatypes(List *tlist, List *colTypes,
-						bool *unsafeColumns)
-{
-	ListCell   *l;
-	ListCell   *colType = list_head(colTypes);
+static void compare_tlist_datatypes(List *tlist, List *colTypes, bool *unsafeColumns) {
+	ListCell *l;
+	ListCell *colType = list_head(colTypes);
 
-	foreach(l, tlist)
-	{
+	foreach(l, tlist) {
 		TargetEntry *tle = (TargetEntry *) lfirst(l);
 
 		if (tle->resjunk)
-			continue;			/* ignore resjunk columns */
+			continue; /* ignore resjunk columns */
 		if (colType == NULL)
 			elog(ERROR, "wrong number of tlist entries");
 		if (exprType((Node *) tle->expr) != lfirst_oid(colType))
@@ -1889,13 +1645,10 @@ compare_tlist_datatypes(List *tlist, List *colTypes,
  * 3. The qual must not refer to any subquery output columns that were
  * found to be unsafe to reference by subquery_is_pushdown_safe().
  */
-static bool
-qual_is_pushdown_safe(Query *subquery, Index rti, Node *qual,
-					  bool *unsafeColumns)
-{
-	bool		safe = true;
-	List	   *vars;
-	ListCell   *vl;
+static bool qual_is_pushdown_safe(Query *subquery, Index rti, Node *qual, bool *unsafeColumns) {
+	bool safe = true;
+	List *vars;
+	ListCell *vl;
 
 	/* Refuse subselects (point 1) */
 	if (contain_subplans(qual))
@@ -1912,12 +1665,9 @@ qual_is_pushdown_safe(Query *subquery, Index rti, Node *qual,
 	 * Examine all Vars used in clause; since it's a restriction clause, all
 	 * such Vars must refer to subselect output columns.
 	 */
-	vars = pull_var_clause(qual,
-						   PVC_REJECT_AGGREGATES,
-						   PVC_INCLUDE_PLACEHOLDERS);
-	foreach(vl, vars)
-	{
-		Var		   *var = (Var *) lfirst(vl);
+	vars = pull_var_clause(qual, PVC_REJECT_AGGREGATES, PVC_INCLUDE_PLACEHOLDERS);
+	foreach(vl, vars) {
+		Var *var = (Var *) lfirst(vl);
 
 		/*
 		 * XXX Punt if we find any PlaceHolderVars in the restriction clause.
@@ -1926,8 +1676,7 @@ qual_is_pushdown_safe(Query *subquery, Index rti, Node *qual,
 		 * practical interest anyway.  So for the moment, just refuse to push
 		 * down.
 		 */
-		if (!IsA(var, Var))
-		{
+		if (!IsA(var, Var)) {
 			safe = false;
 			break;
 		}
@@ -1936,15 +1685,13 @@ qual_is_pushdown_safe(Query *subquery, Index rti, Node *qual,
 		Assert(var->varattno >= 0);
 
 		/* Check point 2 */
-		if (var->varattno == 0)
-		{
+		if (var->varattno == 0) {
 			safe = false;
 			break;
 		}
 
 		/* Check point 3 */
-		if (unsafeColumns[var->varattno])
-		{
+		if (unsafeColumns[var->varattno]) {
 			safe = false;
 			break;
 		}
@@ -1958,17 +1705,11 @@ qual_is_pushdown_safe(Query *subquery, Index rti, Node *qual,
 /*
  * subquery_push_qual - push down a qual that we have determined is safe
  */
-static void
-subquery_push_qual(Query *subquery, RangeTblEntry *rte, Index rti, Node *qual)
-{
-	if (subquery->setOperations != NULL)
-	{
+static void subquery_push_qual(Query *subquery, RangeTblEntry *rte, Index rti, Node *qual) {
+	if (subquery->setOperations != NULL) {
 		/* Recurse to push it separately to each component query */
-		recurse_push_qual(subquery->setOperations, subquery,
-						  rte, rti, qual);
-	}
-	else
-	{
+		recurse_push_qual(subquery->setOperations, subquery, rte, rti, qual);
+	} else {
 		/*
 		 * We need to replace Vars in the qual (which must refer to outputs of
 		 * the subquery) with copies of the subquery's targetlist expressions.
@@ -1978,10 +1719,8 @@ subquery_push_qual(Query *subquery, RangeTblEntry *rte, Index rti, Node *qual)
 		 * This step also ensures that when we are pushing into a setop tree,
 		 * each component query gets its own copy of the qual.
 		 */
-		qual = ReplaceVarsFromTargetList(qual, rti, 0, rte,
-										 subquery->targetList,
-										 REPLACEVARS_REPORT_ERROR, 0,
-										 &subquery->hasSubLinks);
+		qual = ReplaceVarsFromTargetList(qual, rti, 0, rte, subquery->targetList, REPLACEVARS_REPORT_ERROR, 0,
+				&subquery->hasSubLinks);
 
 		/*
 		 * Now attach the qual to the proper place: normally WHERE, but if the
@@ -1991,8 +1730,7 @@ subquery_push_qual(Query *subquery, RangeTblEntry *rte, Index rti, Node *qual)
 		if (subquery->hasAggs || subquery->groupClause || subquery->havingQual)
 			subquery->havingQual = make_and_qual(subquery->havingQual, qual);
 		else
-			subquery->jointree->quals =
-				make_and_qual(subquery->jointree->quals, qual);
+			subquery->jointree->quals = make_and_qual(subquery->jointree->quals, qual);
 
 		/*
 		 * We need not change the subquery's hasAggs or hasSublinks flags,
@@ -2005,30 +1743,21 @@ subquery_push_qual(Query *subquery, RangeTblEntry *rte, Index rti, Node *qual)
 /*
  * Helper routine to recurse through setOperations tree
  */
-static void
-recurse_push_qual(Node *setOp, Query *topquery,
-				  RangeTblEntry *rte, Index rti, Node *qual)
-{
-	if (IsA(setOp, RangeTblRef))
-	{
+static void recurse_push_qual(Node *setOp, Query *topquery, RangeTblEntry *rte, Index rti, Node *qual) {
+	if (IsA(setOp, RangeTblRef)) {
 		RangeTblRef *rtr = (RangeTblRef *) setOp;
 		RangeTblEntry *subrte = rt_fetch(rtr->rtindex, topquery->rtable);
-		Query	   *subquery = subrte->subquery;
+		Query *subquery = subrte->subquery;
 
 		Assert(subquery != NULL);
 		subquery_push_qual(subquery, rte, rti, qual);
-	}
-	else if (IsA(setOp, SetOperationStmt))
-	{
+	} else if (IsA(setOp, SetOperationStmt)) {
 		SetOperationStmt *op = (SetOperationStmt *) setOp;
 
 		recurse_push_qual(op->larg, topquery, rte, rti, qual);
 		recurse_push_qual(op->rarg, topquery, rte, rti, qual);
-	}
-	else
-	{
-		elog(ERROR, "unrecognized node type: %d",
-			 (int) nodeTag(setOp));
+	} else {
+		elog(ERROR, "unrecognized node type: %d", (int) nodeTag(setOp));
 	}
 }
 
@@ -2041,15 +1770,15 @@ recurse_push_qual(Node *setOp, Query *topquery,
 static void
 print_relids(Relids relids)
 {
-	Relids		tmprelids;
-	int			x;
-	bool		first = true;
+	Relids tmprelids;
+	int x;
+	bool first = true;
 
 	tmprelids = bms_copy(relids);
 	while ((x = bms_first_member(tmprelids)) >= 0)
 	{
 		if (!first)
-			printf(" ");
+		printf(" ");
 		printf("%d", x);
 		first = false;
 	}
@@ -2059,7 +1788,7 @@ print_relids(Relids relids)
 static void
 print_restrictclauses(PlannerInfo *root, List *clauses)
 {
-	ListCell   *l;
+	ListCell *l;
 
 	foreach(l, clauses)
 	{
@@ -2067,7 +1796,7 @@ print_restrictclauses(PlannerInfo *root, List *clauses)
 
 		print_expr((Node *) c->clause, root->parse->rtable);
 		if (lnext(l))
-			printf(", ");
+		printf(", ");
 	}
 }
 
@@ -2075,69 +1804,69 @@ static void
 print_path(PlannerInfo *root, Path *path, int indent)
 {
 	const char *ptype;
-	bool		join = false;
-	Path	   *subpath = NULL;
-	int			i;
+	bool join = false;
+	Path *subpath = NULL;
+	int i;
 
 	switch (nodeTag(path))
 	{
 		case T_Path:
-			ptype = "SeqScan";
-			break;
+		ptype = "SeqScan";
+		break;
 		case T_IndexPath:
-			ptype = "IdxScan";
-			break;
+		ptype = "IdxScan";
+		break;
 		case T_BitmapHeapPath:
-			ptype = "BitmapHeapScan";
-			break;
+		ptype = "BitmapHeapScan";
+		break;
 		case T_BitmapAndPath:
-			ptype = "BitmapAndPath";
-			break;
+		ptype = "BitmapAndPath";
+		break;
 		case T_BitmapOrPath:
-			ptype = "BitmapOrPath";
-			break;
+		ptype = "BitmapOrPath";
+		break;
 		case T_TidPath:
-			ptype = "TidScan";
-			break;
+		ptype = "TidScan";
+		break;
 		case T_ForeignPath:
-			ptype = "ForeignScan";
-			break;
+		ptype = "ForeignScan";
+		break;
 		case T_AppendPath:
-			ptype = "Append";
-			break;
+		ptype = "Append";
+		break;
 		case T_MergeAppendPath:
-			ptype = "MergeAppend";
-			break;
+		ptype = "MergeAppend";
+		break;
 		case T_ResultPath:
-			ptype = "Result";
-			break;
+		ptype = "Result";
+		break;
 		case T_MaterialPath:
-			ptype = "Material";
-			subpath = ((MaterialPath *) path)->subpath;
-			break;
+		ptype = "Material";
+		subpath = ((MaterialPath *) path)->subpath;
+		break;
 		case T_UniquePath:
-			ptype = "Unique";
-			subpath = ((UniquePath *) path)->subpath;
-			break;
+		ptype = "Unique";
+		subpath = ((UniquePath *) path)->subpath;
+		break;
 		case T_NestPath:
-			ptype = "NestLoop";
-			join = true;
-			break;
+		ptype = "NestLoop";
+		join = true;
+		break;
 		case T_MergePath:
-			ptype = "MergeJoin";
-			join = true;
-			break;
+		ptype = "MergeJoin";
+		join = true;
+		break;
 		case T_HashPath:
-			ptype = "HashJoin";
-			join = true;
-			break;
+		ptype = "HashJoin";
+		join = true;
+		break;
 		default:
-			ptype = "???Path";
-			break;
+		ptype = "???Path";
+		break;
 	}
 
 	for (i = 0; i < indent; i++)
-		printf("\t");
+	printf("\t");
 	printf("%s", ptype);
 
 	if (path->parent)
@@ -2151,31 +1880,31 @@ print_path(PlannerInfo *root, Path *path, int indent)
 	if (path->pathkeys)
 	{
 		for (i = 0; i < indent; i++)
-			printf("\t");
+		printf("\t");
 		printf("  pathkeys: ");
 		print_pathkeys(path->pathkeys, root->parse->rtable);
 	}
 
 	if (join)
 	{
-		JoinPath   *jp = (JoinPath *) path;
+		JoinPath *jp = (JoinPath *) path;
 
 		for (i = 0; i < indent; i++)
-			printf("\t");
+		printf("\t");
 		printf("  clauses: ");
 		print_restrictclauses(root, jp->joinrestrictinfo);
 		printf("\n");
 
 		if (IsA(path, MergePath))
 		{
-			MergePath  *mp = (MergePath *) path;
+			MergePath *mp = (MergePath *) path;
 
 			for (i = 0; i < indent; i++)
-				printf("\t");
+			printf("\t");
 			printf("  sortouter=%d sortinner=%d materializeinner=%d\n",
-				   ((mp->outersortkeys) ? 1 : 0),
-				   ((mp->innersortkeys) ? 1 : 0),
-				   ((mp->materialize_inner) ? 1 : 0));
+					((mp->outersortkeys) ? 1 : 0),
+					((mp->innersortkeys) ? 1 : 0),
+					((mp->materialize_inner) ? 1 : 0));
 		}
 
 		print_path(root, jp->outerjoinpath, indent + 1);
@@ -2183,13 +1912,13 @@ print_path(PlannerInfo *root, Path *path, int indent)
 	}
 
 	if (subpath)
-		print_path(root, subpath, indent + 1);
+	print_path(root, subpath, indent + 1);
 }
 
 void
 debug_print_rel(PlannerInfo *root, RelOptInfo *rel)
 {
-	ListCell   *l;
+	ListCell *l;
 
 	printf("RELOPTINFO (");
 	print_relids(rel->relids);
@@ -2211,7 +1940,7 @@ debug_print_rel(PlannerInfo *root, RelOptInfo *rel)
 
 	printf("\tpath list:\n");
 	foreach(l, rel->pathlist)
-		print_path(root, lfirst(l), 1);
+	print_path(root, lfirst(l), 1);
 	if (rel->cheapest_startup_path)
 	{
 		printf("\n\tcheapest startup path:\n");

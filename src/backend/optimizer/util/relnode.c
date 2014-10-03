@@ -19,6 +19,7 @@
 #include "optimizer/paths.h"
 #include "optimizer/placeholder.h"
 #include "optimizer/plancat.h"
+#include "optimizer/cost.h"
 #include "optimizer/restrictinfo.h"
 #include "utils/hsearch.h"
 #include "lib/stringinfo.h"
@@ -30,23 +31,20 @@
 #include "storage/fd.h"
 #include "nodes/print.h"
 #include "nodes/pg_list.h"
+#include "utils/memocache.h"
 
 typedef struct JoinHashEntry {
 	Relids join_relids; /* hash key --- MUST BE FIRST */
 	RelOptInfo *join_rel;
 } JoinHashEntry;
 
-static void build_joinrel_tlist(PlannerInfo *root, RelOptInfo *joinrel,
-		RelOptInfo *input_rel);
+static void build_joinrel_tlist(PlannerInfo *root, RelOptInfo *joinrel, RelOptInfo *input_rel);
 
-static List *build_joinrel_restrictlist(PlannerInfo *root, RelOptInfo *joinrel,
-		RelOptInfo *outer_rel, RelOptInfo *inner_rel);
-static void build_joinrel_joinlist(RelOptInfo *joinrel, RelOptInfo *outer_rel,
+static List *build_joinrel_restrictlist(PlannerInfo *root, RelOptInfo *joinrel, RelOptInfo *outer_rel,
 		RelOptInfo *inner_rel);
-static List *subbuild_joinrel_restrictlist(RelOptInfo *joinrel,
-		List *joininfo_list, List *new_restrictlist);
-static List *subbuild_joinrel_joinlist(RelOptInfo *joinrel, List *joininfo_list,
-		List *new_joininfo);
+static void build_joinrel_joinlist(RelOptInfo *joinrel, RelOptInfo *outer_rel, RelOptInfo *inner_rel);
+static List *subbuild_joinrel_restrictlist(RelOptInfo *joinrel, List *joininfo_list, List *new_restrictlist);
+static List *subbuild_joinrel_joinlist(RelOptInfo *joinrel, List *joininfo_list, List *new_joininfo);
 
 /*
  * setup_simple_rel_arrays
@@ -60,12 +58,10 @@ void setup_simple_rel_arrays(PlannerInfo *root) {
 	root->simple_rel_array_size = list_length(root->parse->rtable) + 1;
 
 	/* simple_rel_array is initialized to all NULLs */
-	root->simple_rel_array = (RelOptInfo **) palloc0(
-			root->simple_rel_array_size * sizeof(RelOptInfo *));
+	root->simple_rel_array = (RelOptInfo **) palloc0(root->simple_rel_array_size * sizeof(RelOptInfo *));
 
 	/* simple_rte_array is an array equivalent of the rtable list */
-	root->simple_rte_array = (RangeTblEntry **) palloc0(
-			root->simple_rel_array_size * sizeof(RangeTblEntry *));
+	root->simple_rte_array = (RangeTblEntry **) palloc0(root->simple_rel_array_size * sizeof(RangeTblEntry *));
 	rti = 1;
 	foreach(lc, root->parse->rtable) {
 		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
@@ -130,6 +126,10 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptKind reloptkind) {
 	rel->joininfo = NIL;
 	rel->has_eclass_joins = false;
 	rel->rel_name = NIL;
+	rel->last_index_type=0;
+	rel->last_level=0;
+	rel->last_memorel=NULL;
+	rel->last_restrictList=NIL;
 
 	/* Check type of rtable entry */
 	switch (rte->rtekind) {
@@ -149,8 +149,7 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptKind reloptkind) {
 
 			foreach (lc, rte->subquery->rtable) {
 
-				relname = makeString(
-						((RangeTblEntry *) lfirst(lc))->eref->aliasname);
+				relname = makeString(((RangeTblEntry *) lfirst(lc))->eref->aliasname);
 				rel->rel_name = lappend(rel->rel_name, relname);
 
 			}
@@ -165,10 +164,8 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptKind reloptkind) {
 
 		rel->min_attr = 0;
 		rel->max_attr = list_length(rte->eref->colnames);
-		rel->attr_needed = (Relids *) palloc0(
-				(rel->max_attr - rel->min_attr + 1) * sizeof(Relids));
-		rel->attr_widths = (int32 *) palloc0(
-				(rel->max_attr - rel->min_attr + 1) * sizeof(int32));
+		rel->attr_needed = (Relids *) palloc0((rel->max_attr - rel->min_attr + 1) * sizeof(Relids));
+		rel->attr_widths = (int32 *) palloc0((rel->max_attr - rel->min_attr + 1) * sizeof(int32));
 		break;
 	default:
 		elog(ERROR, "unrecognized RTE kind: %d", (int ) rte->rtekind);
@@ -194,8 +191,7 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptKind reloptkind) {
 			if (appinfo->parent_relid != relid)
 				continue;
 
-			(void) build_simple_rel(root, appinfo->child_relid,
-					RELOPT_OTHER_MEMBER_REL);
+			(void) build_simple_rel(root, appinfo->child_relid, RELOPT_OTHER_MEMBER_REL);
 		}
 	}
 
@@ -239,16 +235,14 @@ static void build_join_rel_hash(PlannerInfo *root) {
 	hash_ctl.hash = bitmap_hash;
 	hash_ctl.match = bitmap_match;
 	hash_ctl.hcxt = CurrentMemoryContext;
-	hashtab = hash_create("JoinRelHashTable", 256L, &hash_ctl,
-			HASH_ELEM | HASH_FUNCTION | HASH_COMPARE | HASH_CONTEXT);
+	hashtab = hash_create("JoinRelHashTable", 256L, &hash_ctl, HASH_ELEM | HASH_FUNCTION | HASH_COMPARE | HASH_CONTEXT);
 
 	/* Insert all the already-existing joinrels */foreach(l, root->join_rel_list) {
 		RelOptInfo *rel = (RelOptInfo *) lfirst(l);
 		JoinHashEntry *hentry;
 		bool found;
 
-		hentry = (JoinHashEntry *) hash_search(hashtab, &(rel->relids),
-				HASH_ENTER, &found);
+		hentry = (JoinHashEntry *) hash_search(hashtab, &(rel->relids), HASH_ENTER, &found);
 		Assert(!found);
 		hentry->join_rel = rel;
 	}
@@ -282,8 +276,7 @@ find_join_rel(PlannerInfo *root, Relids relids) {
 		Relids hashkey = relids;
 		JoinHashEntry *hentry;
 
-		hentry = (JoinHashEntry *) hash_search(root->join_rel_hash, &hashkey,
-				HASH_FIND, NULL);
+		hentry = (JoinHashEntry *) hash_search(root->join_rel_hash, &hashkey, HASH_FIND, NULL);
 		if (hentry)
 			return hentry->join_rel;
 	} else {
@@ -317,11 +310,12 @@ find_join_rel(PlannerInfo *root, Relids relids) {
  * duplicated calculation of the restrictlist...
  */
 RelOptInfo *
-build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel,
-		RelOptInfo *inner_rel, SpecialJoinInfo *sjinfo, List **restrictlist_ptr) {
+build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelOptInfo *inner_rel,
+		SpecialJoinInfo *sjinfo, List **restrictlist_ptr) {
 	RelOptInfo *joinrel;
 	//Relation relation;
 	List *restrictlist;
+	//ListCell *lc;
 
 	/*
 	 * See if we already have a joinrel for this set of base rels.
@@ -333,9 +327,22 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel,
 		 * Yes, so we only need to figure the restrictlist for this particular
 		 * pair of component relations.
 		 */
-		if (restrictlist_ptr)
-			*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel,
-					outer_rel, inner_rel);
+		if (restrictlist_ptr) {
+			*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
+
+			/*restrictlist = list_copy(inner_rel->restrictList);
+			restrictlist = list_concat(restrictlist, list_copy(outer_rel->restrictList));
+			restrictlist = list_concat(restrictlist,
+					generate_join_implied_equalities(root, joinrel->relids, outer_rel->relids, inner_rel));
+			store_join(joinrel->rel_name, root->query_level, restrictlist);*/
+
+			if (!joinrel->memo_checked && enable_memo) {
+
+				//set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo, *restrictlist_ptr);
+
+			}
+		}
+
 		return joinrel;
 	}
 
@@ -381,13 +388,22 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel,
 	joinrel->joininfo = NIL;
 	joinrel->has_eclass_joins = false;
 	joinrel->rel_name = NIL;
+	joinrel->restrictList = NIL;
+
+
 
 	/* We build the join mane  separated by colons using names of childs*/
 	/* see stringinfo.h for an explanation of this maneuver */
 //	if (enable_memo) {
 	joinrel->rel_name = list_copy(inner_rel->rel_name);
-	joinrel->rel_name = list_concat(joinrel->rel_name, outer_rel->rel_name);
-//	}
+	joinrel->rel_name = list_concat(joinrel->rel_name, list_copy(outer_rel->rel_name));
+	joinrel->memo_checked = false;
+	joinrel->last_index_type=0;
+	joinrel->last_level=0;
+	joinrel->last_memorel=NULL;
+	joinrel->last_restrictList=NIL;
+
+	//}
 
 	/*
 	 * Create a new tlist containing just the vars that need to be output from
@@ -406,10 +422,11 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel,
 	 * caller might or might not need the restrictlist, but I need it anyway
 	 * for set_joinrel_size_estimates().)
 	 */
-	restrictlist = build_joinrel_restrictlist(root, joinrel, outer_rel,
-			inner_rel);
-	if (restrictlist_ptr)
+	restrictlist = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
+	if (restrictlist_ptr) {
 		*restrictlist_ptr = restrictlist;
+
+	}
 	build_joinrel_joinlist(joinrel, outer_rel, inner_rel);
 
 	/*
@@ -422,8 +439,12 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel,
 	 * Set estimates of the joinrel's size.
 	 */
 
-	set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo,
-			restrictlist);
+	joinrel->restrictList = list_concat_unique(joinrel->restrictList, list_copy(inner_rel->restrictList));
+	joinrel->restrictList = list_concat_unique(joinrel->restrictList, list_copy(outer_rel->restrictList));
+	joinrel->restrictList = list_concat_unique(joinrel->restrictList,
+			generate_join_implied_equalities(root, joinrel->relids, outer_rel->relids, inner_rel));
+
+	set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo, restrictlist);
 
 	/*
 	 * Add the joinrel to the query's joinrel list, and store it into the
@@ -436,8 +457,7 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel,
 		JoinHashEntry *hentry;
 		bool found;
 
-		hentry = (JoinHashEntry *) hash_search(root->join_rel_hash,
-				&(joinrel->relids), HASH_ENTER, &found);
+		hentry = (JoinHashEntry *) hash_search(root->join_rel_hash, &(joinrel->relids), HASH_ENTER, &found);
 		Assert(!found);
 		hentry->join_rel = joinrel;
 	}
@@ -451,10 +471,8 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel,
 	if (root->join_rel_level) {
 		Assert(root->join_cur_level > 0);
 		Assert(root->join_cur_level <= bms_num_members(joinrel->relids));
-		root->join_rel_level[root->join_cur_level] = lappend(
-				root->join_rel_level[root->join_cur_level], joinrel);
+		root->join_rel_level[root->join_cur_level] = lappend(root->join_rel_level[root->join_cur_level], joinrel);
 	}
-
 	return joinrel;
 }
 
@@ -470,8 +488,7 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel,
  * We also compute the expected width of the join's output, making use
  * of data that was cached at the baserel level by set_rel_width().
  */
-static void build_joinrel_tlist(PlannerInfo *root, RelOptInfo *joinrel,
-		RelOptInfo *input_rel) {
+static void build_joinrel_tlist(PlannerInfo *root, RelOptInfo *joinrel, RelOptInfo *input_rel) {
 	Relids relids = joinrel->relids;
 	ListCell *vars;
 
@@ -493,8 +510,7 @@ static void build_joinrel_tlist(PlannerInfo *root, RelOptInfo *joinrel,
 		 * rels, which will never be seen here.)
 		 */
 		if (!IsA(var, Var))
-			elog(ERROR,
-					"unexpected node type in reltargetlist: %d", (int) nodeTag(var));
+			elog(ERROR, "unexpected node type in reltargetlist: %d", (int) nodeTag(var));
 
 		/* Get the Var's original base rel */
 		baserel = find_base_rel(root, var->varno);
@@ -552,8 +568,7 @@ static void build_joinrel_tlist(PlannerInfo *root, RelOptInfo *joinrel,
  * the original nodes in the lists made for the join relation.
  */
 static List *
-build_joinrel_restrictlist(PlannerInfo *root, RelOptInfo *joinrel,
-		RelOptInfo *outer_rel, RelOptInfo *inner_rel) {
+build_joinrel_restrictlist(PlannerInfo *root, RelOptInfo *joinrel, RelOptInfo *outer_rel, RelOptInfo *inner_rel) {
 	List *result;
 
 	/*
@@ -562,23 +577,19 @@ build_joinrel_restrictlist(PlannerInfo *root, RelOptInfo *joinrel,
 	 * same clauses arriving from both input relations).
 	 */
 	result = subbuild_joinrel_restrictlist(joinrel, outer_rel->joininfo, NIL);
-	result = subbuild_joinrel_restrictlist(joinrel, inner_rel->joininfo,
-			result);
+	result = subbuild_joinrel_restrictlist(joinrel, inner_rel->joininfo, result);
 
 	/*
 	 * Add on any clauses derived from EquivalenceClasses.	These cannot be
 	 * redundant with the clauses in the joininfo lists, so don't bother
 	 * checking.
 	 */
-	result = list_concat(result,
-			generate_join_implied_equalities(root, joinrel->relids,
-					outer_rel->relids, inner_rel));
+	result = list_concat(result, generate_join_implied_equalities(root, joinrel->relids, outer_rel->relids, inner_rel));
 
 	return result;
 }
 
-static void build_joinrel_joinlist(RelOptInfo *joinrel, RelOptInfo *outer_rel,
-		RelOptInfo *inner_rel) {
+static void build_joinrel_joinlist(RelOptInfo *joinrel, RelOptInfo *outer_rel, RelOptInfo *inner_rel) {
 	List *result;
 
 	/*
@@ -593,8 +604,7 @@ static void build_joinrel_joinlist(RelOptInfo *joinrel, RelOptInfo *outer_rel,
 }
 
 static List *
-subbuild_joinrel_restrictlist(RelOptInfo *joinrel, List *joininfo_list,
-		List *new_restrictlist) {
+subbuild_joinrel_restrictlist(RelOptInfo *joinrel, List *joininfo_list, List *new_restrictlist) {
 	ListCell *l;
 
 	foreach(l, joininfo_list) {
@@ -621,8 +631,7 @@ subbuild_joinrel_restrictlist(RelOptInfo *joinrel, List *joininfo_list,
 }
 
 static List *
-subbuild_joinrel_joinlist(RelOptInfo *joinrel, List *joininfo_list,
-		List *new_joininfo) {
+subbuild_joinrel_joinlist(RelOptInfo *joinrel, List *joininfo_list, List *new_joininfo) {
 	ListCell *l;
 
 	foreach(l, joininfo_list) {
@@ -715,8 +724,7 @@ find_childrel_appendrelinfo(PlannerInfo *root, RelOptInfo *rel) {
  * be responsible for evaluating.
  */
 ParamPathInfo *
-get_baserel_parampathinfo(PlannerInfo *root, RelOptInfo *baserel,
-		Relids required_outer) {
+get_baserel_parampathinfo(PlannerInfo *root, RelOptInfo *baserel, Relids required_outer) {
 	ParamPathInfo *ppi;
 	Relids joinrelids;
 	List *pclauses;
@@ -753,9 +761,7 @@ get_baserel_parampathinfo(PlannerInfo *root, RelOptInfo *baserel,
 	 * Add in joinclauses generated by EquivalenceClasses, too.  (These
 	 * necessarily satisfy join_clause_is_movable_into.)
 	 */
-	pclauses = list_concat(pclauses,
-			generate_join_implied_equalities(root, joinrelids, required_outer,
-					baserel));
+	pclauses = list_concat(pclauses, generate_join_implied_equalities(root, joinrelids, required_outer, baserel));
 
 	rows = get_parameterized_baserel_size(root, baserel, pclauses);
 
@@ -799,9 +805,8 @@ get_baserel_parampathinfo(PlannerInfo *root, RelOptInfo *baserel,
  * unnecessary for other join types.
  */
 ParamPathInfo *
-get_joinrel_parampathinfo(PlannerInfo *root, RelOptInfo *joinrel,
-		Path *outer_path, Path *inner_path, SpecialJoinInfo *sjinfo,
-		Relids required_outer, List **restrict_clauses) {
+get_joinrel_parampathinfo(PlannerInfo *root, RelOptInfo *joinrel, Path *outer_path, Path *inner_path,
+		SpecialJoinInfo *sjinfo, Relids required_outer, List **restrict_clauses) {
 	ParamPathInfo *ppi;
 	Relids join_and_req;
 	Relids outer_and_req;
@@ -828,13 +833,11 @@ get_joinrel_parampathinfo(PlannerInfo *root, RelOptInfo *joinrel,
 	 */
 	join_and_req = bms_union(joinrel->relids, required_outer);
 	if (outer_path->param_info)
-		outer_and_req = bms_union(outer_path->parent->relids,
-				PATH_REQ_OUTER(outer_path));
+		outer_and_req = bms_union(outer_path->parent->relids, PATH_REQ_OUTER(outer_path));
 	else
 		outer_and_req = NULL; /* outer path does not accept parameters */
 	if (inner_path->param_info)
-		inner_and_req = bms_union(inner_path->parent->relids,
-				PATH_REQ_OUTER(inner_path));
+		inner_and_req = bms_union(inner_path->parent->relids, PATH_REQ_OUTER(inner_path));
 	else
 		inner_and_req = NULL; /* inner path does not accept parameters */
 
@@ -843,24 +846,18 @@ get_joinrel_parampathinfo(PlannerInfo *root, RelOptInfo *joinrel,
 		RestrictInfo *rinfo = (RestrictInfo *) lfirst(lc);
 
 		if (join_clause_is_movable_into(rinfo, joinrel->relids, join_and_req)
-				&& !join_clause_is_movable_into(rinfo,
-						outer_path->parent->relids, outer_and_req)
-				&& !join_clause_is_movable_into(rinfo,
-						inner_path->parent->relids, inner_and_req))
+				&& !join_clause_is_movable_into(rinfo, outer_path->parent->relids, outer_and_req)
+				&& !join_clause_is_movable_into(rinfo, inner_path->parent->relids, inner_and_req))
 			pclauses = lappend(pclauses, rinfo);
 	}
 
 	/* Consider joinclauses generated by EquivalenceClasses, too */
-	eclauses = generate_join_implied_equalities(root, join_and_req,
-			required_outer, joinrel);
+	eclauses = generate_join_implied_equalities(root, join_and_req, required_outer, joinrel);
 	/* We only want ones that aren't movable to lower levels */foreach(lc, eclauses) {
 		RestrictInfo *rinfo = (RestrictInfo *) lfirst(lc);
-		Assert(
-				join_clause_is_movable_into(rinfo, joinrel->relids, join_and_req));
-		if (!join_clause_is_movable_into(rinfo, outer_path->parent->relids,
-				outer_and_req)
-				&& !join_clause_is_movable_into(rinfo,
-						inner_path->parent->relids, inner_and_req))
+		Assert( join_clause_is_movable_into(rinfo, joinrel->relids, join_and_req));
+		if (!join_clause_is_movable_into(rinfo, outer_path->parent->relids, outer_and_req)
+				&& !join_clause_is_movable_into(rinfo, inner_path->parent->relids, inner_and_req))
 			pclauses = lappend(pclauses, rinfo);
 	}
 
@@ -876,9 +873,9 @@ get_joinrel_parampathinfo(PlannerInfo *root, RelOptInfo *joinrel,
 		if (bms_equal(ppi->ppi_req_outer, required_outer))
 			return ppi;
 	}
+	printf("*********************************************\n");
 
-	rows = get_parameterized_joinrel_size(root, joinrel, outer_path->rows,
-			inner_path->rows, sjinfo, *restrict_clauses);
+	rows = get_parameterized_joinrel_size(root, joinrel, outer_path->rows, inner_path->rows, sjinfo, *restrict_clauses);
 
 	/*
 	 * And now we can build the ParamPathInfo.	No point in saving the
@@ -891,6 +888,7 @@ get_joinrel_parampathinfo(PlannerInfo *root, RelOptInfo *joinrel,
 	ppi->ppi_req_outer = required_outer;
 	ppi->ppi_rows = rows;
 	ppi->ppi_clauses = NIL;
+	ppi->restrictList = *restrict_clauses;
 	joinrel->ppilist = lappend(joinrel->ppilist, ppi);
 
 	return ppi;

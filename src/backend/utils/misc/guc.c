@@ -819,6 +819,15 @@ static struct config_bool ConfigureNamesBool[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"enable_memo_convergent", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Enables memo query optimization."),
+			NULL
+		},
+		&enable_memo_convergent,
+		false,
+		NULL, NULL, NULL
+	},
+	{
 		{"enable_cost_check", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Enables memo query optimization."),
 			NULL
@@ -826,7 +835,7 @@ static struct config_bool ConfigureNamesBool[] =
 		&enable_cost_check,
 		false,
 		NULL, NULL, NULL
-	},
+		},
 	{
 		/* Not for general use --- used by SET SESSION AUTHORIZATION */
 		{"is_superuser", PGC_INTERNAL, UNGROUPED,

@@ -25,8 +25,7 @@
 #include "optimizer/paths.h"
 #include "optimizer/placeholder.h"
 #include "optimizer/planmain.h"
-#include "utils/memocache.h"
-
+#include "optimizer/cost.h"
 /*
  * query_planner
  *	  Generate a path (that is, a simplified plan) for a basic query,
@@ -229,6 +228,7 @@ query_planner(PlannerInfo *root, List *tlist, query_pathkeys_callback qp_callbac
 	 * Ready to do the primary planning.
 	 */
 	final_rel = make_one_rel(root, joinlist);
+
 
 	/* Check that we got at least one usable path */
 	if (!final_rel || !final_rel->cheapest_total_path || final_rel->cheapest_total_path->param_info != NULL)
