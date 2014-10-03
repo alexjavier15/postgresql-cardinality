@@ -1128,6 +1128,7 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 		print_list(str1,rel->rel_name );
 		printClause(path->restrictList );
 		printf("estimated : %lf \n", path->rows);
+		fflush(stdout);
 
 	}
 
