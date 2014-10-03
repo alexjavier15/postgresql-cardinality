@@ -3212,6 +3212,9 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 	/* For safety, make sure result is not more than the base estimate */
 	if (nrows > rel->rows)
 		nrows = rel->rows;
+
+	printf("final  base para  rows are : %f \n", nrows);
+
 	return nrows;
 }
 
