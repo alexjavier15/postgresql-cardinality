@@ -1060,7 +1060,7 @@ void set_join_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, JoinPath *path
 		 printf("%s\n", c);
 		 fflush(stdout);*/
 
-		set_path_sizes(root, rel, &pathnode->path, NULL, false);
+		set_path_sizes(root, rel, &pathnode->path, NULL, 2);
 
 	} else {
 		if (pathnode->path.param_info)
@@ -1099,8 +1099,21 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 			if (level == 1)
 				*loop_count = *loop_count < memo_rel->loops ? memo_rel->loops : *loop_count;
 		}
+		if (isIndex == 2 && isMatched(&result)) {
 
-		path->rows = clamp_row_est(memo_rel->rows / memo_rel->loops);
+			if (path->param_info)
+				path->rows =
+						path->param_info->ppi_rows < clamp_row_est(memo_rel->rows / memo_rel->loops) ?
+								memo_rel->rows : path->param_info->ppi_rows;
+			else
+				path->rows =
+						path->parent->rows < memo_rel->rows ?
+								clamp_row_est(memo_rel->rows / memo_rel->loops) : path->parent->rows;
+
+		} else {
+			path->rows = clamp_row_est(memo_rel->rows / memo_rel->loops);
+		}
+
 		path->total_rows = memo_rel->rows;
 		path->removed_rows = memo_rel->removed_rows;
 		if (!isFetched) {
