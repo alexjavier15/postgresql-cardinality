@@ -1688,6 +1688,8 @@ void final_cost_nestloop(PlannerInfo *root, NestPath *path, JoinCostWorkspace *w
 		path->path.startup_cost = startup_cost;
 		path->path.total_cost = startup_cost + run_cost;
 	}
+	printf("final cost for nested : %lf \n", path->path.total_cost);
+	fflush(stdout);
 
 }
 
@@ -2097,7 +2099,8 @@ void final_cost_mergejoin(PlannerInfo *root, MergePath *path, JoinCostWorkspace 
 		path->jpath.path.startup_cost = startup_cost;
 		path->jpath.path.total_cost = startup_cost + run_cost;
 	}
-
+	printf("final cost for merge : %lf \n", path->jpath.path.total_cost);
+	fflush(stdout);
 }
 
 /*
@@ -2423,8 +2426,7 @@ void final_cost_hashjoin(PlannerInfo *root, HashPath *path, JoinCostWorkspace *w
 		 * JOIN_INNER semantics.
 		 */
 
-
-			hashjointuples = approx_tuple_count(root, &path->jpath, hashclauses);
+		hashjointuples = approx_tuple_count(root, &path->jpath, hashclauses);
 	}
 
 	/*
@@ -2445,6 +2447,8 @@ void final_cost_hashjoin(PlannerInfo *root, HashPath *path, JoinCostWorkspace *w
 
 		path->jpath.path.total_cost = startup_cost + run_cost;
 	}
+	printf("final cost for hash : %lf \n", path->jpath.path.total_cost);
+	fflush(stdout);
 
 }
 
