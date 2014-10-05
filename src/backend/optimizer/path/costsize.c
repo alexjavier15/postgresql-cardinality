@@ -1689,7 +1689,7 @@ void final_cost_nestloop(PlannerInfo *root, NestPath *path, JoinCostWorkspace *w
 		path->path.total_cost = startup_cost + run_cost;
 	}
 	/*printf("final cost for nested : %lf \n", path->path.total_cost);
-	fflush(stdout);*/
+	 fflush(stdout);*/
 
 }
 
@@ -2100,7 +2100,7 @@ void final_cost_mergejoin(PlannerInfo *root, MergePath *path, JoinCostWorkspace 
 		path->jpath.path.total_cost = startup_cost + run_cost;
 	}
 	/*printf("final cost for merge : %lf \n", path->jpath.path.total_cost);
-	fflush(stdout);*/
+	 fflush(stdout);*/
 }
 
 /*
@@ -2447,8 +2447,8 @@ void final_cost_hashjoin(PlannerInfo *root, HashPath *path, JoinCostWorkspace *w
 
 		path->jpath.path.total_cost = startup_cost + run_cost;
 	}
-/*	printf("final cost for hash : %lf \n", path->jpath.path.total_cost);
-	fflush(stdout);*/
+	/*	printf("final cost for hash : %lf \n", path->jpath.path.total_cost);
+	 fflush(stdout);*/
 
 }
 
@@ -3120,18 +3120,31 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 			 printf(" with %d  clauses  \n", rest);
 			 fflush(stdout);*/
 
-			get_baserel_memo_size1(&result, rel->rel_name, root->query_level + rel->rtekind, rel->baserestrictinfo,
-					false);
-			mrows =  result.rows / result.loops;
+			get_relation_size(&result, rel->rel_name, root->query_level + rel->rtekind, rel->baserestrictinfo, false);
+			mrows = result.rows / result.loops;
 
 		}
 
 	}
 
 	nrows = rel->tuples * clauselist_selectivity(root, rel->baserestrictinfo, 0, JOIN_INNER, NULL);
-	if (enable_memo && rel->rel_name != NIL && result.found == 1) {
+	if (enable_memo && rel->rel_name != NIL) {
+		if (result.found == MATCHED_RIGHT) {
 
-		mrows = nrows >= mrows ? nrows : mrows;
+			mrows = nrows >= mrows ? nrows : mrows;
+
+		}
+		if (result.found == MATCHED_LEFT) {
+			List *clauses_left = NIL;
+			ListCell * lc;
+			foreach(lc,result.unmatches) {
+
+				clauses_left = lappend(clauses_left, ((MemoClause *) lfirst(lc))->parent);
+
+			}
+			mrows = result.rows * clauselist_selectivity(root, clauses_left, 0, JOIN_INNER, NULL);
+
+		}
 
 	}
 	nrows = 0 < mrows ? mrows : nrows;
@@ -3187,7 +3200,7 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 		 printf("%s \n", str.data);
 		 fflush(stdout);*/
 
-		get_baserel_memo_size1(&result, rel->rel_name, root->query_level + rel->rtekind, allclauses, false);
+		get_relation_size(&result, rel->rel_name, root->query_level + rel->rtekind, allclauses, false);
 		if (result.loops > 0)
 			mrows = result.rows / result.loops;
 
@@ -3196,9 +3209,23 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 	nrows = rel->tuples * clauselist_selectivity(root, allclauses, rel->relid, /* do not use 0! */
 	JOIN_INNER, NULL);
 
-	if (enable_memo && rel->rel_name != NIL && result.found == 1) {
+	if (enable_memo && rel->rel_name != NIL) {
+		if (result.found == MATCHED_RIGHT) {
 
-		mrows = nrows >= mrows ? nrows : mrows;
+			mrows = nrows >= mrows ? nrows : mrows;
+
+		}
+		if (result.found == MATCHED_LEFT) {
+			List *clauses_left = NIL;
+			ListCell * lc;
+			foreach(lc,result.unmatches) {
+
+				clauses_left = lappend(clauses_left, ((MemoClause *) lfirst(lc))->parent);
+
+			}
+			mrows = result.rows * clauselist_selectivity(root, clauses_left, 0, JOIN_INNER, NULL);
+
+		}
 
 	}
 	nrows = 0 < mrows ? mrows : nrows;
@@ -3362,7 +3389,8 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 		 fflush(stdout);*/
 		//rest = list_length(restrict_clauses);
 		get_join_memo_size1(&result, rel, root->query_level, NULL, true);
-		nrows = result.rows / result.loops;;
+		nrows = result.rows / result.loops;
+		;
 
 	}
 	if (!enable_memo || nrows == -1) {

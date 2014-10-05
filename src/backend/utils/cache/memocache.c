@@ -24,9 +24,10 @@
 #define DEFAULT_MAX_JOIN_SIZE 	10
 
 #define isFullMatched(result) \
-		((result)->found == 2 ? 1 : 0)
+		((result)->found == FULL_MATCHED)
 #define isMatched(result) \
-		((result)->found = 1  ? 1 : 0)
+		((result)->found == MATCHED_RIGHT \
+				|| (result)->found == MATCHED_LEFT)
 
 typedef struct MemoQuery {
 	CacheTag type;
@@ -95,22 +96,42 @@ static void print_relation(MemoRelation *memorelation) {
 	fflush(stdout);
 
 }
-
+/*Build a List of MemoClause from a RestrictInfo List. Every MemoClause is linked to its RestrictInfo Parent*/
 static List * restictInfoToMemoClauses(List *clauses) {
 	char *dc = NULL;
 	List *lquals = NIL;
 	int rest;
-
+	ListCell *lc;
+	MemoClause *mclause;
 	StringInfoData str1;
 
 	initStringInfo(&str1);
 	str1.reduced = true;
-	build_selec_string(&str1, clauses, &rest);
-	if (rest) {
 
-		dc = debackslash(str1.data, str1.len);
-		lquals = build_string_list(dc, M_CLAUSE);
+	foreach(lc,clauses) {
+
+		switch (nodeTag(lfirst(lc))) {
+
+		case T_RestrictInfo:
+
+			build_selec_string(&str1, clauses, &rest);
+			List *tmp = build_string_list(str1.data, M_CLAUSE);
+			if (tmp != NIL) {
+				mclause = (MemoClause *) list_head(tmp);
+				mclause->parent = (RestrictInfo *) lfirst(lc);
+				lquals = lappend(lquals, mclause);
+				pfree(tmp);
+			}
+			break;
+
+		default:
+			printf("Unexpected Node wjen building MemoClauses : %d", nodeTag(lfirst(lc)));
+			break;
+
+		}
+
 	}
+
 	return lquals;
 
 }
@@ -344,7 +365,7 @@ void add_relation(void * sink, MemoRelation * relation, int rellen) {
 	}
 
 }
-void get_baserel_memo_size1(MemoInfoData1 *result, List * relname, int level, List *quals, bool isIndex) {
+void get_relation_size(MemoInfoData1 *result, List * relname, int level, List *quals, bool isIndex) {
 	MemoRelation * memo_rel = NULL;
 
 	/*char *str1;
@@ -364,26 +385,7 @@ void get_baserel_memo_size1(MemoInfoData1 *result, List * relname, int level, Li
 	}
 }
 
-void get_join_memo_size1(MemoInfoData1 *result, RelOptInfo *joinrel, int level, char *quals, bool isParameterized) {
-	MemoRelation * memo_rel = NULL;
 
-	/*char *str1;
-	 char *str2;*/
-	result->loops = 1;
-	result->found = 0;
-	result->rows = -1;
-
-	memo_rel = get_Memorelation(result, joinrel->rel_name, level, quals, 2);
-
-	if (memo_rel) {
-		//	printf(" Matched base relation! :\n");
-		//	print_relation(str1, str2, memorelation);
-		result->loops = memo_rel->loops;
-		result->rows = memo_rel->rows;
-		return;
-	}
-
-}
 
 MemoRelation * get_Memorelation(MemoInfoData1 *result, List *lrelName, int level, List *clauses, int isIndex) {
 	dlist_iter iter;
@@ -421,12 +423,10 @@ MemoRelation * get_Memorelation(MemoInfoData1 *result, List *lrelName, int level
 				return relation;
 
 			}
-			if (isIndex == 2 && isMatched(result) && !IsIndex(relation))
+			if (isIndex == 2 && !IsIndex(relation) && isMatched(result)) {
 
-			{
 				pfree(str1.data);
 				return relation;
-
 			}
 		}
 	}
@@ -572,19 +572,49 @@ char * parse_args(StringInfo buff, char * arg) {
 	}
 	return result;
 }
-
+/*compare list a against list b. Fille the MemoInfoData1 with :
+ * unmatched: all the items in b and not in a.
+ * matched: all the items in b and not in a.
+ * found : 2 if very element is matched. 1 if at least one element was matched and
+ *  list_length(a) > list_length(b)
+ * */
 void cmp_lists(MemoInfoData1 * result, List *lleft, const List *lright) {
-	List * ldiff = NIL;
+	List *a = list_copy(lleft);
+	List *b = list_copy(lright);
+	List *unmatched = NIL;
+	List *matched = NIL;
 
-	if (list_length(lleft) >= list_length(lright)) {
-		ldiff = list_difference(lleft, lright);
-		result->found = (ldiff == NIL) + ((ldiff == NIL) && (list_length(lleft) == list_length(lright)))
-				+ ((ldiff != NIL) && (list_length(lleft) > list_length(lright)));
+	const ListCell *item_b;
 
-		result->nbmatches = ldiff != NIL ? list_length(lleft) - list_length(ldiff) : list_length(lleft);
-		result->unmatches = ldiff;
-		result->matches = list_intersection(lleft, lright);
+	foreach(item_b, b) {
+		if (!list_member_remove(a, lfirst(item_b))) {
+			printf("member not found\n");
+
+			unmatched = lappend(unmatched, lfirst(item_b));
+		} else {
+			matched = lappend(matched, lfirst(item_b));
+
+		}
+
 	}
+	result->found = UNMATCHED;
+	if (!unmatched && list_length(lleft) == list_length(lright)) {
+
+		result->found = FULL_MATCHED;
+	}
+	if (unmatched && list_length(lleft) != list_length(lright)) {
+		if (list_length(lleft) > list_length(lright)) {
+
+			result->found = MATCHED_RIGHT;
+		} else {
+
+			result->found = MATCHED_LEFT;
+		}
+
+	}
+	result->unmatches = unmatched;
+	result->matches = matched;
+
 }
 static bool equalSet(const List *a, const List *b) {
 	const ListCell *item_a;
@@ -709,7 +739,7 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 							contains(&diffrel, (CacheM *) query, resultName_ptr->unmatches, level);
 							clauses = list_union(memorelation->clauses, targetClauses);
 
-							bool diff_realIndex= false;
+							bool diff_realIndex = false;
 							if (diffrel != NULL)
 								diff_realIndex = IsIndex(diffrel) && diffrel->loops > 1;
 							bool com_realIndex = IsIndex(commonrel) && commonrel->loops > 1;
@@ -717,8 +747,8 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 							/*printf("Common relation is:\n");
 
 							 print_relation(str1, str2, commonrel);*/
-							if ((resultName_ptr->nbmatches == (joinlen - 1)) && diffrel != NULL && !com_realIndex
-									&& !diff_realIndex) {
+							if ((list_length(resultName_ptr->matches) == (joinlen - 1)) && diffrel != NULL
+									&& !com_realIndex && !diff_realIndex) {
 								//Mark the first relation and build the resulted expected target join
 								//relation for matching
 								*relation1 = memorelation;
@@ -742,7 +772,7 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 						//In the second pass we have  to match a full join  then
 						//the number of base realtion matches are equal to joinlen
 						/*						print_relation(memorelation);*/
-						if (resultName_ptr->nbmatches == joinlen && equalSet(memorelation->clauses, b)) {
+						if (list_length(resultName_ptr->matches) == joinlen && equalSet(memorelation->clauses, b)) {
 							pfree(b);
 							*relation2 = memorelation;
 

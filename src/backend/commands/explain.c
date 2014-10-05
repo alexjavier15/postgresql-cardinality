@@ -1104,11 +1104,15 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (enable_explain_memo) {
 			if (((IndexScan *) plan)->scanclauses) {
 
-				show_scan_parsed_qual(((IndexScan *) plan)->scanclauses, "PFilter", es);
+				show_scan_parsed_qual(((IndexScan *) plan)->scanclauses, "Restrict List", es);
 
 			}
 			if (((IndexScan *) plan)->indexqualorig) {
 				show_scan_parsed_qual(((IndexScan *) plan)->indexqualorig, "PIndex Cond", es);
+			}
+			if (plan->qual) {
+				show_scan_parsed_qual(plan->qual, "PFilter", es);
+
 			}
 
 		}
@@ -1128,13 +1132,16 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (enable_explain_memo) {
 			if (((IndexOnlyScan *) plan)->scanclauses) {
 
-				show_scan_parsed_qual(((IndexOnlyScan *) plan)->scanclauses, "PFilter", es);
+				show_scan_parsed_qual(((IndexOnlyScan *) plan)->scanclauses, "Restrict List", es);
 
 			}
 			if (((IndexOnlyScan *) plan)->indexqual) {
 				show_scan_parsed_qual(((IndexOnlyScan *) plan)->indexqual, "PIndex Cond", es);
 			}
+			if (plan->qual) {
+				show_scan_parsed_qual(plan->qual, "PFilter", es);
 
+			}
 		}
 
 		if (es->analyze)
@@ -1147,7 +1154,7 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (enable_explain_memo) {
 
 			if (((BitmapIndexScan *) plan)->scanclauses)
-				show_scan_parsed_qual(((BitmapIndexScan *) plan)->scanclauses, "PFilter", es);
+				show_scan_parsed_qual(((BitmapIndexScan *) plan)->scanclauses, "Restrict List", es);
 		}
 
 		break;
@@ -1156,19 +1163,18 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (((BitmapHeapScan *) plan)->bitmapqualorig) {
 			show_instrumentation_count("Rows Removed by Index Recheck", 2, planstate, es);
 			if (enable_explain_memo) {
-				show_scan_parsed_qual(((BitmapHeapScan *) plan)->bitmapqualorig, "PFilter", es);
-			}
+				if (((BitmapHeapScan *) plan)->scanclauses)
+					show_scan_parsed_qual(((BitmapHeapScan *) plan)->scanclauses, "Restrict List", es);
+				if (plan->qual) {
+					show_scan_parsed_qual(plan->qual, "PFilter", es);
 
+				}
+			}
 		}
 		show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
 		if (plan->qual) {
 			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
 
-		}
-		if (enable_explain_memo) {
-
-			if (((BitmapHeapScan *) plan)->scanclauses)
-				show_scan_parsed_qual(((BitmapHeapScan *) plan)->scanclauses, "PFilter", es);
 		}
 
 		if (es->analyze)
@@ -1183,7 +1189,8 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (plan->qual) {
 			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
 			if (enable_explain_memo) {
-				show_scan_parsed_qual(plan->qual, "PFilter", es);
+				show_scan_parsed_qual(plan->qual, "Restrict List", es);
+
 			}
 
 		}
@@ -1208,7 +1215,7 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (plan->qual) {
 			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
 			if (enable_explain_memo) {
-				show_scan_parsed_qual(plan->qual, "PFilter", es);
+				show_scan_parsed_qual(plan->qual, "Restrict List", es);
 			}
 		}
 		break;
@@ -1226,7 +1233,7 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (plan->qual) {
 			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
 			if (enable_explain_memo) {
-				show_scan_parsed_qual(plan->qual, "PFilter", es);
+				show_scan_parsed_qual(plan->qual, "Restrict List", es);
 				//show_scan_parsed_qual(plan->qual, "TID Cond", es);
 			}
 		}
@@ -1248,6 +1255,10 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 			show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
 		if (enable_explain_memo) {
 			show_scan_parsed_qual(((NestLoop *) plan)->join.restrictList, "Join Clauses", es);
+			if (plan->qual) {
+				show_scan_parsed_qual(plan->qual, "PFilter", es);
+
+			}
 
 		}
 		break;
@@ -1261,6 +1272,10 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 			show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
 		if (enable_explain_memo) {
 			show_scan_parsed_qual(((MergeJoin *) plan)->join.restrictList, "Join Clauses", es);
+			if (plan->qual) {
+				show_scan_parsed_qual(plan->qual, "PFilter", es);
+
+			}
 
 		}
 		break;
@@ -1274,7 +1289,10 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 			show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
 		if (enable_explain_memo) {
 			show_scan_parsed_qual(((HashJoin *) plan)->join.restrictList, "Join Clauses", es);
+			if (plan->qual) {
+				show_scan_parsed_qual(plan->qual, "PFilter", es);
 
+			}
 		}
 		break;
 	case T_Agg:
