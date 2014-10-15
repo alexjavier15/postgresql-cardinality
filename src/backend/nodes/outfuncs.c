@@ -913,6 +913,11 @@ static void _outFuncExpr(StringInfo str, const FuncExpr *node) {
 	WRITE_NODE_FIELD(args);
 	WRITE_LOCATION_FIELD(location);
 }
+static void _outSimFuncExpr(StringInfo str, const FuncExpr *node) {
+	WRITE_NODE_SIM_FIELD(S_NULL,args);
+	appendStringInfoSpaces(str, 1);
+
+}
 
 static void _outNamedArgExpr(StringInfo str, const NamedArgExpr *node) {
 	WRITE_NODE_TYPE("NAMEDARGEXPR");
@@ -2411,6 +2416,7 @@ static void _outConstraint(StringInfo str, const Constraint *node) {
 static void _outSimMemoClause(StringInfo str, const MemoClause *node) {
 	WRITE_OID_FIELD(opno);
 	WRITE_NODE_SIM_FIELD(S_NULL, args);
+	WRITE_NODE_SIM_FIELD(S_NULL,parent);
 	appendStringInfoSpaces(str, 1);
 
 }
@@ -3074,7 +3080,7 @@ void _outSimNode(ArgType type, StringInfo str, const void *obj) {
 				_outArrayRef(str, obj);
 				break;
 			case T_FuncExpr:
-				_outFuncExpr(str, obj);
+				_outSimFuncExpr(str, obj);
 				break;
 			case T_NamedArgExpr:
 				_outNamedArgExpr(str, obj);

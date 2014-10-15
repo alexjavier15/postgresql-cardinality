@@ -114,8 +114,6 @@ planner(Query *parse, int cursorOptions, ParamListInfo boundParams) {
 	else
 		result = standard_planner(parse, cursorOptions, boundParams);
 
-	if (enable_memo)
-		free_memo_cache();
 	return result;
 }
 

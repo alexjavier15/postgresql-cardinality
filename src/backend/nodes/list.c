@@ -40,8 +40,7 @@ static void check_list_invariants(const List *list) {
 	Assert(list->head != NULL);
 	Assert(list->tail != NULL);
 
-	Assert(
-			list->type == T_List || list->type == T_IntList || list->type == T_OidList);
+	Assert( list->type == T_List || list->type == T_IntList || list->type == T_OidList);
 
 	if (list->length == 1)
 		Assert(list->head == list->tail);
@@ -443,9 +442,10 @@ bool list_member_remove(const List *list, const void *datum) {
 	check_list_invariants(list);
 	prev = NULL;
 	foreach(cell, list) {
-		if (equal(lfirst(cell), datum))
+		if (equal(lfirst(cell), datum)) {
 			list_remove_cell(list, cell, prev);
-		return true;
+			return true;
+		}
 		prev = cell;
 	}
 

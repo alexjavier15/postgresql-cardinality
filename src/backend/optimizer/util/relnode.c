@@ -126,10 +126,10 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptKind reloptkind) {
 	rel->joininfo = NIL;
 	rel->has_eclass_joins = false;
 	rel->rel_name = NIL;
-	rel->last_index_type=0;
-	rel->last_level=0;
-	rel->last_memorel=NULL;
-	rel->last_restrictList=NIL;
+	rel->last_index_type = 0;
+	rel->last_level = 0;
+	rel->last_memorel = NULL;
+	rel->last_restrictList = NIL;
 
 	/* Check type of rtable entry */
 	switch (rte->rtekind) {
@@ -330,16 +330,14 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 		if (restrictlist_ptr) {
 			*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
 
-			/*restrictlist = list_copy(inner_rel->restrictList);
+			restrictlist = list_copy(inner_rel->restrictList);
 			restrictlist = list_concat(restrictlist, list_copy(outer_rel->restrictList));
 			restrictlist = list_concat(restrictlist,
 					generate_join_implied_equalities(root, joinrel->relids, outer_rel->relids, inner_rel));
-			store_join(joinrel->rel_name, root->query_level, restrictlist);*/
 
-			if (!joinrel->memo_checked && enable_memo) {
+			if (!enable_memo && !equalSet(joinrel->restrictList, restrictlist)) {
 
-				//set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo, *restrictlist_ptr);
-
+				store_join(joinrel->rel_name, root->query_level, restrictlist,joinrel->rows, false);
 			}
 		}
 
@@ -390,18 +388,16 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 	joinrel->rel_name = NIL;
 	joinrel->restrictList = NIL;
 
-
-
 	/* We build the join mane  separated by colons using names of childs*/
 	/* see stringinfo.h for an explanation of this maneuver */
 //	if (enable_memo) {
 	joinrel->rel_name = list_copy(inner_rel->rel_name);
 	joinrel->rel_name = list_concat(joinrel->rel_name, list_copy(outer_rel->rel_name));
 	joinrel->memo_checked = false;
-	joinrel->last_index_type=0;
-	joinrel->last_level=0;
-	joinrel->last_memorel=NULL;
-	joinrel->last_restrictList=NIL;
+	joinrel->last_index_type = 0;
+	joinrel->last_level = 0;
+	joinrel->last_memorel = NULL;
+	joinrel->last_restrictList = NIL;
 
 	//}
 

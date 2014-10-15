@@ -41,6 +41,18 @@ void print(const void *obj) {
 	pfree(s);
 	pfree(f);
 }
+void printMemo(const void *obj) {
+
+	char *s;
+	char *f;
+	s = nodeSimToString_(obj);
+	//f = format_node_dump(s);
+
+	printf("%s\n", s);
+	fflush(stdout);
+	pfree(s);
+	//pfree(f);
+}
 
 /*
  * pprint

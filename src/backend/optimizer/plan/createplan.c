@@ -148,6 +148,8 @@ create_plan(PlannerInfo *root, Path *best_path) {
 	root->curOuterParams = NIL;
 
 	mode_cost_check = enable_cost_check;
+
+	//printMemoCache();
 	if (enable_cost_check)
 
 		file = AllocateFile("injected_durations.txt", "ab");
@@ -1215,7 +1217,6 @@ create_bitmap_scan_plan(PlannerInfo *root, BitmapHeapPath *best_path, List *tlis
 
 	/* Process the bitmapqual tree into a Plan tree and qual lists */
 	bitmapqualplan = create_bitmap_subplan(root, best_path->bitmapqual, &bitmapqualorig, &indexquals, &indexECs);
-
 	/*
 	 * The qpqual list must contain all restrictions not automatically handled
 	 * by the index, other than pseudoconstant clauses which will be handled
@@ -1288,7 +1289,7 @@ create_bitmap_scan_plan(PlannerInfo *root, BitmapHeapPath *best_path, List *tlis
 
 	/* Finally ready to build the plan node */
 	scan_plan = make_bitmap_heapscan(tlist, qpqual, bitmapqualplan, bitmapqualorig, baserelid);
-	((BitmapHeapScan *) scan_plan)->scanclauses = list_copy(((BitmapHeapPath *) best_path)->path.restrictList);
+
 	copy_path_costsize(&scan_plan->scan.plan, &best_path->path);
 
 	return scan_plan;
@@ -1464,6 +1465,7 @@ create_bitmap_subplan(PlannerInfo *root, Path *bitmapqual, List **qual, List **i
 		elog(ERROR, "unrecognized node type: %d", nodeTag(bitmapqual));
 		plan = NULL; /* keep compiler quiet */
 	}
+	plan->scanclauses = list_copy(bitmapqual->restrictList);
 
 	return plan;
 }
@@ -2801,6 +2803,11 @@ static void copy_path_costsize(Plan *dest, Path *src) {
 		dest->mrows = src->mrows;
 		dest->mtotal_cost = src->mtotal_cost;
 		dest->mstartup_cost = src->mstartup_cost;
+		if(src->restrictList){
+			dest->scanclauses = list_copy(src->restrictList);
+
+		}
+		dest->isParameterized = src->isParameterized;
 
 	} else {
 		dest->startup_cost = 0;
@@ -2810,6 +2817,8 @@ static void copy_path_costsize(Plan *dest, Path *src) {
 		dest->mrows = src->mrows;
 		dest->mtotal_cost = src->mtotal_cost;
 		dest->mstartup_cost = src->mstartup_cost;
+		dest->scanclauses = NIL;
+		dest->isParameterized = false;
 	}
 }
 
@@ -2879,7 +2888,6 @@ make_indexscan(List *qptlist, List *qpqual, Index scanrelid, Oid indexid, List *
 	node->indexorderby = indexorderby;
 	node->indexorderbyorig = indexorderbyorig;
 	node->indexorderdir = indexscandir;
-	node->scanclauses = list_copy(scan_clauses);
 
 	return node;
 }
@@ -2901,7 +2909,6 @@ make_indexonlyscan(List *qptlist, List *qpqual, Index scanrelid, Oid indexid, Li
 	node->indexorderby = indexorderby;
 	node->indextlist = indextlist;
 	node->indexorderdir = indexscandir;
-	node->scanclauses = list_copy(scan_clauses);
 
 	return node;
 }
@@ -4280,7 +4287,7 @@ int get_base_rows_from_memo(char *name, int level, int clauses) {
 
 	if (enable_cost_check) {
 		MemoInfoData result;
-		get_baserel_memo_size1(&result, name, level, clauses, NIL);
+		//	get_baserel_memo_size1(&result, name, level, clauses, NIL);
 		return result.rows;
 	}
 
@@ -4290,7 +4297,7 @@ int get_join_rows_from_memo(char *name, int level, int clauses) {
 
 	if (enable_cost_check) {
 		MemoInfoData result;
-		get_join_memo_size1(&result, name, level, NIL, false);
+		//get_join_memo_size1(&result, name, level, NIL, false);
 		result.rows;
 	}
 

@@ -112,6 +112,7 @@ Cost disable_cost = 1.0e10;
 
 bool enable_memo = false;
 bool enable_memo_convergent = false;
+bool enable_memo_propagation = false;
 bool mode_cost_check = false;
 bool enable_seqscan = true;
 bool enable_indexscan = true;
@@ -180,10 +181,6 @@ void cost_seqscan(Path *path, PlannerInfo *root, RelOptInfo *baserel, ParamPathI
 	Assert(baserel->rtekind == RTE_RELATION);
 
 	/* Mark the path with the correct row estimate */
-	if (param_info)
-		path->rows = param_info->ppi_rows;
-	else
-		path->rows = baserel->rows;
 
 	if (!enable_seqscan)
 		startup_cost += disable_cost;
@@ -1689,7 +1686,7 @@ void final_cost_nestloop(PlannerInfo *root, NestPath *path, JoinCostWorkspace *w
 		path->path.total_cost = startup_cost + run_cost;
 	}
 	/*printf("final cost for nested : %lf \n", path->path.total_cost);
-	fflush(stdout);*/
+	 fflush(stdout);*/
 
 }
 
@@ -2100,7 +2097,7 @@ void final_cost_mergejoin(PlannerInfo *root, MergePath *path, JoinCostWorkspace 
 		path->jpath.path.total_cost = startup_cost + run_cost;
 	}
 	/*printf("final cost for merge : %lf \n", path->jpath.path.total_cost);
-	fflush(stdout);*/
+	 fflush(stdout);*/
 }
 
 /*
@@ -2447,8 +2444,8 @@ void final_cost_hashjoin(PlannerInfo *root, HashPath *path, JoinCostWorkspace *w
 
 		path->jpath.path.total_cost = startup_cost + run_cost;
 	}
-/*	printf("final cost for hash : %lf \n", path->jpath.path.total_cost);
-	fflush(stdout);*/
+	/*	printf("final cost for hash : %lf \n", path->jpath.path.total_cost);
+	 fflush(stdout);*/
 
 }
 
@@ -2541,78 +2538,78 @@ Cost *rescan_total_cost) {
 	int mrows = mode_cost_check ? path->mrows : path->rows;
 	double mcost = mode_cost_check ? path->mtotal_cost : path->total_cost;
 	switch (path->pathtype) {
-	case T_FunctionScan:
+		case T_FunctionScan:
 
-		/*
-		 * Currently, nodeFunctionscan.c always executes the function to
-		 * completion before returning any rows, and caches the results in
-		 * a tuplestore.  So the function eval cost is all startup cost
-		 * and isn't paid over again on rescans. However, all run costs
-		 * will be paid over again.
-		 */
-		*rescan_startup_cost = 0;
-		*rescan_total_cost = mcost - path->startup_cost;
-		break;
-	case T_HashJoin:
+			/*
+			 * Currently, nodeFunctionscan.c always executes the function to
+			 * completion before returning any rows, and caches the results in
+			 * a tuplestore.  So the function eval cost is all startup cost
+			 * and isn't paid over again on rescans. However, all run costs
+			 * will be paid over again.
+			 */
+			*rescan_startup_cost = 0;
+			*rescan_total_cost = mcost - path->startup_cost;
+			break;
+		case T_HashJoin:
 
-		/*
-		 * Assume that all of the startup cost represents hash table
-		 * building, which we won't have to do over.
-		 */
-		*rescan_startup_cost = 0;
-		*rescan_total_cost = mcost - path->startup_cost;
-		break;
-	case T_CteScan:
-	case T_WorkTableScan: {
-		/*
-		 * These plan types materialize their final result in a
-		 * tuplestore or tuplesort object.  So the rescan cost is only
-		 * cpu_tuple_cost per tuple, unless the result is large enough
-		 * to spill to disk.
-		 */
+			/*
+			 * Assume that all of the startup cost represents hash table
+			 * building, which we won't have to do over.
+			 */
+			*rescan_startup_cost = 0;
+			*rescan_total_cost = mcost - path->startup_cost;
+			break;
+		case T_CteScan:
+		case T_WorkTableScan: {
+			/*
+			 * These plan types materialize their final result in a
+			 * tuplestore or tuplesort object.  So the rescan cost is only
+			 * cpu_tuple_cost per tuple, unless the result is large enough
+			 * to spill to disk.
+			 */
 
-		Cost run_cost = cpu_tuple_cost * mrows;
-		double nbytes = relation_byte_size(mrows, path->parent->width);
-		long work_mem_bytes = work_mem * 1024L;
+			Cost run_cost = cpu_tuple_cost * mrows;
+			double nbytes = relation_byte_size(mrows, path->parent->width);
+			long work_mem_bytes = work_mem * 1024L;
 
-		if (nbytes > work_mem_bytes) {
-			/* It will spill, so account for re-read cost */
-			double npages = ceil(nbytes / BLCKSZ);
+			if (nbytes > work_mem_bytes) {
+				/* It will spill, so account for re-read cost */
+				double npages = ceil(nbytes / BLCKSZ);
 
-			run_cost += seq_page_cost * npages;
+				run_cost += seq_page_cost * npages;
+			}
+			*rescan_startup_cost = 0;
+			*rescan_total_cost = run_cost;
 		}
-		*rescan_startup_cost = 0;
-		*rescan_total_cost = run_cost;
-	}
-		break;
-	case T_Material:
-	case T_Sort: {
-		/*
-		 * These plan types not only materialize their results, but do
-		 * not implement qual filtering or projection.  So they are
-		 * even cheaper to rescan than the ones above.  We charge only
-		 * cpu_operator_cost per tuple.  (Note: keep that in sync with
-		 * the run_cost charge in cost_sort, and also see comments in
-		 * cost_material before you change it.)
-		 */
-		Cost run_cost = cpu_operator_cost * mrows;
-		double nbytes = relation_byte_size(mrows, path->parent->width);
-		long work_mem_bytes = work_mem * 1024L;
+			break;
+		case T_Material:
+		case T_Sort: {
+			/*
+			 * These plan types not only materialize their results, but do
+			 * not implement qual filtering or projection.  So they are
+			 * even cheaper to rescan than the ones above.  We charge only
+			 * cpu_operator_cost per tuple.  (Note: keep that in sync with
+			 * the run_cost charge in cost_sort, and also see comments in
+			 * cost_material before you change it.)
+			 */
+			Cost run_cost = cpu_operator_cost * mrows;
+			double nbytes = relation_byte_size(mrows, path->parent->width);
+			long work_mem_bytes = work_mem * 1024L;
 
-		if (nbytes > work_mem_bytes) {
-			/* It will spill, so account for re-read cost */
-			double npages = ceil(nbytes / BLCKSZ);
+			if (nbytes > work_mem_bytes) {
+				/* It will spill, so account for re-read cost */
+				double npages = ceil(nbytes / BLCKSZ);
 
-			run_cost += seq_page_cost * npages;
+				run_cost += seq_page_cost * npages;
+			}
+			*rescan_startup_cost = 0;
+			*rescan_total_cost = run_cost;
 		}
-		*rescan_startup_cost = 0;
-		*rescan_total_cost = run_cost;
-	}
-		break;
-	default:
-		*rescan_startup_cost = path->startup_cost;
-		*rescan_total_cost = mcost;
-		break;
+			break;
+		default:
+			*rescan_startup_cost = path->startup_cost;
+			*rescan_total_cost = mcost;
+			break;
 	}
 }
 
@@ -2975,28 +2972,28 @@ static bool has_indexed_join_quals(NestPath *joinpath) {
 
 	/* Find the indexclauses list for the inner scan */
 	switch (innerpath->pathtype) {
-	case T_IndexScan:
-	case T_IndexOnlyScan:
-		indexclauses = ((IndexPath *) innerpath)->indexclauses;
-		break;
-	case T_BitmapHeapScan: {
-		/* Accept only a simple bitmap scan, not AND/OR cases */
-		Path *bmqual = ((BitmapHeapPath *) innerpath)->bitmapqual;
+		case T_IndexScan:
+		case T_IndexOnlyScan:
+			indexclauses = ((IndexPath *) innerpath)->indexclauses;
+			break;
+		case T_BitmapHeapScan: {
+			/* Accept only a simple bitmap scan, not AND/OR cases */
+			Path *bmqual = ((BitmapHeapPath *) innerpath)->bitmapqual;
 
-		if (IsA(bmqual, IndexPath))
-			indexclauses = ((IndexPath *) bmqual)->indexclauses;
-		else
+			if (IsA(bmqual, IndexPath))
+				indexclauses = ((IndexPath *) bmqual)->indexclauses;
+			else
+				return false;
+			break;
+		}
+		default:
+
+			/*
+			 * If it's not a simple indexscan, it probably doesn't run quickly
+			 * for zero rows out, even if it's a parameterized path using all
+			 * the joinquals.
+			 */
 			return false;
-		break;
-	}
-	default:
-
-		/*
-		 * If it's not a simple indexscan, it probably doesn't run quickly
-		 * for zero rows out, even if it's a parameterized path using all
-		 * the joinquals.
-		 */
-		return false;
 	}
 
 	/*
@@ -3097,47 +3094,29 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 
 //	ListCell *lc;
 
+	List *final_clauses = NIL;
+
 	/* Should only be applied to base relations */
 	Assert(rel->relid > 0);
-	Assert(rel ->rel_name != NIL);
 
-	if (enable_memo) {
-
+	if (enable_memo && list_length(rel->baserestrictinfo)) {
+		Assert(rel ->rel_name != NIL);
+		/*printf("level : %d ", root->query_level + rel->rtekind);
+		 printMemo(rel->rel_name);*/
 		//maybe memo hacked
-		if (list_length(rel->baserestrictinfo)) {
+		//printMemo(rel->baserestrictinfo);
+		get_relation_size(&result, root, rel, rel->baserestrictinfo, false, NULL);
+		nrows = result.rows;
+	} else {
 
-			/* printf("checking base relation  ");
-			 printf("Names for base relation are: \n");
-			 fflush(stdout);
-
-			 foreach (lc, rel->rel_name) {
-
-			 printf("%s ,", ((Value *) lfirst(lc))->val.str);
-			 fflush(stdout);
-			 }
-			 printf("\n");
-
-			 printf(" with %d  clauses  \n", rest);
-			 fflush(stdout);*/
-
-			get_baserel_memo_size1(&result, rel->rel_name, root->query_level + rel->rtekind, rel->baserestrictinfo,
-					false);
-			mrows =  result.rows / result.loops;
-
-		}
+		nrows = rel->tuples * clauselist_selectivity(root, rel->baserestrictinfo, 0, JOIN_INNER, NULL);
 
 	}
-
-	nrows = rel->tuples * clauselist_selectivity(root, rel->baserestrictinfo, 0, JOIN_INNER, NULL);
-	if (enable_memo && rel->rel_name != NIL && result.found == 1) {
-
-		mrows = nrows >= mrows ? nrows : mrows;
-
-	}
-	nrows = 0 < mrows ? mrows : nrows;
 
 	rel->rows = clamp_row_est(nrows);
-	printf("final  base rows are : %f \n", nrows);
+	//printMemo(rel->rel_name);
+
+	printf("final  base rows are : %f \n", rel->rows);
 
 	cost_qual_eval(&rel->baserestrictcost, rel->baserestrictinfo, root);
 
@@ -3158,6 +3137,7 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 	double mrows = -1;
 	MemoInfoData1 result;
 	//ListCell *lc;
+	List *final_clauses = NIL;
 
 	allclauses = list_concat(list_copy(param_clauses), rel->baserestrictinfo);
 
@@ -3171,37 +3151,24 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 	 * non-join clauses during selectivity estimation.
 	 */
 
-	if (enable_memo && rel->rel_name != NIL) {
+	/* Should only be applied to base relations */
+	Assert(rel->relid > 0);
+	Assert(rel ->rel_name != NIL);
+	if (enable_memo && list_length(allclauses)) {
+		/*printf("level : %d ", root->query_level + rel->rtekind);
 
-		/*printf("checking parameterized base relation  ");
-		 foreach (lc, rel->rel_name) {
+		 //maybe memo hacked
 
-		 printf("%s ,", ((Value *) lfirst(lc))->val.str);
-		 fflush(stdout);
-		 }
-		 printf("\n");
+		 printMemo(rel->baserestrictinfo);*/
 
-		 printf(" with %d  clauses  \n", rest);
-		 printf("Clauses are :\n ");
+		get_relation_size(&result, root, rel, allclauses, true, NULL);
+		nrows = result.rows;
 
-		 printf("%s \n", str.data);
-		 fflush(stdout);*/
+	} else {
 
-		get_baserel_memo_size1(&result, rel->rel_name, root->query_level + rel->rtekind, allclauses, false);
-		if (result.loops > 0)
-			mrows = result.rows / result.loops;
+		nrows = rel->tuples * clauselist_selectivity(root, allclauses, 0, JOIN_INNER, NULL);
 
 	}
-
-	nrows = rel->tuples * clauselist_selectivity(root, allclauses, rel->relid, /* do not use 0! */
-	JOIN_INNER, NULL);
-
-	if (enable_memo && rel->rel_name != NIL && result.found == 1) {
-
-		mrows = nrows >= mrows ? nrows : mrows;
-
-	}
-	nrows = 0 < mrows ? mrows : nrows;
 	nrows = clamp_row_est(nrows);
 	/*
 	 printf("final  parameterized base rows are : %f \n", nrows);
@@ -3212,7 +3179,7 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 	/* For safety, make sure result is not more than the base estimate */
 	if (nrows > rel->rows)
 		nrows = rel->rows;
-
+	//printMemo(rel->rel_name);
 	printf("final  base para  rows are : %f \n", nrows);
 
 	return nrows;
@@ -3242,59 +3209,33 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
  */
 void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *outer_rel, RelOptInfo *inner_rel,
 		SpecialJoinInfo *sjinfo, List *restrictlist) {
-	double nrows;
-//Relids tmpset = bms_copy(rel->relids);
-//ListCell *lc;
-//int rest = 0;
-	StringInfoData str;
-//int x = -1;
+	double nrows = -1;
 	MemoInfoData1 result;
-	initStringInfo(&str);
-
-	/*printf("relids base join are:\n---------------------------------\n");
-
-	 while ((x = bms_first_member(tmpset)) >= 0)
-	 printf("%d,", x);
-	 bms_free(tmpset);
-	 build_selec_string(&str, restrictlist, &rest);
-	 printf("\n");
-	 printf("End relids:\n---------------------------------\n");
-	 printf("Clauses are %s:\n---------------------------------\n", str.data);
-
-	 printf("End clauses\n---------------------------------\n");
-	 resetStringInfo(&str);
-	 build_selec_string(&str, sjinfo->join_quals, &rest);
-	 printf("join quals are %s:\n---------------------------------\n", str.data);
-	 printf("End quals \n---------------------------------\n");*/
 
 	if (enable_memo) {
-		/*
-		 printf("checking join relation  ");
-		 foreach (lc, rel->rel_name) {
 
-		 printf("%s ,", ((Value *) lfirst(lc))->val.str);
-		 fflush(stdout);
-		 }
-		 printf("\n");
+		/*printf("checking join relation  ");
+		 printMemo(rel->restrictList);*/
 
-		 fflush(stdout);*/
-
-		get_join_memo_size1(&result, rel, root->query_level, NULL, false);
-		nrows = result.rows / result.loops;
+		get_relation_size(&result, root, rel, list_copy(rel->restrictList), false, sjinfo);
+		nrows = result.rows;
 	}
-	if (!enable_memo || nrows == -1) {
-
-		nrows = rel->rows == -1 ?
-				calc_joinrel_size_estimate(root, outer_rel->rows, inner_rel->rows, sjinfo, restrictlist) : rel->rows;
-	} else {
-		rel->memo_checked = true;
+	if (nrows == -1) {
+		//printf("Calculating join\n");
+		//printMemo(rel->restrictList);
+		nrows = calc_joinrel_size_estimate(root, outer_rel->rows, inner_rel->rows, sjinfo, restrictlist);
 
 	}
+
 	/*	printf("selectivity was  parameterized : %f \n", calc_joinrel_size_estimate(root, outer_rel->rows, inner_rel->rows, sjinfo, restrictlist));*/
 //	printf("outer : %lf, inner %lf, rows: %lf\n", outer_rel->rows, inner_rel->rows, nrows);
 	rel->rows = clamp_row_est(nrows);
+	//printMemo(rel->rel_name);
+
+	printf("final  base join rows are : %f \n", rel->rows);
+
 	if (!enable_memo)
-		store_join(rel->rel_name, root->query_level, list_copy(rel->restrictList), rel->rows);
+		store_join(rel->rel_name, root->query_level, list_copy(rel->restrictList), rel->rows, false);
 }
 
 /*
@@ -3315,35 +3256,13 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double outer_rows, double inner_rows,
 		SpecialJoinInfo *sjinfo, List *restrict_clauses) {
 	double nrows = -1;
-//int rest = 0;
 	MemoInfoData1 result;
-	StringInfoData str;
-//ListCell *lc;
-
-//int x = -1;
-
-//Relids tmpset = bms_copy(rel->relids);
-	initStringInfo(&str);
 
 	/*
 	 printf("\t\t\trelids parameterized join are:\n---------------------------------\n");
 
-	 while ((x = bms_first_member(tmpset)) >= 0)
-	 printf("%d,", x);
-	 bms_free(tmpset);
-	 build_selec_string(&str, restrict_clauses, &rest);
-	 printf("\n");
-	 printf("End relids:\n---------------------------------\n");
-	 printf("Clauses are %s:\n---------------------------------\n", str.data);
 
-	 printf("End clauses\n---------------------------------\n");
-	 resetStringInfo(&str);
-	 build_selec_string(&str, sjinfo->join_quals, &rest);
-	 printf("join quals are %s:\n---------------------------------\n", str.data);
-
-	 printf("End quals \n---------------------------------\n");*/
-
-	/* Estimate the number of rows returned by the parameterized join as the
+	 /* Estimate the number of rows returned by the parameterized join as the
 	 * sizes of the input paths times the selectivity of the clauses that have
 	 * ended up at this join node.
 	 *
@@ -3352,22 +3271,16 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 	 * estimate for any pair with the same parameterization.
 	 */
 	if (enable_memo && rel->rel_name != NULL) {
-		/*printf("checking parameterized join relation  ");
-		 foreach (lc, rel->rel_name) {
-
-		 printf("%s ,", ((Value *) lfirst(lc))->val.str);
-		 fflush(stdout);
-		 }
-		 printf("\n");
-		 fflush(stdout);*/
+		/*	printf("checking parameterized join relation  ");
+		 printMemo(rel->rel_name);*/
 		//rest = list_length(restrict_clauses);
-		get_join_memo_size1(&result, rel, root->query_level, NULL, true);
-		nrows = result.rows / result.loops;;
+		get_relation_size(&result, root, rel, list_copy(restrict_clauses), true, sjinfo);
+		nrows = result.rows / result.loops;
 
 	}
-	if (!enable_memo || nrows == -1) {
-		nrows = rel->rows == -1 ?
-				calc_joinrel_size_estimate(root, outer_rows, inner_rows, sjinfo, restrict_clauses) : rel->rows;
+	if (nrows == -1) {
+		nrows = calc_joinrel_size_estimate(root, outer_rows, inner_rows, sjinfo, restrict_clauses);
+
 	} else {
 		rel->memo_checked = true;
 
@@ -3378,7 +3291,8 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 	if (nrows > rel->rows)
 		nrows = rel->rows;
 	if (!enable_memo)
-		store_join(rel->rel_name, root->query_level, list_copy(rel->restrictList), nrows);
+		store_join(rel->rel_name, root->query_level, list_copy(rel->restrictList), nrows, true);
+	printf("final  param join rows are : %f \n", nrows);
 
 	return nrows;
 }
@@ -3445,36 +3359,36 @@ static double calc_joinrel_size_estimate(PlannerInfo *root, double outer_rows, d
 	 * of LHS rows that have matches, and we apply that straightforwardly.
 	 */
 	switch (jointype) {
-	case JOIN_INNER:
-		nrows = outer_rows * inner_rows * jselec;
-		break;
-	case JOIN_LEFT:
-		nrows = outer_rows * inner_rows * jselec;
-		if (nrows < outer_rows)
-			nrows = outer_rows;
-		nrows *= pselec;
-		break;
-	case JOIN_FULL:
-		nrows = outer_rows * inner_rows * jselec;
-		if (nrows < outer_rows)
-			nrows = outer_rows;
-		if (nrows < inner_rows)
-			nrows = inner_rows;
-		nrows *= pselec;
-		break;
-	case JOIN_SEMI:
-		nrows = outer_rows * jselec;
-		/* pselec not used */
-		break;
-	case JOIN_ANTI:
-		nrows = outer_rows * (1.0 - jselec);
-		nrows *= pselec;
-		break;
-	default:
-		/* other values not expected here */
-		elog(ERROR, "unrecognized join type: %d", (int) jointype);
-		nrows = 0; /* keep compiler quiet */
-		break;
+		case JOIN_INNER:
+			nrows = outer_rows * inner_rows * jselec;
+			break;
+		case JOIN_LEFT:
+			nrows = outer_rows * inner_rows * jselec;
+			if (nrows < outer_rows)
+				nrows = outer_rows;
+			nrows *= pselec;
+			break;
+		case JOIN_FULL:
+			nrows = outer_rows * inner_rows * jselec;
+			if (nrows < outer_rows)
+				nrows = outer_rows;
+			if (nrows < inner_rows)
+				nrows = inner_rows;
+			nrows *= pselec;
+			break;
+		case JOIN_SEMI:
+			nrows = outer_rows * jselec;
+			/* pselec not used */
+			break;
+		case JOIN_ANTI:
+			nrows = outer_rows * (1.0 - jselec);
+			nrows *= pselec;
+			break;
+		default:
+			/* other values not expected here */
+			elog(ERROR, "unrecognized join type: %d", (int) jointype);
+			nrows = 0; /* keep compiler quiet */
+			break;
 	}
 
 	return clamp_row_est(nrows);

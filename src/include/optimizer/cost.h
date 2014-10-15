@@ -61,6 +61,7 @@ extern bool enable_mergejoin;
 extern bool enable_hashjoin;
 extern bool enable_memo;
 extern bool enable_memo_convergent;
+extern bool enable_memo_propagation;
 extern bool enable_cost_check;
 extern bool mode_cost_check;
 extern int	constraint_exclusion;
