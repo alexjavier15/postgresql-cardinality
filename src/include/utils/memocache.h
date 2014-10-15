@@ -66,7 +66,10 @@ typedef struct CacheM {
 	dlist_head *content;
 	int size;
 } CacheM;
-
+extern void add_relation(MemoRelation * relation, int rellen);
+extern MemoRelation* create_memo_realation(int level, bool isParam, List *relname, double rows, int loops,
+		List *clauses);
+extern List * restictInfoToMemoClauses(List *clauses);
 extern void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel, List *quals, bool isParam,
 		SpecialJoinInfo * sjinfo);
 extern void store_join(List *lrelName, int level, List *clauses, double rows, bool isParam);
