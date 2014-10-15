@@ -535,6 +535,7 @@ typedef struct RelOptInfo
 	int			last_level;
 	bool		last_index_type;
 	MemoRelation		*last_memorel;
+	double		paramloops;
 
 
 } RelOptInfo;
@@ -764,6 +765,7 @@ typedef struct ParamPathInfo
 	List	   *ppi_clauses;	/* join clauses available from outer rels */
 	/* used for memo calculations */
 	List	   *restrictList;
+	double		paramloops;
 } ParamPathInfo;
 
 

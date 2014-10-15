@@ -130,46 +130,47 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptKind reloptkind) {
 	rel->last_level = 0;
 	rel->last_memorel = NULL;
 	rel->last_restrictList = NIL;
+	rel->paramloops = 0;
 
 	/* Check type of rtable entry */
 	switch (rte->rtekind) {
-	case RTE_RELATION:
+		case RTE_RELATION:
 
-		/* Table --- retrieve statistics from the system catalogs */
-		get_relation_info(root, rte->relid, rte->inh, rel);
+			/* Table --- retrieve statistics from the system catalogs */
+			get_relation_info(root, rte->relid, rte->inh, rel);
 
-		/*hack for memo*/
-		break;
-	case RTE_SUBQUERY:
-	case RTE_FUNCTION:
-	case RTE_VALUES:
-	case RTE_CTE:
-		if (rte->subquery) {
-			Value *relname;
+			/*hack for memo*/
+			break;
+		case RTE_SUBQUERY:
+		case RTE_FUNCTION:
+		case RTE_VALUES:
+		case RTE_CTE:
+			if (rte->subquery) {
+				Value *relname;
 
-			foreach (lc, rte->subquery->rtable) {
+				foreach (lc, rte->subquery->rtable) {
 
-				relname = makeString(((RangeTblEntry *) lfirst(lc))->eref->aliasname);
-				rel->rel_name = lappend(rel->rel_name, relname);
+					relname = makeString(((RangeTblEntry *) lfirst(lc))->eref->aliasname);
+					rel->rel_name = lappend(rel->rel_name, relname);
+
+				}
 
 			}
+			/*
+			 * Subquery, function, or values list --- set up attr range and
+			 * arrays
+			 *
+			 * Note: 0 is included in range to support whole-row Vars
+			 */
 
-		}
-		/*
-		 * Subquery, function, or values list --- set up attr range and
-		 * arrays
-		 *
-		 * Note: 0 is included in range to support whole-row Vars
-		 */
-
-		rel->min_attr = 0;
-		rel->max_attr = list_length(rte->eref->colnames);
-		rel->attr_needed = (Relids *) palloc0((rel->max_attr - rel->min_attr + 1) * sizeof(Relids));
-		rel->attr_widths = (int32 *) palloc0((rel->max_attr - rel->min_attr + 1) * sizeof(int32));
-		break;
-	default:
-		elog(ERROR, "unrecognized RTE kind: %d", (int ) rte->rtekind);
-		break;
+			rel->min_attr = 0;
+			rel->max_attr = list_length(rte->eref->colnames);
+			rel->attr_needed = (Relids *) palloc0((rel->max_attr - rel->min_attr + 1) * sizeof(Relids));
+			rel->attr_widths = (int32 *) palloc0((rel->max_attr - rel->min_attr + 1) * sizeof(int32));
+			break;
+		default:
+			elog(ERROR, "unrecognized RTE kind: %d", (int ) rte->rtekind);
+			break;
 	}
 
 	/* Save the finished struct in the query's simple_rel_array */
@@ -337,7 +338,7 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 
 			if (!enable_memo && !equalSet(joinrel->restrictList, restrictlist)) {
 
-				store_join(joinrel->rel_name, root->query_level, restrictlist,joinrel->rows, false);
+				store_join(joinrel->rel_name, root->query_level, restrictlist, joinrel->rows, false);
 			}
 		}
 
@@ -398,6 +399,7 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 	joinrel->last_level = 0;
 	joinrel->last_memorel = NULL;
 	joinrel->last_restrictList = NIL;
+	joinrel->paramloops=0;
 
 	//}
 
@@ -766,9 +768,12 @@ get_baserel_parampathinfo(PlannerInfo *root, RelOptInfo *baserel, Relids require
 	ppi->ppi_req_outer = required_outer;
 
 	ppi->ppi_rows = rows;
+	//don't forget to clean paramoops after affectation
+	if (baserel->paramloops)
+		ppi->paramloops = baserel->paramloops;
 	ppi->ppi_clauses = pclauses;
 	baserel->ppilist = lappend(baserel->ppilist, ppi);
-
+	baserel->paramloops = 0;
 	return ppi;
 }
 
@@ -883,10 +888,12 @@ get_joinrel_parampathinfo(PlannerInfo *root, RelOptInfo *joinrel, Path *outer_pa
 	ppi = makeNode(ParamPathInfo);
 	ppi->ppi_req_outer = required_outer;
 	ppi->ppi_rows = rows;
+	if(joinrel->paramloops)
+		ppi->paramloops=joinrel->paramloops;
 	ppi->ppi_clauses = NIL;
 	ppi->restrictList = *restrict_clauses;
 	joinrel->ppilist = lappend(joinrel->ppilist, ppi);
-
+	joinrel->paramloops= 0;
 	return ppi;
 }
 

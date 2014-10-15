@@ -119,9 +119,14 @@ static void remove_par(char * stringList) {
 	}
 
 }
+extern void add_relation( MemoRelation * relation, int rellen){
+
+	add_node(memo_query_ptr,relation, rellen);
+
+}
 
 /*Build a List of MemoClause from a RestrictInfo List. Every MemoClause is linked to its RestrictInfo Parent*/
-static List * restictInfoToMemoClauses(List *clauses) {
+List * restictInfoToMemoClauses(List *clauses) {
 	List *lquals = NIL;
 	ListCell *lc;
 
@@ -165,7 +170,7 @@ static List * restictInfoToMemoClauses(List *clauses) {
 	return lquals;
 
 }
-static MemoRelation* create_memo_realation(int level, bool isParam, List *relname, double rows, int loops,
+MemoRelation* create_memo_realation(int level, bool isParam, List *relname, double rows, int loops,
 		List *clauses) {
 
 	MemoRelation *relation = newMemoRelation();
@@ -512,7 +517,7 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 		}
 		case MATCHED_RIGHT: {
 			if (!sjinfo) {
-			//	printf(" MATCHED_RIGHT  relation! :\n");
+				//	printf(" MATCHED_RIGHT  relation! :\n");
 
 				final_clauses = NIL;
 				result->rows = rel->tuples * clauselist_selectivity(root, quals, 0, JOIN_INNER, NULL);
@@ -963,12 +968,12 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 					cmp_lists(result, memorelation->clauses, lquals);
 					/*if (list_length(relname) == 4) {
 
-						printMemo(relname);
+					 printMemo(relname);
 
-						printMemo(relname);
-					}*/
+					 printMemo(relname);
+					 }*/
 					if (isFullMatched(result)) {
-					//	printf("IS FULL MATCHED\n!");
+						//	printf("IS FULL MATCHED\n!");
 						*relation = &(*memorelation);
 						return;
 					}
@@ -1241,20 +1246,26 @@ int equals(MemoRelation *rel1, MemoRelation *rel2) {
 void set_plain_rel_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop_count, bool isIndex) {
 
 	path->restrictList = list_copy(rel->baserestrictinfo);
-	if (path->param_info)
-		path->restrictList = list_concat_unique(path->restrictList, list_copy(path->param_info->ppi_clauses));
-	if (enable_memo) {
-		set_path_sizes(root, rel, path, loop_count, path->param_info != NULL);
 
-	} else {
-		if (path->param_info) {
-			path->rows = path->param_info->ppi_rows;
-			path->isParameterized = true;
-		} else {
-			path->rows = path->parent->rows;
-			path->isParameterized = false;
+	if (path->param_info) {
+		path->restrictList = list_concat_unique(path->restrictList, list_copy(path->param_info->ppi_clauses));
+		path->rows = path->param_info->ppi_rows;
+		if (enable_memo && path->param_info->paramloops) {
+
+			*loop_count = path->param_info->paramloops;
 		}
+
+		path->isParameterized = true;
+	} else {
+		if (enable_memo) {
+			set_path_sizes(root, rel, path, loop_count, false);
+		} else {
+
+			path->rows = path->parent->rows;
+		}
+		path->isParameterized = false;
 	}
+
 }
 void set_join_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, JoinPath *pathnode) {
 	pathnode->path.restrictList = list_concat_unique(pathnode->path.restrictList,
@@ -1289,7 +1300,7 @@ void set_join_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, JoinPath *path
 void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop_count, bool isParam) {
 	MemoRelation * memo_rel = NULL;
 	MemoInfoData1 result;
-	//char *str1;
+//char *str1;
 	/*	char *str1, *str2;*/
 	bool isFetched = false;
 	int level = rel->rtekind == RTE_JOIN ? root->query_level : root->query_level + rel->rtekind;
@@ -1311,22 +1322,11 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 		/*	printf(" Setting path sizes for! :\n");
 
 		 print_relation(str1, str2, memo_rel);*/
-		if (loop_count != NULL) {
+		if (loop_count != NULL && isParam) {
 
 			*loop_count = *loop_count < memo_rel->loops ? memo_rel->loops : *loop_count;
 		}
-		//if (isIndex == 2 && isMatched(&result)) {
 
-		/*if (path->param_info)
-		 path->rows = path->param_info->ppi_rows; < clamp_row_est(memo_rel->rows / memo_rel->loops) ?
-		 clamp_row_est(memo_rel->rows / memo_rel->loops) : path->param_info->ppi_rows;
-		 else
-		 path->rows = path->parent->rows; < clamp_row_est(memo_rel->rows / memo_rel->loops) ?
-		 clamp_row_est(memo_rel->rows / memo_rel->loops) : path->parent->rows;*/
-
-		//	} else {
-		//
-		//}
 		path->total_rows = memo_rel->rows;
 		path->removed_rows = memo_rel->removed_rows;
 		if (!isFetched) {
@@ -1342,35 +1342,26 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 		}
 		path->rows = clamp_row_est(memo_rel->rows / memo_rel->loops);
 
-	} else {
-		if (path->param_info) {
-			path->rows = path->param_info->ppi_rows;
-			path->isParameterized = true;
-		} else {
-			path->rows = path->parent->rows;
-			path->isParameterized = false;
-
-		}
 	}
-
-	/*	printf("not injected : \n ");
-	 print_list(str1, rel->rel_name);
-	 printClause(path->restrictList);
-	 printf("estimated : %lf \n", path->rows);
-	 fflush(stdout);*/
-
 }
+
+/*	printf("not injected : \n ");
+ print_list(str1, rel->rel_name);
+ printClause(path->restrictList);
+ printf("estimated : %lf \n", path->rows);
+ fflush(stdout);*/
+
 void set_agg_sizes_from_memo(PlannerInfo *root, Path *path) {
 	MemoRelation * memo_rel = NULL;
 	MemoInfoData1 result;
-	//char *str1 = NULL;
+//char *str1 = NULL;
 
 	if (enable_memo) {
 		memo_rel = get_Memorelation(&result, path->nodename, root->query_level, path->restrictList, false);
 
 	}
 	if (memo_rel != NULL) {
-		//print_list(str1, path->nodename);
+//print_list(str1, path->nodename);
 		path->rows = clamp_row_est(memo_rel->rows / memo_rel->loops);
 
 	} else {
