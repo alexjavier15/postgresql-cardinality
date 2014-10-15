@@ -3114,7 +3114,7 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 	}
 
 	rel->rows = clamp_row_est(nrows);
-	printMemo(rel->rel_name);
+	//printMemo(rel->rel_name);
 
 	printf("final  base rows are : %f \n", rel->rows);
 
@@ -3179,7 +3179,7 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 	/* For safety, make sure result is not more than the base estimate */
 	if (nrows > rel->rows)
 		nrows = rel->rows;
-	printMemo(rel->rel_name);
+	//printMemo(rel->rel_name);
 	printf("final  base para  rows are : %f \n", nrows);
 
 	return nrows;
@@ -3230,7 +3230,7 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 	/*	printf("selectivity was  parameterized : %f \n", calc_joinrel_size_estimate(root, outer_rel->rows, inner_rel->rows, sjinfo, restrictlist));*/
 //	printf("outer : %lf, inner %lf, rows: %lf\n", outer_rel->rows, inner_rel->rows, nrows);
 	rel->rows = clamp_row_est(nrows);
-	printMemo(rel->rel_name);
+	//printMemo(rel->rel_name);
 
 	printf("final  base join rows are : %f \n", rel->rows);
 
