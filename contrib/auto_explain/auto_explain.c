@@ -201,7 +201,7 @@ static void explain_ExecutorFinish(QueryDesc *queryDesc) {
 static void explain_ExecutorEnd(QueryDesc *queryDesc) {
 	FILE *file = fopen("memoTxt.xml", "wb");
 	FILE *file_d = fopen("durations.txt", "a+");
-	FILE *file_joins = fopen("joins.txt", "wb");
+	FILE *file_joins = fopen("joins.txt", "a+");
 
 	if (queryDesc->totaltime && auto_explain_enabled()) {
 		double msec;
@@ -251,17 +251,17 @@ static void explain_ExecutorEnd(QueryDesc *queryDesc) {
 				ereport(LOG, (errmsg("duration: %.3f ms  plan:\n%s", msec, es.str->data), errhidestmt(true)));
 				fprintf(file_d, "%.3f", msec);
 
-				export_join(file_joins);
-				if (enable_memo)
+				if (enable_memo) {
 					fprintf(file_d, "\n");
-				else
+				} else
+					export_join(file_joins);
+					free_memo_cache();
 					fprintf(file_d, "	");
 				fwrite(es.str->data, 1, strlen(es.str->data), file);
 				fclose(file);
 				fclose(file_d);
 				if (auto_explain_log_memo) {
 					system("java -jar explain.jar memoTxt.xml memoTxt");
-
 
 				}
 

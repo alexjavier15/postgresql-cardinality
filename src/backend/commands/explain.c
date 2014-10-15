@@ -946,6 +946,7 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 	case T_BitmapIndexScan: {
 		BitmapIndexScan *bitmapindexscan = (BitmapIndexScan *) plan;
 		const char *indexname = explain_get_index_name(bitmapindexscan->indexid);
+		ExplainScanTarget((Scan *) bitmapindexscan, es);
 
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 			appendStringInfo(es->str, " on %s", indexname);
@@ -1027,6 +1028,11 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		break;
 	}
 
+	if (enable_explain_memo && plan->isParameterized) {
+
+		ExplainPropertyInteger("Is Parameterized", plan->isParameterized, es);
+
+	}
 	if (es->costs) {
 		if (es->format == EXPLAIN_FORMAT_TEXT) {
 			appendStringInfo(es->str, "  (cost=%.2f..%.2f rows=%.0f width=%d)", plan->startup_cost, plan->total_cost,
@@ -1102,9 +1108,9 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 
 		}
 		if (enable_explain_memo) {
-			if (((IndexScan *) plan)->scanclauses) {
+			if (plan->scanclauses) {
 
-				show_scan_parsed_qual(((IndexScan *) plan)->scanclauses, "Restrict List", es);
+				show_scan_parsed_qual(plan->scanclauses, "Restrict List", es);
 
 			}
 			if (((IndexScan *) plan)->indexqualorig) {
@@ -1130,9 +1136,9 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		}
 
 		if (enable_explain_memo) {
-			if (((IndexOnlyScan *) plan)->scanclauses) {
+			if (plan->scanclauses) {
 
-				show_scan_parsed_qual(((IndexOnlyScan *) plan)->scanclauses, "Restrict List", es);
+				show_scan_parsed_qual(plan->scanclauses, "Restrict List", es);
 
 			}
 			if (((IndexOnlyScan *) plan)->indexqual) {
@@ -1153,8 +1159,8 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 
 		if (enable_explain_memo) {
 
-			if (((BitmapIndexScan *) plan)->scanclauses)
-				show_scan_parsed_qual(((BitmapIndexScan *) plan)->scanclauses, "Restrict List", es);
+			if (plan->scanclauses)
+				show_scan_parsed_qual(plan->scanclauses, "Restrict List", es);
 		}
 
 		break;
@@ -1163,8 +1169,8 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (((BitmapHeapScan *) plan)->bitmapqualorig) {
 			show_instrumentation_count("Rows Removed by Index Recheck", 2, planstate, es);
 			if (enable_explain_memo) {
-				if (((BitmapHeapScan *) plan)->scanclauses)
-					show_scan_parsed_qual(((BitmapHeapScan *) plan)->scanclauses, "Restrict List", es);
+				if (plan->scanclauses)
+					show_scan_parsed_qual(plan->scanclauses, "Restrict List", es);
 				if (plan->qual) {
 					show_scan_parsed_qual(plan->qual, "PFilter", es);
 
@@ -1189,7 +1195,7 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (plan->qual) {
 			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
 			if (enable_explain_memo) {
-				show_scan_parsed_qual(plan->qual, "Restrict List", es);
+				show_scan_parsed_qual(plan->scanclauses, "Restrict List", es);
 
 			}
 
@@ -1853,6 +1859,7 @@ static void ExplainTargetRel(Plan *plan, Index rti, ExplainState *es) {
 	case T_IndexScan:
 	case T_IndexOnlyScan:
 	case T_BitmapHeapScan:
+	case T_BitmapIndexScan:
 	case T_TidScan:
 	case T_ForeignScan:
 	case T_ModifyTable:

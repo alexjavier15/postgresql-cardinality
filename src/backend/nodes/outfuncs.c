@@ -2416,6 +2416,7 @@ static void _outConstraint(StringInfo str, const Constraint *node) {
 static void _outSimMemoClause(StringInfo str, const MemoClause *node) {
 	WRITE_OID_FIELD(opno);
 	WRITE_NODE_SIM_FIELD(S_NULL, args);
+	WRITE_NODE_SIM_FIELD(S_NULL,parent);
 	appendStringInfoSpaces(str, 1);
 
 }

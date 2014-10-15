@@ -613,6 +613,7 @@ create_seqscan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer) {
 	pathnode->param_info = get_baserel_parampathinfo(root, rel, required_outer);
 	pathnode->pathkeys = NIL; /* seqscan has unordered result */
 	pathnode->restrictList = list_copy(rel->restrictList);
+	set_plain_rel_sizes_from_memo(root, rel, pathnode, NULL, false);
 
 	cost_seqscan(pathnode, root, rel, pathnode->param_info);
 

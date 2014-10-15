@@ -434,7 +434,8 @@ typedef enum NodeTag
 	T_InlineCodeBlock,			/* in nodes/parsenodes.h */
 	T_FdwRoutine,				/* in foreign/fdwapi.h */
 	/*Tags for Memo*/
-	T_MemoClause
+	T_MemoClause,
+	T_MemoRelation
 } NodeTag;
 
 /*

@@ -31,24 +31,27 @@ typedef struct MemoClause {
 	Oid opno;
 	List *args;
 	RestrictInfo * parent; /* optional pointer to an existing RestrictInfo*/
+	double selectivity;
 
 } MemoClause;
 
 typedef struct MemoInfoData1 {
 	int found;
 	double rows;
-	;
 	List *unmatches;
 	List *matches;
 	double loops;
 	double removed_rows;
+	char *debug;
+	char *debug1;
+	char *debug2;
 
 } MemoInfoData1;
 
 typedef enum CacheTag {
 	M_Invalid = 0,
 
-	M_MemoQuery, M_JoinCache
+	M_MemoQuery, M_JoinCache, M_SelCache
 
 } CacheTag;
 typedef enum ListType {
@@ -64,9 +67,9 @@ typedef struct CacheM {
 	int size;
 } CacheM;
 
-
-extern void get_relation_size(MemoInfoData1 *result, List * relaname, int level, List *quals, bool isIndex);
-extern void store_join(List *lrelName, int level, List *clauses, double rows);
+extern void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel, List *quals, bool isParam,
+		SpecialJoinInfo * sjinfo);
+extern void store_join(List *lrelName, int level, List *clauses, double rows, bool isParam);
 extern void export_join(FILE *file);
 extern MemoRelation * set_base_rel_tuples(List *lrelName, int level, double tuples);
 extern void set_memo_join_sizes(void);

@@ -129,6 +129,8 @@ typedef struct Plan
 	 */
 	Bitmapset  *extParam;
 	Bitmapset  *allParam;
+	List * 		scanclauses;
+	bool	    isParameterized;
 } Plan;
 
 /* ----------------
@@ -317,7 +319,6 @@ typedef struct IndexScan
 	List	   *indexorderby;	/* list of index ORDER BY exprs */
 	List	   *indexorderbyorig;		/* the same in original form */
 	ScanDirection indexorderdir;	/* forward or backward or don't care */
-	List		*scanclauses;
 } IndexScan;
 
 /* ----------------
@@ -345,7 +346,7 @@ typedef struct IndexOnlyScan
 	List	   *indexorderby;	/* list of index ORDER BY exprs */
 	List	   *indextlist;		/* TargetEntry list describing index's cols */
 	ScanDirection indexorderdir;	/* forward or backward or don't care */
-	List		*scanclauses;
+
 } IndexOnlyScan;
 
 /* ----------------
@@ -371,7 +372,7 @@ typedef struct BitmapIndexScan
 	Oid			indexid;		/* OID of index to scan */
 	List	   *indexqual;		/* list of index quals (OpExprs) */
 	List	   *indexqualorig;	/* the same in original form */
-	List	   *scanclauses;
+
 } BitmapIndexScan;
 
 /* ----------------
@@ -387,7 +388,6 @@ typedef struct BitmapHeapScan
 {
 	Scan		scan;
 	List	   *bitmapqualorig; /* index quals, in standard expr form */
-	List		*scanclauses;
 } BitmapHeapScan;
 
 /* ----------------

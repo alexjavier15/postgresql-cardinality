@@ -216,6 +216,7 @@ extern bool list_member_ptr(const List *list, const void *datum);
 extern bool list_member_int(const List *list, int datum);
 extern bool list_member_oid(const List *list, Oid datum);
 extern bool list_member_remove(const List *list, const void *datum);
+extern bool equalSet(const List *a, const List *b);
 
 
 extern List *list_delete(List *list, void *datum);

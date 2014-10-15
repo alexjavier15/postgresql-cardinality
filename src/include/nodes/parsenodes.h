@@ -2783,5 +2783,6 @@ typedef struct MemoRelation {
 	double removed_rows;
 	int loops;
 	bool test;
+	int isParameterized;
 } MemoRelation;
 #endif   /* PARSENODES_H */

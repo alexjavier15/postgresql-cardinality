@@ -819,6 +819,7 @@ typedef struct Path
 	double		total_rows;
 	double 		removed_rows;
 	List       *nodename;
+	bool	    isParameterized;
 } Path;
 
 /* Macro for extracting a path's parameterization relids; beware double eval */
