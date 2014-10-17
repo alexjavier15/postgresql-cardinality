@@ -315,7 +315,7 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 		SpecialJoinInfo *sjinfo, List **restrictlist_ptr) {
 	RelOptInfo *joinrel;
 	//Relation relation;
-	List *restrictlist;
+	List *restrictlist=NIL;
 	//ListCell *lc;
 
 	/*
@@ -330,11 +330,12 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 		 */
 		if (restrictlist_ptr) {
 			*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
-
-			restrictlist = list_copy(inner_rel->restrictList);
-			restrictlist = list_concat(restrictlist, list_copy(outer_rel->restrictList));
-			restrictlist = list_concat(restrictlist,
-					generate_join_implied_equalities(root, joinrel->relids, outer_rel->relids, inner_rel));
+			if (enable_memo) {
+				restrictlist = list_copy(inner_rel->restrictList);
+				restrictlist = list_concat(restrictlist, list_copy(outer_rel->restrictList));
+				restrictlist = list_concat(restrictlist,
+						generate_join_implied_equalities(root, joinrel->relids, outer_rel->relids, inner_rel));
+			}
 
 			if (!enable_memo && !equalSet(joinrel->restrictList, restrictlist)) {
 
@@ -399,7 +400,7 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 	joinrel->last_level = 0;
 	joinrel->last_memorel = NULL;
 	joinrel->last_restrictList = NIL;
-	joinrel->paramloops=0;
+	joinrel->paramloops = 0;
 
 	//}
 
@@ -436,11 +437,12 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 	/*
 	 * Set estimates of the joinrel's size.
 	 */
-
-	joinrel->restrictList = list_concat_unique(joinrel->restrictList, list_copy(inner_rel->restrictList));
-	joinrel->restrictList = list_concat_unique(joinrel->restrictList, list_copy(outer_rel->restrictList));
-	joinrel->restrictList = list_concat_unique(joinrel->restrictList,
-			generate_join_implied_equalities(root, joinrel->relids, outer_rel->relids, inner_rel));
+	if (enable_memo) {
+		joinrel->restrictList = list_concat_unique(joinrel->restrictList, list_copy(inner_rel->restrictList));
+		joinrel->restrictList = list_concat_unique(joinrel->restrictList, list_copy(outer_rel->restrictList));
+		joinrel->restrictList = list_concat_unique(joinrel->restrictList,
+				generate_join_implied_equalities(root, joinrel->relids, outer_rel->relids, inner_rel));
+	}
 
 	set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo, restrictlist);
 
@@ -888,12 +890,12 @@ get_joinrel_parampathinfo(PlannerInfo *root, RelOptInfo *joinrel, Path *outer_pa
 	ppi = makeNode(ParamPathInfo);
 	ppi->ppi_req_outer = required_outer;
 	ppi->ppi_rows = rows;
-	if(joinrel->paramloops)
-		ppi->paramloops=joinrel->paramloops;
+	if (joinrel->paramloops)
+		ppi->paramloops = joinrel->paramloops;
 	ppi->ppi_clauses = NIL;
 	ppi->restrictList = *restrict_clauses;
 	joinrel->ppilist = lappend(joinrel->ppilist, ppi);
-	joinrel->paramloops= 0;
+	joinrel->paramloops = 0;
 	return ppi;
 }
 
