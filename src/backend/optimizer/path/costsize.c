@@ -3093,8 +3093,6 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 
 //	ListCell *lc;
 
-
-
 	/* Should only be applied to base relations */
 	Assert(rel->relid > 0);
 
@@ -3164,7 +3162,7 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 
 	} else {
 
-		nrows = rel->tuples * clauselist_selectivity(root, allclauses, 0, JOIN_INNER, NULL);
+		nrows = rel->tuples * clauselist_selectivity(root, allclauses, rel->relid, JOIN_INNER, NULL);
 
 	}
 	nrows = clamp_row_est(nrows);
@@ -3219,7 +3217,7 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 		get_relation_size(&result, root, rel, list_copy(final_clauses), false, sjinfo);
 		nrows = result.rows;
 	}
-	if (nrows == -1) {
+	if (!enable_memo || nrows == -1) {
 
 		nrows = calc_joinrel_size_estimate(root, outer_rel->rows, inner_rel->rows, sjinfo, restrictlist);
 		if (enable_memo) {
@@ -3263,8 +3261,7 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 	MemoInfoData1 result;
 	List * final_clauses = list_copy(restrict_clauses);
 
-
-	 /* Estimate the number of rows returned by the parameterized join as the
+	/* Estimate the number of rows returned by the parameterized join as the
 	 * sizes of the input paths times the selectivity of the clauses that have
 	 * ended up at this join node.
 	 *
@@ -3276,12 +3273,12 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 		/*	printf("checking parameterized join relation  ");
 		 printMemo(rel->rel_name);*/
 		//rest = list_length(restrict_clauses);
-		get_relation_size(&result, root, rel,  list_copy(final_clauses), true, sjinfo);
+		get_relation_size(&result, root, rel, list_copy(final_clauses), true, sjinfo);
 		nrows = result.rows / result.loops;
 		rel->paramloops = result.loops >= 1 ? result.loops : 0;
 
 	}
-	if (nrows == -1) {
+	if (!enable_memo || nrows == -1) {
 
 		nrows = calc_joinrel_size_estimate(root, outer_rows, inner_rows, sjinfo, restrict_clauses);
 		if (enable_memo) {
