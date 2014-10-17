@@ -3214,7 +3214,7 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 		/*printf("checking join relation  ");
 		 printMemo(rel->restrictList);*/
 
-		get_relation_size(&result, root, rel, list_copy(final_clauses), false, sjinfo);
+		get_relation_size(&result, root, rel, list_copy(final_clauses), 3, sjinfo);
 		nrows = result.rows;
 	}
 	if (!enable_memo || nrows == -1) {
@@ -3238,8 +3238,11 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 
 	printf("final  base join rows are : %f \n", rel->rows);
 
-	if (!enable_memo)
+	if (!enable_memo){
 		store_join(rel->rel_name, root->query_level, list_copy(rel->restrictList), rel->rows, false);
+		//store_join(rel->rel_name, root->query_level, list_copy(restrictlist), rel->rows, false);
+
+	}
 }
 
 /*
@@ -3289,7 +3292,7 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 
 		if (enable_memo) {
 			MemoRelation *newRelation = NULL;
-			newRelation = create_memo_realation(root->query_level, true, rel->rel_name, clamp_row_est(nrows), true, final_clauses);
+			newRelation = create_memo_realation(root->query_level, 3, rel->rel_name, clamp_row_est(nrows), true, final_clauses);
 			add_relation(newRelation, list_length(rel->rel_name));
 		}
 	} else {
@@ -3300,8 +3303,11 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 
 	/* For safety, make sure result is not more than the base estimate */
 
-	if (!enable_memo)
+	if (!enable_memo){
 		store_join(rel->rel_name, root->query_level, list_copy(rel->restrictList), nrows, true);
+		//store_join(rel->rel_name, root->query_level, list_copy(restrict_clauses), rel->rows, false);
+
+	}
 	printf("final  param join rows are : %f \n", nrows);
 
 	return nrows;

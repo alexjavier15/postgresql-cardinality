@@ -277,6 +277,61 @@ void InitJoinCache(void) {
 		set_memo_join_sizes();
 	}
 }
+
+static void append_equalities_clauses(List *clauses){
+	ListCell * lc;
+
+
+	foreach(lc, clauses){}
+
+
+}
+static MemoClause * equival_clause(MemoClause *cl1, MemoClause *cl2) {
+	if (cl1 == NIL || cl2 == NIL || cl1->args == NIL || cl2->args ==NIL) {
+
+		return NULL;
+	}
+
+	if (cl1->opno == cl2->opno) {
+
+		if (equalSet(list_copy(cl1->args), list_copy(cl1->args))) {
+
+			return cl1;
+		} else {
+			if (cl1->args->length == 2 && cl2->args->length == 2) {
+				const ListCell *item_b;
+				List *a = list_copy(cl1->args);
+				List *b = list_copy(cl2->args);
+				List *lunion = NIL;
+
+				foreach(item_b, b) {
+					if (list_member_remove(a, lfirst(item_b))) {
+						list_member_remove(b, lfirst(item_b));
+						break;
+					}
+
+				}
+				lunion = list_union(a, b);
+				if (list_length(lunion) == 2) {
+					MemoClause *clause_ptr = (MemoClause *) palloc(sizeof(MemoClause));
+
+					clause_ptr->type = T_MemoClause;
+					clause_ptr->opno = cl1->opno;
+					clause_ptr->args = lunion;
+					clause_ptr->parent = NULL;
+					return clause_ptr;
+
+				}
+
+			}
+
+		}
+
+	}
+
+	return NULL;
+
+}
 void discard_existing_joins(void) {
 
 	dlist_mutable_iter iter;
@@ -305,6 +360,7 @@ void discard_existing_joins(void) {
 	}
 
 }
+
 static void printClause(List *clauses) {
 	int rest;
 	StringInfoData str1;
@@ -717,20 +773,16 @@ void cmp_lists(MemoInfoData1 * result, List *lleft, List *lright) {
 	result->unmatches = NIL;
 	result->matches = NIL;
 	const ListCell *item_b;
-	if (lleft) {
-		result->debug2 = nodeSimToString_(lleft);
-	}
+
 	foreach(item_b, b) {
 		if (!list_member_remove(a, lfirst(item_b))) {
 
 			//printf("member not found\n");
 			//printMemo(lfirst(item_b));
 			result->unmatches = lappend(result->unmatches, lfirst(item_b));
-			result->debug = nodeSimToString_(result->unmatches);
 			//	printMemo(result->unmatches);
 		} else {
 			result->matches = lappend(result->matches, lfirst(item_b));
-			result->debug1 = nodeSimToString_(result->matches);
 
 		}
 
@@ -959,6 +1011,13 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 		memorelation = dlist_container(MemoRelation,list_node, iter.cur);
 		equal = equalSet(list_copy(memorelation->relationname), list_copy(relname));
 		if (equal && memorelation->level == level) {
+			if(isParam == 3){
+				result->found= FULL_MATCHED;
+				*relation = &(*memorelation);
+				return;
+
+
+			}
 
 			if ((isParam < 2 && memorelation->isParameterized == isParam) || isParam == 2) {
 				//	print_relation(memorelation);
@@ -1275,16 +1334,12 @@ void set_join_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, JoinPath *path
 			list_copy(pathnode->outerjoinpath->restrictList));
 	pathnode->path.restrictList = list_concat_unique(pathnode->path.restrictList,
 			list_copy(pathnode->joinrestrictinfo));
-	if (enable_memo) {
-		/*	List *l = restictInfoToMemoClauses(pathnode->path.restrictList);
-		 char * c = nodeSimToString_(l);
-		 printf("Go to probe : \n");
-		 printf("%s\n", c);
-		 fflush(stdout);*/
+	/*if (enable_memo) {
+
 
 		set_path_sizes(root, rel, &pathnode->path, NULL, pathnode->path.param_info != NULL);
 
-	} else {
+	} else { */
 		if (pathnode->path.param_info) {
 			pathnode->path.rows = pathnode->path.param_info->ppi_rows;
 
@@ -1295,7 +1350,7 @@ void set_join_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, JoinPath *path
 
 		}
 		pathnode->path.isParameterized = pathnode->path.param_info != NULL;
-	}
+	//}
 	if (pathnode->path.rows == 0) {
 
 		printf("injected 0 rows for : \n");
@@ -1320,7 +1375,6 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 		memo_rel = rel->last_memorel;
 
 	} else {
-
 
 		memo_rel = get_Memorelation(&result, rel->rel_name, level, path->restrictList, isParam);
 	}
