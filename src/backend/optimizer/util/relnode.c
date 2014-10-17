@@ -338,7 +338,9 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 
 			if (!enable_memo && !equalSet(joinrel->restrictList, restrictlist)) {
 
-				store_join(joinrel->rel_name, root->query_level, restrictlist, joinrel->rows, false);
+				//store_join(joinrel->rel_name, root->query_level, restrictlist, joinrel->rows, false);
+				//store_join(joinrel->rel_name, root->query_level, list_copy(*restrictlist_ptr), joinrel->rows, false);
+
 			}
 		}
 

@@ -42,9 +42,7 @@ typedef struct MemoInfoData1 {
 	List *matches;
 	double loops;
 	double removed_rows;
-	char *debug;
-	char *debug1;
-	char *debug2;
+
 
 } MemoInfoData1;
 
