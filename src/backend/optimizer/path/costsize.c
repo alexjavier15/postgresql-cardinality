@@ -3220,18 +3220,20 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 	if (!enable_memo || nrows == -1) {
 
 		nrows = calc_joinrel_size_estimate(root, outer_rel->rows, inner_rel->rows, sjinfo, restrictlist);
+		nrows = clamp_row_est(nrows);
 		if (enable_memo) {
 			MemoRelation *newRelation = NULL;
-			newRelation = create_memo_realation(root->query_level, true, rel->rel_name, nrows, 1,
-					restictInfoToMemoClauses(final_clauses));
+
+			newRelation = create_memo_realation(root->query_level, true, rel->rel_name, nrows, false, final_clauses);
+
 			add_relation(newRelation, list_length(rel->rel_name));
 		}
 
 	}
-
+	rel->rows = nrows;
 	/*	printf("selectivity was  parameterized : %f \n", calc_joinrel_size_estimate(root, outer_rel->rows, inner_rel->rows, sjinfo, restrictlist));*/
 //	printf("outer : %lf, inner %lf, rows: %lf\n", outer_rel->rows, inner_rel->rows, nrows);
-	rel->rows = clamp_row_est(nrows);
+
 	//printMemo(rel->rel_name);
 
 	printf("final  base join rows are : %f \n", rel->rows);
@@ -3260,6 +3262,7 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 	double nrows = -1;
 	MemoInfoData1 result;
 	List * final_clauses = list_copy(restrict_clauses);
+	final_clauses = list_concat_unique(final_clauses, rel->restrictList);
 
 	/* Estimate the number of rows returned by the parameterized join as the
 	 * sizes of the input paths times the selectivity of the clauses that have
@@ -3274,17 +3277,19 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 		 printMemo(rel->rel_name);*/
 		//rest = list_length(restrict_clauses);
 		get_relation_size(&result, root, rel, list_copy(final_clauses), true, sjinfo);
-		nrows = result.rows / result.loops;
+		nrows = clamp_row_est(result.rows / result.loops);
 		rel->paramloops = result.loops >= 1 ? result.loops : 0;
 
 	}
 	if (!enable_memo || nrows == -1) {
 
 		nrows = calc_joinrel_size_estimate(root, outer_rows, inner_rows, sjinfo, restrict_clauses);
+		if (nrows > rel->rows)
+			nrows = rel->rows;
+
 		if (enable_memo) {
 			MemoRelation *newRelation = NULL;
-			newRelation = create_memo_realation(root->query_level, true, rel->rel_name, nrows, 1,
-					restictInfoToMemoClauses(final_clauses));
+			newRelation = create_memo_realation(root->query_level, true, rel->rel_name, clamp_row_est(nrows), true, final_clauses);
 			add_relation(newRelation, list_length(rel->rel_name));
 		}
 	} else {
@@ -3294,8 +3299,7 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 //	printf("PArameterized :\n outer : %lf, inner %lf, rows: %lf\n End\n", outer_rows, outer_rows, nrows);
 
 	/* For safety, make sure result is not more than the base estimate */
-	if (nrows > rel->rows)
-		nrows = rel->rows;
+
 	if (!enable_memo)
 		store_join(rel->rel_name, root->query_level, list_copy(rel->restrictList), nrows, true);
 	printf("final  param join rows are : %f \n", nrows);
