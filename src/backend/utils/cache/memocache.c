@@ -1316,7 +1316,7 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 		pfree(b);
 	if (isFetched) {
 
-		printf("Relation already fetched ! \n");
+		//printf("Relation already fetched ! \n");
 		memo_rel = rel->last_memorel;
 
 	} else {
@@ -1327,7 +1327,7 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 
 	if (memo_rel != NULL) {
 
-		printMemo(rel->rel_name);
+		//printMemo(rel->rel_name);
 		if (loop_count != NULL && isParam) {
 
 			*loop_count = *loop_count < memo_rel->loops ? memo_rel->loops : *loop_count;
