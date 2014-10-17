@@ -119,9 +119,9 @@ static void remove_par(char * stringList) {
 	}
 
 }
-extern void add_relation( MemoRelation * relation, int rellen){
-
-	add_node(memo_query_ptr,relation, rellen);
+void add_relation(MemoRelation * relation, int rellen) {
+	//print_relation(relation);
+	add_node(memo_query_ptr, relation, rellen);
 
 }
 
@@ -170,8 +170,7 @@ List * restictInfoToMemoClauses(List *clauses) {
 	return lquals;
 
 }
-MemoRelation* create_memo_realation(int level, bool isParam, List *relname, double rows, int loops,
-		List *clauses) {
+MemoRelation* create_memo_realation(int level, bool isParam, List *relname, double rows, int loops, List *clauses) {
 
 	MemoRelation *relation = newMemoRelation();
 	relation->level = level;
@@ -179,6 +178,7 @@ MemoRelation* create_memo_realation(int level, bool isParam, List *relname, doub
 	relation->relationname = list_copy(relname);
 	relation->rows = rows;
 	relation->loops = loops;
+	relation->clauseslength = 1;
 	relation->clauses = restictInfoToMemoClauses(clauses);
 	return relation;
 }
@@ -542,6 +542,7 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 	if (!sjinfo || result->found == FULL_MATCHED
 			|| (sjinfo && result->found == MATCHED_LEFT && sjinfo->jointype == JOIN_INNER)) {
 		result->rows = result->rows * clauselist_selectivity(root, final_clauses, 0, JOIN_INNER, NULL);
+		result->rows = clamp_row_est(result->rows);
 		if (isNew) {
 			MemoRelation *newRelation = create_memo_realation(level, isParam, rel->rel_name, result->rows,
 					result->loops, final_clauses);
@@ -1295,6 +1296,11 @@ void set_join_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, JoinPath *path
 		}
 		pathnode->path.isParameterized = pathnode->path.param_info != NULL;
 	}
+	if (pathnode->path.rows == 0) {
+
+		printf("injected 0 rows for : \n");
+		printMemo(rel->rel_name);
+	}
 }
 
 void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop_count, bool isParam) {
@@ -1310,18 +1316,18 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 		pfree(b);
 	if (isFetched) {
 
-		/*		printf("Relation already fetched ! \n");*/
+		//printf("Relation already fetched ! \n");
 		memo_rel = rel->last_memorel;
 
 	} else {
+
 
 		memo_rel = get_Memorelation(&result, rel->rel_name, level, path->restrictList, isParam);
 	}
 
 	if (memo_rel != NULL) {
-		/*	printf(" Setting path sizes for! :\n");
 
-		 print_relation(str1, str2, memo_rel);*/
+		//printMemo(rel->rel_name);
 		if (loop_count != NULL && isParam) {
 
 			*loop_count = *loop_count < memo_rel->loops ? memo_rel->loops : *loop_count;
@@ -1342,6 +1348,13 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 		}
 		path->rows = clamp_row_est(memo_rel->rows / memo_rel->loops);
 
+	} else {
+		if (path->param_info) {
+			path->rows = path->param_info->ppi_rows;
+		} else {
+			path->rows = path->parent->rows;
+
+		}
 	}
 }
 
