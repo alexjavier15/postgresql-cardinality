@@ -1382,10 +1382,10 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 	if (memo_rel != NULL) {
 
 		//printMemo(rel->rel_name);
-		if (loop_count != NULL && isParam) {
+		/*if (loop_count != NULL && isParam) {
 
 			*loop_count = *loop_count < memo_rel->loops ? memo_rel->loops : *loop_count;
-		}
+		}*/
 
 		path->total_rows = memo_rel->rows;
 		path->removed_rows = memo_rel->removed_rows;
