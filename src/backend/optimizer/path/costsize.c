@@ -3234,7 +3234,7 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 	/*	printf("selectivity was  parameterized : %f \n", calc_joinrel_size_estimate(root, outer_rel->rows, inner_rel->rows, sjinfo, restrictlist));*/
 //	printf("outer : %lf, inner %lf, rows: %lf\n", outer_rel->rows, inner_rel->rows, nrows);
 
-	//printMemo(rel->rel_name);
+	printMemo(rel->rel_name);
 
 	printf("final  base join rows are : %f \n", rel->rows);
 
