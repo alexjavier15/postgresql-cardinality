@@ -1115,7 +1115,8 @@ void export_join(FILE *file) {
 				MemoRelation *memorelation = dlist_container(MemoRelation,list_node, iter.cur);
 				buildSimpleStringList(&str, memorelation->relationname);
 				nodeSimToString(memorelation->clauses, &clauses);
-
+				printf("0\t%d\t%d\t%s\t%.0f\t0\t1\t0\t%d\t%s\n", memorelation->isParameterized,
+										memorelation->level, str.data, memorelation->rows, clauses.len, clauses.data);
 				fprintf(file, "0\t%d\t%d\t%s\t%.0f\t0\t1\t0\t%d\t%s\n", memorelation->isParameterized,
 						memorelation->level, str.data, memorelation->rows, clauses.len, clauses.data);
 
