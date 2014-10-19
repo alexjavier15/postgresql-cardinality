@@ -255,8 +255,8 @@ static void explain_ExecutorEnd(QueryDesc *queryDesc) {
 					fprintf(file_d, "\n");
 				} else
 					export_join(file_joins);
-					free_memo_cache();
-					fprintf(file_d, "	");
+				free_memo_cache();
+				fprintf(file_d, "	");
 				fwrite(es.str->data, 1, strlen(es.str->data), file);
 				fclose(file);
 				fclose(file_d);
