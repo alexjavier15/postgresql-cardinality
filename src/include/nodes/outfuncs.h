@@ -21,7 +21,7 @@ typedef enum ArgType
 
 } ArgType;
 extern void _outSimOpExpr(StringInfo str, const OpExpr *node);
-
+extern char* _outuBitmapset(const Bitmapset *bms);
 extern void _outSimVar(StringInfo str, const Var *node);
 extern void _outSimConst(StringInfo str, const Const *node);
 extern void _outSimParam(StringInfo str, const Param *node);
