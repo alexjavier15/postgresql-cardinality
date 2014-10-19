@@ -278,16 +278,15 @@ void InitJoinCache(void) {
 	}
 }
 
-static void append_equalities_clauses(List *clauses){
+static void append_equalities_clauses(List *clauses) {
 	ListCell * lc;
 
-
-	foreach(lc, clauses){}
-
+	foreach(lc, clauses) {
+	}
 
 }
 static MemoClause * equival_clause(MemoClause *cl1, MemoClause *cl2) {
-	if (cl1 == NIL || cl2 == NIL || cl1->args == NIL || cl2->args ==NIL) {
+	if (cl1 == NIL || cl2 == NIL || cl1->args == NIL || cl2->args == NIL) {
 
 		return NULL;
 	}
@@ -1011,11 +1010,10 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 		memorelation = dlist_container(MemoRelation,list_node, iter.cur);
 		equal = equalSet(list_copy(memorelation->relationname), list_copy(relname));
 		if (equal && memorelation->level == level) {
-			if(isParam == 3){
-				result->found= FULL_MATCHED;
+			if (isParam == 3) {
+				result->found = FULL_MATCHED;
 				*relation = &(*memorelation);
 				return;
-
 
 			}
 
@@ -1115,8 +1113,6 @@ void export_join(FILE *file) {
 				MemoRelation *memorelation = dlist_container(MemoRelation,list_node, iter.cur);
 				buildSimpleStringList(&str, memorelation->relationname);
 				nodeSimToString(memorelation->clauses, &clauses);
-				printf("0\t%d\t%d\t%s\t%.0f\t0\t1\t0\t%d\t%s\n", memorelation->isParameterized,
-										memorelation->level, str.data, memorelation->rows, clauses.len, clauses.data);
 				fprintf(file, "0\t%d\t%d\t%s\t%.0f\t0\t1\t0\t%d\t%s\n", memorelation->isParameterized,
 						memorelation->level, str.data, memorelation->rows, clauses.len, clauses.data);
 
@@ -1126,8 +1122,6 @@ void export_join(FILE *file) {
 			}
 
 		}
-
-		fclose(file);
 
 	}
 
@@ -1338,19 +1332,19 @@ void set_join_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, JoinPath *path
 	/*if (enable_memo) {
 
 
-		set_path_sizes(root, rel, &pathnode->path, NULL, pathnode->path.param_info != NULL);
+	 set_path_sizes(root, rel, &pathnode->path, NULL, pathnode->path.param_info != NULL);
 
-	} else { */
-		if (pathnode->path.param_info) {
-			pathnode->path.rows = pathnode->path.param_info->ppi_rows;
+	 } else { */
+	if (pathnode->path.param_info) {
+		pathnode->path.rows = pathnode->path.param_info->ppi_rows;
 
-		}
+	}
 
-		else {
-			pathnode->path.rows = pathnode->path.parent->rows;
+	else {
+		pathnode->path.rows = pathnode->path.parent->rows;
 
-		}
-		pathnode->path.isParameterized = pathnode->path.param_info != NULL;
+	}
+	pathnode->path.isParameterized = pathnode->path.param_info != NULL;
 	//}
 	if (pathnode->path.rows == 0) {
 
@@ -1385,8 +1379,8 @@ void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop
 		//printMemo(rel->rel_name);
 		/*if (loop_count != NULL && isParam) {
 
-			*loop_count = *loop_count < memo_rel->loops ? memo_rel->loops : *loop_count;
-		}*/
+		 *loop_count = *loop_count < memo_rel->loops ? memo_rel->loops : *loop_count;
+		 }*/
 
 		path->total_rows = memo_rel->rows;
 		path->removed_rows = memo_rel->removed_rows;

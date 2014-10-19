@@ -253,9 +253,12 @@ static void explain_ExecutorEnd(QueryDesc *queryDesc) {
 
 				if (enable_memo) {
 					fprintf(file_d, "\n");
-				} else
+				} else {
 					export_join(file_joins);
-				free_memo_cache();
+					fflush(file);
+				}
+				if (enable_memo)
+					free_memo_cache();
 				fprintf(file_d, "	");
 				fwrite(es.str->data, 1, strlen(es.str->data), file);
 				fclose(file);
