@@ -207,6 +207,18 @@ static void _outBitmapset(StringInfo str, const Bitmapset *bms) {
 	bms_free(tmpset);
 	appendStringInfoChar(str, ')');
 }
+extern char* _outuBitmapset(const Bitmapset *bms){
+
+	StringInfoData str;
+
+		/* see stringinfo.h for an explanation of this maneuver */
+		initStringInfo(&str);
+		_outBitmapset(&str, bms);
+		return str.data;
+
+
+}
+
 
 /*
  * Print the value of a Datum given its type.
