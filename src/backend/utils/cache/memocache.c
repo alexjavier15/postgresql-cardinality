@@ -548,7 +548,7 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 	switch (result->found) {
 
 		case FULL_MATCHED:
-			//printf(" FULL Matched  relation! :\n");
+			printf(" FULL Matched  relation! :\n");
 
 			result->rows = mrows;
 			final_clauses = NIL;
@@ -1011,6 +1011,7 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 		equal = equalSet(list_copy(memorelation->relationname), list_copy(relname));
 		if (equal && memorelation->level == level) {
 			if (isParam == 3) {
+				printf("FULL MATCHED IN CONTAINS 3");
 				result->found = FULL_MATCHED;
 				*relation = &(*memorelation);
 				return;
