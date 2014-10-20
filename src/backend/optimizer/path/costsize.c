@@ -792,12 +792,6 @@ void cost_tidscan(Path *path, PlannerInfo *root, RelOptInfo *baserel, List *tidq
 	Assert(baserel->relid > 0);
 	Assert(baserel->rtekind == RTE_RELATION);
 
-	/* Mark the path with the correct row estimate */
-	if (param_info)
-		path->rows = param_info->ppi_rows;
-	else
-		path->rows = baserel->rows;
-
 	/* Count how many tuples we expect to retrieve */
 	ntuples = 0;
 	foreach(l, tidquals) {
@@ -872,12 +866,6 @@ void cost_subqueryscan(Path *path, PlannerInfo *root, RelOptInfo *baserel, Param
 	Assert(baserel->relid > 0);
 	Assert(baserel->rtekind == RTE_SUBQUERY);
 
-	/* Mark the path with the correct row estimate */
-	if (param_info)
-		path->rows = param_info->ppi_rows;
-	else
-		path->rows = baserel->rows;
-
 	/*
 	 * Cost of path is cost of evaluating the subplan, plus cost of evaluating
 	 * any restriction clauses that will be attached to the SubqueryScan node,
@@ -915,12 +903,6 @@ void cost_functionscan(Path *path, PlannerInfo *root, RelOptInfo *baserel, Param
 	Assert(baserel->relid > 0);
 	rte = planner_rt_fetch(baserel->relid, root);
 	Assert(rte->rtekind == RTE_FUNCTION);
-
-	/* Mark the path with the correct row estimate */
-	if (param_info)
-		path->rows = param_info->ppi_rows;
-	else
-		path->rows = baserel->rows;
 
 	/*
 	 * Estimate costs of executing the function expression(s).
@@ -967,12 +949,6 @@ void cost_valuesscan(Path *path, PlannerInfo *root, RelOptInfo *baserel, ParamPa
 	Assert(baserel->relid > 0);
 	Assert(baserel->rtekind == RTE_VALUES);
 
-	/* Mark the path with the correct row estimate */
-	if (param_info)
-		path->rows = param_info->ppi_rows;
-	else
-		path->rows = baserel->rows;
-
 	/*
 	 * For now, estimate list evaluation cost at one operator eval per list
 	 * (probably pretty bogus, but is it worth being smarter?)
@@ -1009,12 +985,6 @@ void cost_ctescan(Path *path, PlannerInfo *root, RelOptInfo *baserel, ParamPathI
 	/* Should only be applied to base relations that are CTEs */
 	Assert(baserel->relid > 0);
 	Assert(baserel->rtekind == RTE_CTE);
-
-	/* Mark the path with the correct row estimate */
-	if (param_info)
-		path->rows = param_info->ppi_rows;
-	else
-		path->rows = baserel->rows;
 
 	/* Charge one CPU tuple cost per row for tuplestore manipulation */
 	cpu_per_tuple = cpu_tuple_cost;
@@ -3208,13 +3178,12 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 	double nrows = -1;
 	MemoInfoData1 result;
 	List * final_clauses = list_copy(rel->restrictList);
-
 	if (enable_memo) {
 
 		/*printf("checking join relation  ");
 		 printMemo(rel->restrictList);*/
 
-		get_relation_size(&result, root, rel, list_copy(final_clauses), 3, sjinfo);
+		get_relation_size(&result, root, rel, list_copy(final_clauses), false, sjinfo);
 		nrows = result.rows;
 	}
 	if (!enable_memo || nrows == -1) {
@@ -3238,7 +3207,7 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 
 	printf("final  base join rows are : %f \n", rel->rows);
 
-	if (!enable_memo){
+	if (!enable_memo) {
 		store_join(rel->rel_name, root->query_level, list_copy(rel->restrictList), rel->rows, false);
 		//store_join(rel->rel_name, root->query_level, list_copy(restrictlist), rel->rows, false);
 
@@ -3292,7 +3261,8 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 
 		if (enable_memo) {
 			MemoRelation *newRelation = NULL;
-			newRelation = create_memo_realation(root->query_level, 3, rel->rel_name, clamp_row_est(nrows), 1, final_clauses);
+			newRelation = create_memo_realation(root->query_level, 3, rel->rel_name, clamp_row_est(nrows), 1,
+					final_clauses);
 			add_relation(newRelation, list_length(rel->rel_name));
 		}
 	} else {
@@ -3303,7 +3273,7 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 
 	/* For safety, make sure result is not more than the base estimate */
 
-	if (!enable_memo){
+	if (!enable_memo) {
 		store_join(rel->rel_name, root->query_level, list_copy(rel->restrictList), nrows, true);
 		//store_join(rel->rel_name, root->query_level, list_copy(restrict_clauses), rel->rows, false);
 
@@ -3478,6 +3448,7 @@ void set_subquery_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 		}
 		rel->attr_widths[te->resno - rel->min_attr] = item_width;
 	}
+	rel->restrictList = list_copy(rel->baserestrictinfo);
 
 	/* Now estimate number of output rows, etc */
 	set_baserel_size_estimates(root, rel);
@@ -3513,6 +3484,7 @@ void set_function_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 		if (ntup > rel->tuples)
 			rel->tuples = ntup;
 	}
+	rel->restrictList = list_copy(rel->baserestrictinfo);
 
 	/* Now estimate number of output rows, etc */
 	set_baserel_size_estimates(root, rel);
@@ -3542,6 +3514,7 @@ void set_values_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 	 * anywhere else either).
 	 */
 	rel->tuples = list_length(rte->values_lists);
+	rel->restrictList = list_copy(rel->baserestrictinfo);
 
 	/* Now estimate number of output rows, etc */
 	set_baserel_size_estimates(root, rel);
@@ -3575,6 +3548,7 @@ void set_cte_size_estimates(PlannerInfo *root, RelOptInfo *rel, Plan *cteplan) {
 		/* Otherwise just believe the CTE plan's output estimate */
 		rel->tuples = cteplan->plan_rows;
 	}
+	rel->restrictList = list_copy(rel->baserestrictinfo);
 
 	/* Now estimate number of output rows, etc */
 	set_baserel_size_estimates(root, rel);
@@ -3799,7 +3773,7 @@ void build_selec_string(const void * str, List *clauses, int * lenght) {
 
 	if (*lenght != 0) {
 
-		nodeSimToString(clauses, str);
+		nodeSimToString(get_cur_rte_reference(),clauses, str);
 
 	}
 

@@ -612,7 +612,6 @@ create_seqscan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer) {
 	pathnode->parent = rel;
 	pathnode->param_info = get_baserel_parampathinfo(root, rel, required_outer);
 	pathnode->pathkeys = NIL; /* seqscan has unordered result */
-	pathnode->restrictList = list_copy(rel->restrictList);
 	set_plain_rel_sizes_from_memo(root, rel, pathnode, NULL, false);
 
 	cost_seqscan(pathnode, root, rel, pathnode->param_info);
@@ -723,10 +722,8 @@ create_bitmap_and_path(PlannerInfo *root, RelOptInfo *rel, List *bitmapquals) {
 	pathnode->path.pathkeys = NIL; /* always unordered */
 
 	pathnode->bitmapquals = bitmapquals;
-	pathnode->path.restrictList = list_copy(bitmapquals);
-	if (pathnode->path.param_info)
-		pathnode->path.restrictList = list_concat(pathnode->path.restrictList,
-				list_copy(pathnode->path.param_info->ppi_clauses));
+	set_plain_rel_sizes_from_memo(root, rel, &pathnode->path, NULL, false);
+
 
 	/* this sets bitmapselectivity as well as the regular cost fields: */
 	cost_bitmap_and_node(pathnode, root);
@@ -748,10 +745,8 @@ create_bitmap_or_path(PlannerInfo *root, RelOptInfo *rel, List *bitmapquals) {
 	pathnode->path.pathkeys = NIL; /* always unordered */
 
 	pathnode->bitmapquals = bitmapquals;
-	pathnode->path.restrictList = list_copy(bitmapquals);
-	if (pathnode->path.param_info)
-		pathnode->path.restrictList = list_concat(pathnode->path.restrictList,
-				list_copy(pathnode->path.param_info->ppi_clauses));
+	set_plain_rel_sizes_from_memo(root, rel, &pathnode->path, NULL, false);
+
 
 	/* this sets bitmapselectivity as well as the regular cost fields: */
 	cost_bitmap_or_node(pathnode, root);
@@ -773,10 +768,8 @@ create_tidscan_path(PlannerInfo *root, RelOptInfo *rel, List *tidquals, Relids r
 	pathnode->path.pathkeys = NIL; /* always unordered */
 
 	pathnode->tidquals = tidquals;
-	pathnode->path.restrictList = list_copy(rel->restrictList);
-	if (pathnode->path.param_info)
-		pathnode->path.restrictList = list_concat(pathnode->path.restrictList,
-				list_copy(pathnode->path.param_info->ppi_clauses));
+	set_plain_rel_sizes_from_memo(root, rel, pathnode, NULL, false);
+
 
 	cost_tidscan(&pathnode->path, root, rel, tidquals, pathnode->path.param_info);
 
@@ -801,6 +794,7 @@ create_append_path(RelOptInfo *rel, List *subpaths, Relids required_outer) {
 	pathnode->path.pathkeys = NIL; /* result is always considered
 	 * unsorted */
 	pathnode->subpaths = subpaths;
+	pathnode->path.restrictList = NIL;
 
 	/*
 	 * We don't bother with inventing a cost_append(), but just do it here.
@@ -813,10 +807,7 @@ create_append_path(RelOptInfo *rel, List *subpaths, Relids required_outer) {
 	pathnode->path.rows = 0;
 	pathnode->path.startup_cost = 0;
 	pathnode->path.total_cost = 0;
-	pathnode->path.restrictList = list_copy(rel->restrictList);
-	if (pathnode->path.param_info)
-		pathnode->path.restrictList = list_concat(pathnode->path.restrictList,
-				list_copy(pathnode->path.param_info->ppi_clauses));
+
 	foreach(l, subpaths) {
 		Path *subpath = (Path *) lfirst(l);
 
@@ -850,6 +841,7 @@ create_merge_append_path(PlannerInfo *root, RelOptInfo *rel, List *subpaths, Lis
 	pathnode->path.param_info = get_appendrel_parampathinfo(rel, required_outer);
 	pathnode->path.pathkeys = pathkeys;
 	pathnode->subpaths = subpaths;
+	pathnode->path.restrictList = NIL;
 
 	/*
 	 * Apply query-wide LIMIT if known and path is for sole base relation.
@@ -915,6 +907,8 @@ create_result_path(List *quals) {
 	pathnode->path.rows = 1;
 	pathnode->path.startup_cost = 0;
 	pathnode->path.total_cost = cpu_tuple_cost;
+	pathnode->path.restrictList = NIL;
+
 
 	/*
 	 * In theory we should include the qual eval cost as well, but at present
@@ -941,7 +935,7 @@ create_material_path(RelOptInfo *rel, Path *subpath) {
 	pathnode->path.parent = rel;
 	pathnode->path.param_info = subpath->param_info;
 	pathnode->path.pathkeys = subpath->pathkeys;
-	pathnode->path.restrictList = list_copy(subpath->restrictList);
+	pathnode->path.restrictList = NIL;
 
 	pathnode->subpath = subpath;
 
@@ -1431,6 +1425,7 @@ create_subqueryscan_path(PlannerInfo *root, RelOptInfo *rel, List *pathkeys, Rel
 	pathnode->parent = rel;
 	pathnode->param_info = get_baserel_parampathinfo(root, rel, required_outer);
 	pathnode->pathkeys = pathkeys;
+	set_plain_rel_sizes_from_memo(root, rel, pathnode, NULL, false);
 
 	cost_subqueryscan(pathnode, root, rel, pathnode->param_info);
 
@@ -1450,6 +1445,7 @@ create_functionscan_path(PlannerInfo *root, RelOptInfo *rel, List *pathkeys, Rel
 	pathnode->parent = rel;
 	pathnode->param_info = get_baserel_parampathinfo(root, rel, required_outer);
 	pathnode->pathkeys = pathkeys;
+	set_plain_rel_sizes_from_memo(root, rel, pathnode, NULL, false);
 
 	cost_functionscan(pathnode, root, rel, pathnode->param_info);
 
@@ -1469,6 +1465,7 @@ create_valuesscan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer
 	pathnode->parent = rel;
 	pathnode->param_info = get_baserel_parampathinfo(root, rel, required_outer);
 	pathnode->pathkeys = NIL; /* result is always unordered */
+	set_plain_rel_sizes_from_memo(root, rel, pathnode, NULL, false);
 
 	cost_valuesscan(pathnode, root, rel, pathnode->param_info);
 
@@ -1488,6 +1485,7 @@ create_ctescan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer) {
 	pathnode->parent = rel;
 	pathnode->param_info = get_baserel_parampathinfo(root, rel, required_outer);
 	pathnode->pathkeys = NIL; /* XXX for now, result is always unordered */
+	set_plain_rel_sizes_from_memo(root, rel, pathnode, NULL, false);
 
 	cost_ctescan(pathnode, root, rel, pathnode->param_info);
 

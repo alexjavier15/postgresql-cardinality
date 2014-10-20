@@ -331,17 +331,7 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 		if (restrictlist_ptr) {
 			*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
 
-			restrictlist = list_copy(inner_rel->restrictList);
-			restrictlist = list_concat(restrictlist, list_copy(outer_rel->restrictList));
-			restrictlist = list_concat(restrictlist,
-					generate_join_implied_equalities(root, joinrel->relids, outer_rel->relids, inner_rel));
 
-			if (!enable_memo && !equalSet(joinrel->restrictList, restrictlist)) {
-
-				//store_join(joinrel->rel_name, root->query_level, restrictlist, joinrel->rows, false);
-				//store_join(joinrel->rel_name, root->query_level, list_copy(*restrictlist_ptr), joinrel->rows, false);
-
-			}
 		}
 
 		return joinrel;
@@ -752,7 +742,7 @@ get_baserel_parampathinfo(PlannerInfo *root, RelOptInfo *baserel, Relids require
 	pclauses = NIL;
 	foreach(lc, baserel->joininfo) {
 		RestrictInfo *rinfo = (RestrictInfo *) lfirst(lc);
-		;
+
 		if (join_clause_is_movable_into(rinfo, baserel->relids, joinrelids))
 			pclauses = lappend(pclauses, rinfo);
 	}
@@ -773,6 +763,7 @@ get_baserel_parampathinfo(PlannerInfo *root, RelOptInfo *baserel, Relids require
 	//don't forget to clean paramoops after affectation
 	if (baserel->paramloops)
 		ppi->paramloops = baserel->paramloops;
+	ppi->restrictList =list_concat(list_copy(pclauses), baserel->baserestrictinfo);
 	ppi->ppi_clauses = pclauses;
 	baserel->ppilist = lappend(baserel->ppilist, ppi);
 	baserel->paramloops = 0;
@@ -893,7 +884,7 @@ get_joinrel_parampathinfo(PlannerInfo *root, RelOptInfo *joinrel, Path *outer_pa
 	if(joinrel->paramloops)
 		ppi->paramloops=joinrel->paramloops;
 	ppi->ppi_clauses = NIL;
-	ppi->restrictList = *restrict_clauses;
+	ppi->restrictList = list_concat_unique(list_copy(*restrict_clauses), joinrel->restrictList);
 	joinrel->ppilist = lappend(joinrel->ppilist, ppi);
 	joinrel->paramloops= 0;
 	return ppi;

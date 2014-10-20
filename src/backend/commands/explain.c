@@ -51,7 +51,7 @@ bool enable_explain_memo = false;
 static void ExplainOneQuery(Query *query, IntoClause *into, ExplainState *es, const char *queryString,
 		ParamListInfo params);
 static void report_triggers(ResultRelInfo *rInfo, bool show_relname, ExplainState *es);
-static void show_scan_parsed_qual(List *qual, const char *qlabel, ExplainState *es);
+static void show_scan_parsed_qual(void *rte_ref, List *qual, const char *qlabel, ExplainState *es);
 static double elapsed_time(instr_time *starttime);
 static void ExplainPreScanNode(PlanState *planstate, Bitmapset **rels_used);
 static void ExplainPreScanMemberNodes(List *plans, PlanState **planstates, Bitmapset **rels_used);
@@ -1110,14 +1110,14 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (enable_explain_memo) {
 			if (plan->scanclauses) {
 
-				show_scan_parsed_qual(plan->scanclauses, "Restrict List", es);
+				show_scan_parsed_qual(plan->rte_reference,plan->scanclauses, "Restrict List", es);
 
 			}
 			if (((IndexScan *) plan)->indexqualorig) {
-				show_scan_parsed_qual(((IndexScan *) plan)->indexqualorig, "PIndex Cond", es);
+				show_scan_parsed_qual(plan->rte_reference,((IndexScan *) plan)->indexqualorig, "PIndex Cond", es);
 			}
 			if (plan->qual) {
-				show_scan_parsed_qual(plan->qual, "PFilter", es);
+				show_scan_parsed_qual(plan->rte_reference,plan->qual, "PFilter", es);
 
 			}
 
@@ -1138,14 +1138,14 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (enable_explain_memo) {
 			if (plan->scanclauses) {
 
-				show_scan_parsed_qual(plan->scanclauses, "Restrict List", es);
+				show_scan_parsed_qual(plan->rte_reference,plan->scanclauses, "Restrict List", es);
 
 			}
 			if (((IndexOnlyScan *) plan)->indexqual) {
-				show_scan_parsed_qual(((IndexOnlyScan *) plan)->indexqual, "PIndex Cond", es);
+				show_scan_parsed_qual(plan->rte_reference,((IndexOnlyScan *) plan)->indexqual, "PIndex Cond", es);
 			}
 			if (plan->qual) {
-				show_scan_parsed_qual(plan->qual, "PFilter", es);
+				show_scan_parsed_qual(plan->rte_reference,plan->qual, "PFilter", es);
 
 			}
 		}
@@ -1160,7 +1160,7 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (enable_explain_memo) {
 
 			if (plan->scanclauses)
-				show_scan_parsed_qual(plan->scanclauses, "Restrict List", es);
+				show_scan_parsed_qual(plan->rte_reference,plan->scanclauses, "Restrict List", es);
 		}
 
 		break;
@@ -1170,9 +1170,9 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 			show_instrumentation_count("Rows Removed by Index Recheck", 2, planstate, es);
 			if (enable_explain_memo) {
 				if (plan->scanclauses)
-					show_scan_parsed_qual(plan->scanclauses, "Restrict List", es);
+					show_scan_parsed_qual(plan->rte_reference,plan->scanclauses, "Restrict List", es);
 				if (plan->qual) {
-					show_scan_parsed_qual(plan->qual, "PFilter", es);
+					show_scan_parsed_qual(plan->rte_reference,plan->qual, "PFilter", es);
 
 				}
 			}
@@ -1195,7 +1195,7 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (plan->qual) {
 			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
 			if (enable_explain_memo) {
-				show_scan_parsed_qual(plan->scanclauses, "Restrict List", es);
+				show_scan_parsed_qual(plan->rte_reference,plan->scanclauses, "Restrict List", es);
 
 			}
 
@@ -1221,7 +1221,7 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (plan->qual) {
 			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
 			if (enable_explain_memo) {
-				show_scan_parsed_qual(plan->qual, "Restrict List", es);
+				show_scan_parsed_qual(plan->rte_reference,plan->qual, "Restrict List", es);
 			}
 		}
 		break;
@@ -1239,7 +1239,7 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (plan->qual) {
 			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
 			if (enable_explain_memo) {
-				show_scan_parsed_qual(plan->qual, "Restrict List", es);
+				show_scan_parsed_qual(plan->rte_reference,plan->qual, "Restrict List", es);
 				//show_scan_parsed_qual(plan->qual, "TID Cond", es);
 			}
 		}
@@ -1260,9 +1260,9 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (plan->qual)
 			show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
 		if (enable_explain_memo) {
-			show_scan_parsed_qual(((NestLoop *) plan)->join.restrictList, "Join Clauses", es);
+			show_scan_parsed_qual(plan->rte_reference,((NestLoop *) plan)->join.restrictList, "Join Clauses", es);
 			if (plan->qual) {
-				show_scan_parsed_qual(plan->qual, "PFilter", es);
+				show_scan_parsed_qual(plan->rte_reference,plan->qual, "PFilter", es);
 
 			}
 
@@ -1277,9 +1277,9 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (plan->qual)
 			show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
 		if (enable_explain_memo) {
-			show_scan_parsed_qual(((MergeJoin *) plan)->join.restrictList, "Join Clauses", es);
+			show_scan_parsed_qual(plan->rte_reference,((MergeJoin *) plan)->join.restrictList, "Join Clauses", es);
 			if (plan->qual) {
-				show_scan_parsed_qual(plan->qual, "PFilter", es);
+				show_scan_parsed_qual(plan->rte_reference,plan->qual, "PFilter", es);
 
 			}
 
@@ -1294,9 +1294,9 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		if (plan->qual)
 			show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
 		if (enable_explain_memo) {
-			show_scan_parsed_qual(((HashJoin *) plan)->join.restrictList, "Join Clauses", es);
+			show_scan_parsed_qual(plan->rte_reference,((HashJoin *) plan)->join.restrictList, "Join Clauses", es);
 			if (plan->qual) {
-				show_scan_parsed_qual(plan->qual, "PFilter", es);
+				show_scan_parsed_qual(plan->rte_reference,plan->qual, "PFilter", es);
 
 			}
 		}
@@ -2420,11 +2420,11 @@ static void ExplainYAMLLineStarting(ExplainState *es) {
 static void escape_yaml(StringInfo buf, const char *str) {
 	escape_json(buf, str);
 }
-static void show_scan_parsed_qual(List *quals, const char *qlabel, ExplainState *es) {
+static void show_scan_parsed_qual(void *rte_ref,List *quals, const char *qlabel, ExplainState *es) {
 	StringInfoData str;
 	initStringInfo(&str);
 
-	nodeSimToString(quals, &str);
+	explicitNode(rte_ref,quals, &str);
 
 	ExplainPropertyText(qlabel, str.data, es);
 

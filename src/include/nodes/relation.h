@@ -256,6 +256,7 @@ typedef struct PlannerInfo
 
 	/* optional private data for join_search_hook, e.g., GEQO */
 	void	   *join_search_private;
+	void       *cur_rte_reference;
 } PlannerInfo;
 
 
@@ -822,6 +823,8 @@ typedef struct Path
 	double 		removed_rows;
 	List       *nodename;
 	bool	    isParameterized;
+
+
 } Path;
 
 /* Macro for extracting a path's parameterization relids; beware double eval */
