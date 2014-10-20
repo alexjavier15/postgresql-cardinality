@@ -1013,7 +1013,7 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 		if (equal && memorelation->level == level) {
 			if (isParam == 3) {
 				printf("FULL MATCHED IN CONTAINS 3");
-				printf("length -> memo: %d, rel : %d \n",list_length(memorelation->relationname),list_copy(relname) );
+				printf("length -> memo: %d, rel : %d \n",list_length(memorelation->relationname),list_length(relname) );
 				print_relation(memorelation);
 				result->found = FULL_MATCHED;
 				*relation = &(*memorelation);
