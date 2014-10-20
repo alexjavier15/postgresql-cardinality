@@ -2021,9 +2021,11 @@ static bool equalMemoClause(const MemoClause *a, const MemoClause *b) {
 	List *b1 = list_copy(b->args);
 	COMPARE_SCALAR_FIELD(opno);
 	if (list_length(a1) != list_length(b1)) {
-/*		printMemo(a);
-		printMemo(b);*/
+/*
+		printMemo(a);
+		printMemo(b);
 		printf("different args length %d and %d \n", list_length(a1), list_length(b1));
+*/
 		return false;
 	}
 	foreach(lc, a1) {

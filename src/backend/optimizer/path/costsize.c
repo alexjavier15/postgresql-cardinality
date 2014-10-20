@@ -3190,13 +3190,13 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 
 		nrows = calc_joinrel_size_estimate(root, outer_rel->rows, inner_rel->rows, sjinfo, restrictlist);
 		nrows = clamp_row_est(nrows);
-		if (enable_memo) {
+		/*if (enable_memo) {
 			MemoRelation *newRelation = NULL;
 
 			newRelation = create_memo_realation(root->query_level, true, rel->rel_name, nrows, 1, final_clauses);
 
 			add_relation(newRelation, list_length(rel->rel_name));
-		}
+		}*/
 
 	}
 	rel->rows = nrows;
@@ -3259,12 +3259,12 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 		if (nrows > rel->rows)
 			nrows = rel->rows;
 
-		if (enable_memo) {
+		/*if (enable_memo) {
 			MemoRelation *newRelation = NULL;
 			newRelation = create_memo_realation(root->query_level, 3, rel->rel_name, clamp_row_est(nrows), 1,
 					final_clauses);
 			add_relation(newRelation, list_length(rel->rel_name));
-		}
+		}*/
 	} else {
 		rel->memo_checked = true;
 
