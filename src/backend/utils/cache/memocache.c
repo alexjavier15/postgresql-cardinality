@@ -15,7 +15,7 @@
 #include "nodes/readfuncs.h"
 #include "optimizer/cost.h"
 #include "nodes/relation.h"
-
+#include <time.h>
 #include <openssl/md5.h>
 
 #define IsIndex(relation)	((relation)->nodeType == T_IndexOnlyScan  \
@@ -102,7 +102,6 @@ static void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* ca
 static int equals(MemoRelation *rel1, MemoRelation *rel2);
 MemoClause * parse_clause(char * clause);
 static char * parse_args(StringInfo buff, char * arg);
-static void set_path_sizes(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop_count, bool isParam);
 
 static void print_relation(MemoRelation *memorelation) {
 	char *str1 = nodeSimToString_((memorelation)->relationname);
@@ -214,11 +213,8 @@ void push_reference(Index index, Value * name) {
 }
 //int md5(FILE *inFile);
 void InitCachesForMemo(void) {
-	time_t rawtime;
-	struct tm * timeinfo;
-	time(&rawtime);
-	timeinfo = localtime(&rawtime);
-	printf("Start local time and date: %s", asctime(timeinfo));
+	clock_t t;
+	t = clock();
 
 	rte_ref_ptr->rte_table = (Value **) palloc0((DEFAULT_MAX_JOIN_SIZE) * sizeof(Value *));
 	rte_ref_ptr->size = DEFAULT_MAX_JOIN_SIZE;
@@ -235,8 +231,8 @@ void InitCachesForMemo(void) {
 	printf("calling init cache");
 	if (join_cache_ptr->type != M_JoinCache)
 		InitJoinCache();
-	timeinfo = localtime(&rawtime);
-	printf("End local time and date: %s", asctime(timeinfo));
+
+	printf("elapsed time:  %lf ms \n", (1000 * ((float)t)/CLOCKS_PER_SEC));
 }
 static void InitSelectivityCache(void) {
 	char *cquals = NULL;
