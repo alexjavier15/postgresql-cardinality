@@ -3224,7 +3224,7 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 		if (enable_memo) {
 			MemoRelation *newRelation = NULL;
 
-			newRelation = create_memo_realation(root->query_level, true, rel->rel_name, nrows, false, final_clauses);
+			newRelation = create_memo_realation(root->query_level, true, rel->rel_name, nrows, 1, final_clauses);
 
 			add_relation(newRelation, list_length(rel->rel_name));
 		}
@@ -3292,7 +3292,7 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 
 		if (enable_memo) {
 			MemoRelation *newRelation = NULL;
-			newRelation = create_memo_realation(root->query_level, 3, rel->rel_name, clamp_row_est(nrows), true, final_clauses);
+			newRelation = create_memo_realation(root->query_level, 3, rel->rel_name, clamp_row_est(nrows), 1, final_clauses);
 			add_relation(newRelation, list_length(rel->rel_name));
 		}
 	} else {
