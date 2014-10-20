@@ -214,6 +214,12 @@ void push_reference(Index index, Value * name) {
 }
 //int md5(FILE *inFile);
 void InitCachesForMemo(void) {
+	time_t rawtime;
+	struct tm * timeinfo;
+	time(&rawtime);
+	timeinfo = localtime(&rawtime);
+	printf("Start local time and date: %s", asctime(timeinfo));
+
 	rte_ref_ptr->rte_table = (Value **) palloc0((DEFAULT_MAX_JOIN_SIZE) * sizeof(Value *));
 	rte_ref_ptr->size = DEFAULT_MAX_JOIN_SIZE;
 	joincache = AllocateFile("joins.txt", "rb");
@@ -229,6 +235,8 @@ void InitCachesForMemo(void) {
 	printf("calling init cache");
 	if (join_cache_ptr->type != M_JoinCache)
 		InitJoinCache();
+	timeinfo = localtime(&rawtime);
+	printf("End local time and date: %s", asctime(timeinfo));
 }
 static void InitSelectivityCache(void) {
 	char *cquals = NULL;
@@ -265,6 +273,7 @@ void InitMemoCache(void) {
 
 	MemoQuery *memo;
 	int i = 0;
+
 	memo = (MemoQuery *) palloc0(sizeof(MemoQuery));
 	memo->type = M_MemoQuery;
 	memo->length = DEFAULT_MAX_JOIN_SIZE;
@@ -297,9 +306,9 @@ void InitJoinCache(void) {
 	if (joincache != NULL && enable_memo_propagation)
 		readAndFillFromFile(joincache, join_cache_ptr);
 
-	 printContentRelations((CacheM *) join_cache_ptr);
+	printContentRelations((CacheM *) join_cache_ptr);
 
-	 printf("Join cache ending\n-----------------------\n");
+	printf("Join cache ending\n-----------------------\n");
 
 	//printf("New join cache state:\n-----------------------\n");
 	//printContentRelations((CacheM *) join_cache_ptr);
@@ -803,7 +812,6 @@ void cmp_lists(MemoInfoData1 * result, List *lleft, List *lright) {
 	result->unmatches = NIL;
 	result->matches = NIL;
 
-
 	foreach(item_b, b) {
 		if (!list_member_remove(a, lfirst(item_b))) {
 
@@ -998,7 +1006,8 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 						//In the second pass we have  to match a full join  then
 						//the number of base realtion matches are equal to joinlen
 						//print_relation(memorelation);
-						if (list_length(resultName_ptr->matches) == joinlen && equalSet(list_copy(memorelation->clauses), b)) {
+						if (list_length(resultName_ptr->matches) == joinlen
+								&& equalSet(list_copy(memorelation->clauses), b)) {
 							pfree(b);
 							*relation2 = memorelation;
 
@@ -1101,7 +1110,7 @@ void store_join(List *lrelName, int level, List *clauses, double rows, bool isPa
 	StringInfoData str;
 	initStringInfo(&str);
 
-	explicitNode(rte_ref_ptr,clauses, &str);
+	explicitNode(rte_ref_ptr, clauses, &str);
 
 	relation = newMemoRelation();
 	if (list_length(lrelName) > 0) {
@@ -1139,7 +1148,8 @@ void export_join(FILE *file) {
 				buildSimpleStringList(&str, memorelation->relationname);
 
 				fprintf(file, "0\t%d\t%d\t%s\t%.0f\t0\t1\t0\t%d\t%s\n", memorelation->isParameterized,
-						memorelation->level, str.data, memorelation->rows, (int) strlen(memorelation->str_clauses), memorelation->str_clauses);
+						memorelation->level, str.data, memorelation->rows, (int) strlen(memorelation->str_clauses),
+						memorelation->str_clauses);
 
 				resetStringInfo(&str);
 
@@ -1334,7 +1344,6 @@ void set_join_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, JoinPath *path
 	pathnode->path.isParameterized = pathnode->path.param_info != NULL;
 
 }
-
 
 void set_agg_sizes_from_memo(PlannerInfo *root, Path *path) {
 	MemoRelation * memo_rel = NULL;

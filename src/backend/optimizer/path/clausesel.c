@@ -659,13 +659,11 @@ clause_selectivity(PlannerInfo *root,
 		if (treat_as_join_clause(clause, rinfo, varRelid, sjinfo))
 		{
 			/* Estimate selectivity for a join clause. */
-			printf("operator %u \n",opno );
 			s1 = join_selectivity(root, opno,
 								  opclause->args,
 								  opclause->inputcollid,
 								  jointype,
 								  sjinfo);
-			printf("selectivity %lf \n",s1 );
 
 		}
 		else
