@@ -2779,6 +2779,7 @@ typedef struct MemoRelation {
 	double rows;
 	int clauseslength;
 	List * clauses;
+	char *str_clauses;
 	double tuples;
 	double removed_rows;
 	int loops;

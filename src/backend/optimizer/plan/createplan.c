@@ -147,6 +147,7 @@ create_plan(PlannerInfo *root, Path *best_path) {
 	root->curOuterRels = NULL;
 	root->curOuterParams = NIL;
 
+	root->cur_rte_reference=fetch_unique_rte_reference();
 	mode_cost_check = enable_cost_check;
 
 	//printMemoCache();
@@ -156,6 +157,8 @@ create_plan(PlannerInfo *root, Path *best_path) {
 
 	/* Recursively process the path tree */
 	plan = create_plan_recurse(root, best_path);
+
+
 	mode_cost_check = false; // reset cost var
 	/* Check we successfully assigned all NestLoopParams to plan nodes */
 	if (root->curOuterParams != NIL)
@@ -220,6 +223,7 @@ create_plan_recurse(PlannerInfo *root, Path *best_path) {
 	}
 
 	plan->level = root->query_level;
+	plan->rte_reference=root->cur_rte_reference;
 	return plan;
 }
 
@@ -1466,7 +1470,7 @@ create_bitmap_subplan(PlannerInfo *root, Path *bitmapqual, List **qual, List **i
 		plan = NULL; /* keep compiler quiet */
 	}
 	plan->scanclauses = list_copy(bitmapqual->restrictList);
-
+	plan->rte_reference= root->cur_rte_reference;
 	return plan;
 }
 

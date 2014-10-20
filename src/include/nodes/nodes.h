@@ -506,8 +506,8 @@ extern PGDLLIMPORT Node *newNodeMacroHolder;
  * nodes/{outfuncs.c,print.c}
  */
 extern char *nodeToString(const void *obj);
-
-extern void nodeSimToString(const void *obj, const void  *str);
+extern void explicitNode(void *rte_ref, const void *obj, const void *str);
+extern void nodeSimToString(void *rte_ref,const void *obj, const void  *str);
 extern char *nodeSimToString_(const void *obj);
 
 /*

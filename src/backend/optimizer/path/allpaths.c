@@ -113,7 +113,6 @@ make_one_rel(PlannerInfo *root, List *joinlist) {
 
 	set_base_rel_sizes(root);
 
-
 	set_base_rel_pathlists(root);
 
 	/*
@@ -207,45 +206,45 @@ static void set_rel_size(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTbl
 		set_append_rel_size(root, rel, rti, rte);
 	} else {
 		switch (rel->rtekind) {
-		case RTE_RELATION:
-			if (rte->relkind == RELKIND_FOREIGN_TABLE) {
-				/* Foreign table */
-				set_foreign_size(root, rel, rte);
-			} else {
-				/* Plain relation */
-				set_plain_rel_size(root, rel, rte);
-			}
-			break;
-		case RTE_SUBQUERY:
+			case RTE_RELATION:
+				if (rte->relkind == RELKIND_FOREIGN_TABLE) {
+					/* Foreign table */
+					set_foreign_size(root, rel, rte);
+				} else {
+					/* Plain relation */
+					set_plain_rel_size(root, rel, rte);
+				}
+				break;
+			case RTE_SUBQUERY:
 
-			/*
-			 * Subqueries don't support making a choice between
-			 * parameterized and unparameterized paths, so just go ahead
-			 * and build their paths immediately.
-			 */
-			set_subquery_pathlist(root, rel, rti, rte);
-			break;
-		case RTE_FUNCTION:
-			set_function_size_estimates(root, rel);
-			break;
-		case RTE_VALUES:
-			set_values_size_estimates(root, rel);
-			break;
-		case RTE_CTE:
+				/*
+				 * Subqueries don't support making a choice between
+				 * parameterized and unparameterized paths, so just go ahead
+				 * and build their paths immediately.
+				 */
+				set_subquery_pathlist(root, rel, rti, rte);
+				break;
+			case RTE_FUNCTION:
+				set_function_size_estimates(root, rel);
+				break;
+			case RTE_VALUES:
+				set_values_size_estimates(root, rel);
+				break;
+			case RTE_CTE:
 
-			/*
-			 * CTEs don't support making a choice between parameterized
-			 * and unparameterized paths, so just go ahead and build their
-			 * paths immediately.
-			 */
-			if (rte->self_reference)
-				set_worktable_pathlist(root, rel, rte);
-			else
-				set_cte_pathlist(root, rel, rte);
-			break;
-		default:
-			elog(ERROR, "unexpected rtekind: %d", (int) rel->rtekind);
-			break;
+				/*
+				 * CTEs don't support making a choice between parameterized
+				 * and unparameterized paths, so just go ahead and build their
+				 * paths immediately.
+				 */
+				if (rte->self_reference)
+					set_worktable_pathlist(root, rel, rte);
+				else
+					set_cte_pathlist(root, rel, rte);
+				break;
+			default:
+				elog(ERROR, "unexpected rtekind: %d", (int) rel->rtekind);
+				break;
 		}
 	}
 }
@@ -262,32 +261,32 @@ static void set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti, Rang
 		set_append_rel_pathlist(root, rel, rti, rte);
 	} else {
 		switch (rel->rtekind) {
-		case RTE_RELATION:
-			if (rte->relkind == RELKIND_FOREIGN_TABLE) {
-				/* Foreign table */
-				set_foreign_pathlist(root, rel, rte);
-			} else {
-				/* Plain relation */
-				set_plain_rel_pathlist(root, rel, rte);
-			}
-			break;
-		case RTE_SUBQUERY:
-			/* Subquery --- fully handled during set_rel_size */
-			break;
-		case RTE_FUNCTION:
-			/* RangeFunction */
-			set_function_pathlist(root, rel, rte);
-			break;
-		case RTE_VALUES:
-			/* Values list */
-			set_values_pathlist(root, rel, rte);
-			break;
-		case RTE_CTE:
-			/* CTE reference --- fully handled during set_rel_size */
-			break;
-		default:
-			elog(ERROR, "unexpected rtekind: %d", (int) rel->rtekind);
-			break;
+			case RTE_RELATION:
+				if (rte->relkind == RELKIND_FOREIGN_TABLE) {
+					/* Foreign table */
+					set_foreign_pathlist(root, rel, rte);
+				} else {
+					/* Plain relation */
+					set_plain_rel_pathlist(root, rel, rte);
+				}
+				break;
+			case RTE_SUBQUERY:
+				/* Subquery --- fully handled during set_rel_size */
+				break;
+			case RTE_FUNCTION:
+				/* RangeFunction */
+				set_function_pathlist(root, rel, rte);
+				break;
+			case RTE_VALUES:
+				/* Values list */
+				set_values_pathlist(root, rel, rte);
+				break;
+			case RTE_CTE:
+				/* CTE reference --- fully handled during set_rel_size */
+				break;
+			default:
+				elog(ERROR, "unexpected rtekind: %d", (int) rel->rtekind);
+				break;
 		}
 	}
 
@@ -306,7 +305,7 @@ static void set_plain_rel_size(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry
 	 * first since partial unique indexes can affect size estimates.
 	 */
 	check_partial_indexes(root, rel);
-
+	rel->restrictList = list_copy(rel->baserestrictinfo);
 	/* Mark rel with estimated output rows, width, etc */
 	set_baserel_size_estimates(root, rel);
 }

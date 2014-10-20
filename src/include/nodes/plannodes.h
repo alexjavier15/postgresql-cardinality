@@ -131,6 +131,7 @@ typedef struct Plan
 	Bitmapset  *allParam;
 	List * 		scanclauses;
 	bool	    isParameterized;
+	void	   *rte_reference;
 } Plan;
 
 /* ----------------

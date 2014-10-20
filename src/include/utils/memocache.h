@@ -64,6 +64,17 @@ typedef struct CacheM {
 	dlist_head *content;
 	int size;
 } CacheM;
+
+typedef struct RteReferences {
+
+	Value **rte_table;
+	int size;
+} RteReferences;
+
+extern void push_reference(Index index,  Value * name);
+extern void * fetch_unique_rte_reference(void);
+extern void * get_cur_rte_reference(void);
+
 extern void add_relation(MemoRelation * relation, int rellen);
 extern MemoRelation* create_memo_realation(int level, bool isParam, List *relname, double rows, int loops,
 		List *clauses);
