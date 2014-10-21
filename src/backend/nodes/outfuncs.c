@@ -159,7 +159,7 @@ static void _outList(ArgType type, StringInfo str, const List *node, bool sim) {
 
 				_outSimNode(S_NULL, str, lfirst(lc));
 
-				if (lnext(lc)) {
+				/*if (lnext(lc)) {
 
 					switch (nodeTag(lfirst(lc))) {
 
@@ -179,7 +179,7 @@ static void _outList(ArgType type, StringInfo str, const List *node, bool sim) {
 							break;
 					}
 
-				}
+				}*/
 			}
 		} else if (IsA(node, IntList))
 			appendStringInfo(str, " %d", lfirst_int(lc));

@@ -21,6 +21,8 @@
 #define IsIndex(relation)	((relation)->nodeType == T_IndexOnlyScan  \
 		|| (relation)->nodeType == T_IndexScan || (relation)->nodeType == T_BitmapIndexScan)
 #define IsUntaged(relation) ((relation)->nodeType == T_Invalid )
+#define IsBoolLoop(node)	((node)->opno == AND_EXPR \
+		|| (node)->opno == OR_EXPR || (node)->opno == NOT_EXPR)
 #define DEFAULT_MAX_JOIN_SIZE 	10
 
 #define isFullMatched(result) \
@@ -102,7 +104,9 @@ static void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* ca
 static int equals(MemoRelation *rel1, MemoRelation *rel2);
 MemoClause * parse_clause(char * clause);
 static char * parse_args(StringInfo buff, char * arg);
-
+static List * parse_clause_list(char * lclause, char **next);
+static MemoClause * parse_clause1(char * clause, char **next);
+static void * parse_item_list(char * element, char **next);
 static void print_relation(MemoRelation *memorelation) {
 	char *str1 = nodeSimToString_((memorelation)->relationname);
 	char *str2 = nodeSimToString_((memorelation)->clauses);
@@ -132,7 +136,7 @@ void add_relation(MemoRelation * relation, int rellen) {
 List * restictInfoToMemoClauses(List *clauses) {
 	List *lquals = NIL;
 	ListCell *lc;
-
+	char  *next = "";
 	char * str1 = NULL;
 	if (clauses == NIL)
 		return NIL;
@@ -148,7 +152,7 @@ List * restictInfoToMemoClauses(List *clauses) {
 				if (sclause[0] == '(')
 					sclause = sclause + 1;
 
-				mclause = parse_clause(sclause);
+				mclause = parse_item_list(sclause,&next);
 				if (mclause != NULL) {
 
 					mclause->parent = (RestrictInfo *) lfirst(lc);
@@ -195,15 +199,19 @@ void * fetch_unique_rte_reference(void) {
 	newrte->rte_table = (Value **) palloc0((rte_ref_ptr->size) * sizeof(Value *));
 	newrte->size = rte_ref_ptr->size;
 	for (i = 0; i < newrte->size; i++) {
-
-		newrte->rte_table[i] = (Value *) copyObject(rte_ref_ptr->rte_table[i]);
-
+		if (rte_ref_ptr->rte_table[i] != NULL)
+			newrte->rte_table[i] = (Value *) copyObject(rte_ref_ptr->rte_table[i]);
+		else
+			newrte->rte_table[i] = NULL;
 	}
 	return newrte;
 }
 void push_reference(Index index, Value * name) {
 	if (index >= rte_ref_ptr->size) {
-		rte_ref_ptr->rte_table = (Value **) repalloc((rte_ref_ptr->rte_table), (index + 1) * sizeof(Value *));
+
+		Value ** newtable = (Value **) palloc0((index + 1) * sizeof(Value *));
+		memcpy(newtable, rte_ref_ptr->rte_table, (rte_ref_ptr->size) * sizeof(Value));
+		rte_ref_ptr->rte_table = newtable;
 		rte_ref_ptr->size = index + 1;
 	}
 	rte_ref_ptr->rte_table[index] = name;
@@ -232,7 +240,7 @@ void InitCachesForMemo(void) {
 	if (join_cache_ptr->type != M_JoinCache)
 		InitJoinCache();
 
-	printf("elapsed time:  %lf ms \n", (1000 * ((float)t)/CLOCKS_PER_SEC));
+	printf("elapsed time:  %lf ms \n", (1000 * ((float) t) / CLOCKS_PER_SEC));
 }
 static void InitSelectivityCache(void) {
 	char *cquals = NULL;
@@ -409,6 +417,15 @@ static void printClause(List *clauses) {
 	}
 
 }
+static List * parse_restricList(char *restricList) {
+	char *next = "";
+	if (restricList == NULL || !strcmp(restricList, "<>")) {
+		return NIL;
+
+	}
+	return parse_clause_list(restricList, &next);
+
+}
 void readAndFillFromFile(FILE *file, void *sink) {
 
 	int ARG_NUM = 8;
@@ -463,7 +480,8 @@ void readAndFillFromFile(FILE *file, void *sink) {
 
 				tmprelation->relationname = build_string_list(srelname, M_NAME);
 				dequals = debackslash(cquals, tmprelation->clauseslength);
-				tmprelation->clauses = build_string_list(dequals, M_CLAUSE);
+				tmprelation->clauses = parse_restricList(dequals);
+				//tmprelation->clauses = build_string_list(dequals, M_CLAUSE);
 				tmprelation->tuples = 0;
 
 			} else {
@@ -685,11 +703,6 @@ static List * build_string_list(char * stringList1, ListType type) {
 	char *newstring;
 	void *value = NULL;
 	List *result = NIL;
-	if (type == M_CLAUSE) {
-		remove_par(stringList);
-		if (stringList[0] == '(')
-			stringList = stringList + 1;
-	}
 
 	tmp = strtok_r(stringList, s, &save);
 	while (tmp != NULL) {
@@ -717,6 +730,135 @@ static List * build_string_list(char * stringList1, ListType type) {
 	}
 	return result;
 }
+static MemoClause * parse_clause1(char * clause, char **next) {
+	MemoClause *clause_ptr = (MemoClause *) palloc(sizeof(MemoClause));
+	char * args = NULL;
+	int arg_len = 7;
+
+	clause_ptr->type = T_MemoClause;
+	clause_ptr->opno = 0;
+	clause_ptr->args = NIL;
+	clause_ptr->parent = NULL;
+
+	if (sscanf(clause, ":opno %u", &clause_ptr->opno) == 1) {
+		args = strstr(clause, " :args ");
+
+		if (args != NULL) {
+
+			args = &args[arg_len];
+
+			clause_ptr->args = parse_clause_list(args, next);
+			*next = (*next + 4);
+			//*next = strstr((*next), "{");
+			//if(*next == n)
+
+		}
+	} else if (strcmp(clause, "<>") == 0) {
+		return NULL;
+
+	} else {
+
+		printf("syntax error when parsing clause: %s \n", clause);
+
+		return NULL;
+	}
+
+	return clause_ptr;
+
+}
+
+static Value * parse_args1(char * argm, char **next) {
+	int i = 0;
+	int balanced = 0;
+	Value * result = NULL;
+	StringInfoData buff;
+	initStringInfo(&buff);
+	if (argm[i] == '{') {
+		i++;
+		balanced++;
+		while (balanced != 0 && argm[i] != '\0') {
+
+			if (argm[i] == '}')
+				balanced--;
+			else if (argm[i] == '{')
+				balanced++;
+			else if (balanced < 0) {
+				printf("Error parsing arg");
+				break;
+
+			}
+			appendStringInfoChar(&buff, argm[i]);
+			i++;
+		}
+		(&buff)->len--;
+		(&buff)->data[(&buff)->len] = '\0';
+
+		if (balanced == 0) {
+
+			*next = &argm[i];
+
+			result = makeString(buff.data);
+		}
+	}
+	return result;
+}
+static void * parse_item_list(char * element, char **next) {
+
+	char *start = (char*) palloc0(3 * sizeof(char));
+	start[2] = '\0';
+
+	if(element==NULL){
+		pfree(start);
+
+		return NULL;
+	}
+
+	strncpy(start, element, 2);
+	if (!strcmp(start, "{ ")) {
+
+		pfree(start);
+		switch (element[2]) {
+
+			case ' ':
+				return parse_clause1(&element[3], next);
+				break;
+			default:
+				return parse_args1(&element[0], next);
+				break;
+		}
+
+	}
+	pfree(start);
+	return NULL;
+
+}
+
+static List * parse_clause_list(char * lclause, char **next) {
+	List *result = NIL;
+	char *tmp;
+	void * element;
+	if (lclause == NULL || lclause[0] != '(' || lclause[1] == '\0') {
+
+		return NIL;
+
+	}
+	tmp = &lclause[1];
+
+	while (element = parse_item_list(tmp, next),tmp !=NULL && tmp[0] == '{' && element != NULL) {
+
+		result = lappend(result, element);
+		tmp = *next;
+	}
+	if (*next[0] != ')') {
+		printf("Malformed List! %s\n ",*next );
+		return NIL;
+
+	}
+
+
+	return result;
+
+}
 
 MemoClause * parse_clause(char * clause) {
 	MemoClause *clause_ptr = (MemoClause *) palloc(sizeof(MemoClause));
@@ -731,8 +873,18 @@ MemoClause * parse_clause(char * clause) {
 	clause_ptr->args = NIL;
 	clause_ptr->parent = NULL;
 
-	if (sscanf(clause, "{  :opno %u", &clause_ptr->opno) == 1) {
+	if (sscanf(clause, ":opno %u", &clause_ptr->opno) == 1) {
 		args = strstr(clause, ":args (");
+		/*		switch(clause_ptr->opno){
+
+		 case AND_EXPR:
+		 case OR_EXPR:
+		 case NOT_EXPR:
+		 parse_cl
+		 default:
+
+
+		 }*/
 		if (args != NULL) {
 
 			args = &args[arg_len];
@@ -814,7 +966,7 @@ void cmp_lists(MemoInfoData1 * result, List *lleft, List *lright) {
 			//printf("member not found\n");
 			//printMemo(lfirst(item_b));
 			result->unmatches = lappend(result->unmatches, lfirst(item_b));
-			//	printMemo(result->unmatches);
+			//printMemo(result->unmatches);
 		} else {
 			result->matches = lappend(result->matches, lfirst(item_b));
 
@@ -848,21 +1000,7 @@ void cmp_lists(MemoInfoData1 * result, List *lleft, List *lright) {
 
 	}
 }
-bool equalSet(const List *a, const List *b) {
-	ListCell *item_a;
-	if (list_length(a) != list_length(b))
-		return false;
-	foreach(item_a, a) {
-		if (!list_member_remove(b, lfirst(item_a))) {
-			//	printf("member not found\n");
 
-			return false;
-		}
-
-	}
-	return true;
-
-}
 
 static void check_NoMemo_queries(void) {
 	MemoRelation *relation1 = NULL;
@@ -1031,7 +1169,7 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 	dlist_iter iter;
 	List *lquals = NIL;
 
-	//char *str1, *str2 = NULL;
+//char *str1, *str2 = NULL;
 	int rellen = list_length(relname);
 	MemoRelation *memorelation = NULL;
 	MemoRelation *rightmatched = NULL;
@@ -1094,7 +1232,7 @@ static void set_estimated_join_rows(MemoRelation *relation1, MemoRelation *relat
 			* clamp_row_est(commonrelation->rows / commonrelation->loops);
 	target->rows = rows <= 0 ? 1 : rows;
 	target->loops = 1;
-
+	target->isParameterized= commonrelation->isParameterized;
 	/*printf("Injected new estimated size  %lf for : \n", rows);
 	 print(target->relationname);
 	 printf("\n");
@@ -1221,7 +1359,7 @@ void buildSimpleStringList(StringInfo str, List *list) {
 MemoRelation * set_base_rel_tuples(List *lrelName, int level, double tuples) {
 
 	dlist_iter iter;
-	//char *str1, *str2 = NULL;
+//char *str1, *str2 = NULL;
 	MemoRelation *relation = NULL;
 
 	dlist_foreach(iter, &memo_cache_ptr->content) {

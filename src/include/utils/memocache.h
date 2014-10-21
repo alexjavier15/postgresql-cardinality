@@ -70,7 +70,7 @@ typedef struct RteReferences {
 	Value **rte_table;
 	int size;
 } RteReferences;
-
+extern List * restictInfoToMemoClauses(List *clauses) ;
 extern void push_reference(Index index,  Value * name);
 extern void * fetch_unique_rte_reference(void);
 extern void * get_cur_rte_reference(void);

@@ -186,7 +186,6 @@ void get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent, 
 
 			info->indexoid = index->indexrelid;
 
-			push_reference(info->indexoid, relname);
 
 			info->reltablespace = RelationGetForm(indexRelation)->reltablespace;
 			info->rel = rel;

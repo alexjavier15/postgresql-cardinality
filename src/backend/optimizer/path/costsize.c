@@ -3180,8 +3180,8 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 	List * final_clauses = list_copy(rel->restrictList);
 	if (enable_memo) {
 
-		/*printf("checking join relation  ");
-		 printMemo(rel->restrictList);*/
+		/*printf("checking join relation  ");*/
+		 printMemo(rel->restrictList);
 
 		get_relation_size(&result, root, rel, list_copy(final_clauses), false, sjinfo);
 		nrows = result.rows;

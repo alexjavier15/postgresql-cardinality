@@ -32,6 +32,7 @@
 #include "nodes/relation.h"
 #include "utils/datum.h"
 #include "utils/memocache.h"
+#include "nodes/print.h"
 
 /*
  * Macros to simplify comparison of different kinds of fields.	Use these
@@ -41,6 +42,7 @@
  */
 
 /* Compare a simple scalar field (int, float, bool, enum, etc) */
+
 #define COMPARE_SCALAR_FIELD(fldname) \
 	do { \
 		if (a->fldname != b->fldname) \
@@ -90,6 +92,8 @@
 /*
  *	Stuff from primnodes.h
  */
+
+bool equalSet(const List *a, const List *b);
 
 static bool _equalAlias(const Alias *a, const Alias *b) {
 	COMPARE_STRING_FIELD(aliasname);
@@ -2015,18 +2019,39 @@ static bool _equalXmlSerialize(const XmlSerialize *a, const XmlSerialize *b) {
 
 	return true;
 }
+bool equalSet(const List *a, const List *b) {
+	ListCell *item_a;
+	if (list_length(a) != list_length(b))
+		return false;
+	foreach(item_a, a) {
+		if (!list_member_remove(b, lfirst(item_a))) {
+			//printMemo( lfirst(item_a));
+
+			return false;
+		}
+
+	}
+	return true;
+
+}
+
 static bool equalMemoClause(const MemoClause *a, const MemoClause *b) {
 	ListCell *lc;
 	List *a1 = list_copy(a->args);
 	List *b1 = list_copy(b->args);
 	COMPARE_SCALAR_FIELD(opno);
 	if (list_length(a1) != list_length(b1)) {
-/*
-		printMemo(a);
-		printMemo(b);
-		printf("different args length %d and %d \n", list_length(a1), list_length(b1));
-*/
+		/*
+
+		 printf("different args length %d and %d \n", list_length(a1), list_length(b1));
+		 */
 		return false;
+	}
+	if (a->opno ==1 ) {
+		/*printMemo(a);
+		printMemo(b);*/
+		return equalSet(a1,b1);
+
 	}
 	foreach(lc, a1) {
 		if (!list_member_remove(b1, lfirst(lc)))
@@ -2056,27 +2081,27 @@ static bool _equalList(const List *a, const List *b) {
 	 * may not be worth doing...
 	 */
 	switch (a->type) {
-	case T_List:
-		forboth(item_a, a, item_b, b) {
-			if (!equal(lfirst(item_a), lfirst(item_b)))
-				return false;
-		}
-		break;
-	case T_IntList:
-		forboth(item_a, a, item_b, b) {
-			if (lfirst_int(item_a) != lfirst_int(item_b))
-				return false;
-		}
-		break;
-	case T_OidList:
-		forboth(item_a, a, item_b, b) {
-			if (lfirst_oid(item_a) != lfirst_oid(item_b))
-				return false;
-		}
-		break;
-	default:
-		elog(ERROR, "unrecognized list node type: %d", (int) a->type);
-		return false; /* keep compiler quiet */
+		case T_List:
+			forboth(item_a, a, item_b, b) {
+				if (!equal(lfirst(item_a), lfirst(item_b)))
+					return false;
+			}
+			break;
+		case T_IntList:
+			forboth(item_a, a, item_b, b) {
+				if (lfirst_int(item_a) != lfirst_int(item_b))
+					return false;
+			}
+			break;
+		case T_OidList:
+			forboth(item_a, a, item_b, b) {
+				if (lfirst_oid(item_a) != lfirst_oid(item_b))
+					return false;
+			}
+			break;
+		default:
+			elog(ERROR, "unrecognized list node type: %d", (int) a->type);
+			return false; /* keep compiler quiet */
 	}
 
 	/*
@@ -2096,20 +2121,20 @@ static bool _equalValue(const Value *a, const Value *b) {
 	COMPARE_SCALAR_FIELD(type);
 
 	switch (a->type) {
-	case T_Integer:
-		COMPARE_SCALAR_FIELD(val.ival);
-		break;
-	case T_Float:
-	case T_String:
-	case T_BitString:
-		COMPARE_STRING_FIELD(val.str);
-		break;
-	case T_Null:
-		/* nothing to do */
-		break;
-	default:
-		elog(ERROR, "unrecognized node type: %d", (int) a->type);
-		break;
+		case T_Integer:
+			COMPARE_SCALAR_FIELD(val.ival);
+			break;
+		case T_Float:
+		case T_String:
+		case T_BitString:
+			COMPARE_STRING_FIELD(val.str);
+			break;
+		case T_Null:
+			/* nothing to do */
+			break;
+		default:
+			elog(ERROR, "unrecognized node type: %d", (int) a->type);
+			break;
 	}
 
 	return true;
@@ -2138,598 +2163,598 @@ bool equal(const void *a, const void *b) {
 		return false;
 
 	switch (nodeTag(a)) {
-	/*
-	 * PRIMITIVE NODES
-	 */
-	case T_Alias:
-		retval = _equalAlias(a, b);
-		break;
-	case T_RangeVar:
-		retval = _equalRangeVar(a, b);
-		break;
-	case T_IntoClause:
-		retval = _equalIntoClause(a, b);
-		break;
-	case T_Var:
-		retval = _equalVar(a, b);
-		break;
-	case T_Const:
-		retval = _equalConst(a, b);
-		break;
-	case T_Param:
-		retval = _equalParam(a, b);
-		break;
-	case T_Aggref:
-		retval = _equalAggref(a, b);
-		break;
-	case T_WindowFunc:
-		retval = _equalWindowFunc(a, b);
-		break;
-	case T_ArrayRef:
-		retval = _equalArrayRef(a, b);
-		break;
-	case T_FuncExpr:
-		retval = _equalFuncExpr(a, b);
-		break;
-	case T_NamedArgExpr:
-		retval = _equalNamedArgExpr(a, b);
-		break;
-	case T_OpExpr:
-		retval = _equalOpExpr(a, b);
-		break;
-	case T_DistinctExpr:
-		retval = _equalDistinctExpr(a, b);
-		break;
-	case T_NullIfExpr:
-		retval = _equalNullIfExpr(a, b);
-		break;
-	case T_ScalarArrayOpExpr:
-		retval = _equalScalarArrayOpExpr(a, b);
-		break;
-	case T_BoolExpr:
-		retval = _equalBoolExpr(a, b);
-		break;
-	case T_SubLink:
-		retval = _equalSubLink(a, b);
-		break;
-	case T_SubPlan:
-		retval = _equalSubPlan(a, b);
-		break;
-	case T_AlternativeSubPlan:
-		retval = _equalAlternativeSubPlan(a, b);
-		break;
-	case T_FieldSelect:
-		retval = _equalFieldSelect(a, b);
-		break;
-	case T_FieldStore:
-		retval = _equalFieldStore(a, b);
-		break;
-	case T_RelabelType:
-		retval = _equalRelabelType(a, b);
-		break;
-	case T_CoerceViaIO:
-		retval = _equalCoerceViaIO(a, b);
-		break;
-	case T_ArrayCoerceExpr:
-		retval = _equalArrayCoerceExpr(a, b);
-		break;
-	case T_ConvertRowtypeExpr:
-		retval = _equalConvertRowtypeExpr(a, b);
-		break;
-	case T_CollateExpr:
-		retval = _equalCollateExpr(a, b);
-		break;
-	case T_CaseExpr:
-		retval = _equalCaseExpr(a, b);
-		break;
-	case T_CaseWhen:
-		retval = _equalCaseWhen(a, b);
-		break;
-	case T_CaseTestExpr:
-		retval = _equalCaseTestExpr(a, b);
-		break;
-	case T_ArrayExpr:
-		retval = _equalArrayExpr(a, b);
-		break;
-	case T_RowExpr:
-		retval = _equalRowExpr(a, b);
-		break;
-	case T_RowCompareExpr:
-		retval = _equalRowCompareExpr(a, b);
-		break;
-	case T_CoalesceExpr:
-		retval = _equalCoalesceExpr(a, b);
-		break;
-	case T_MinMaxExpr:
-		retval = _equalMinMaxExpr(a, b);
-		break;
-	case T_XmlExpr:
-		retval = _equalXmlExpr(a, b);
-		break;
-	case T_NullTest:
-		retval = _equalNullTest(a, b);
-		break;
-	case T_BooleanTest:
-		retval = _equalBooleanTest(a, b);
-		break;
-	case T_CoerceToDomain:
-		retval = _equalCoerceToDomain(a, b);
-		break;
-	case T_CoerceToDomainValue:
-		retval = _equalCoerceToDomainValue(a, b);
-		break;
-	case T_SetToDefault:
-		retval = _equalSetToDefault(a, b);
-		break;
-	case T_CurrentOfExpr:
-		retval = _equalCurrentOfExpr(a, b);
-		break;
-	case T_TargetEntry:
-		retval = _equalTargetEntry(a, b);
-		break;
-	case T_RangeTblRef:
-		retval = _equalRangeTblRef(a, b);
-		break;
-	case T_FromExpr:
-		retval = _equalFromExpr(a, b);
-		break;
-	case T_JoinExpr:
-		retval = _equalJoinExpr(a, b);
-		break;
-	case T_MemoClause:
-		retval = equalMemoClause(a, b);
-		break;
-
 		/*
-		 * RELATION NODES
+		 * PRIMITIVE NODES
 		 */
-	case T_PathKey:
-		retval = _equalPathKey(a, b);
-		break;
-	case T_RestrictInfo:
-		retval = _equalRestrictInfo(a, b);
-		break;
-	case T_PlaceHolderVar:
-		retval = _equalPlaceHolderVar(a, b);
-		break;
-	case T_SpecialJoinInfo:
-		retval = _equalSpecialJoinInfo(a, b);
-		break;
-	case T_LateralJoinInfo:
-		retval = _equalLateralJoinInfo(a, b);
-		break;
-	case T_AppendRelInfo:
-		retval = _equalAppendRelInfo(a, b);
-		break;
-	case T_PlaceHolderInfo:
-		retval = _equalPlaceHolderInfo(a, b);
-		break;
+		case T_Alias:
+			retval = _equalAlias(a, b);
+			break;
+		case T_RangeVar:
+			retval = _equalRangeVar(a, b);
+			break;
+		case T_IntoClause:
+			retval = _equalIntoClause(a, b);
+			break;
+		case T_Var:
+			retval = _equalVar(a, b);
+			break;
+		case T_Const:
+			retval = _equalConst(a, b);
+			break;
+		case T_Param:
+			retval = _equalParam(a, b);
+			break;
+		case T_Aggref:
+			retval = _equalAggref(a, b);
+			break;
+		case T_WindowFunc:
+			retval = _equalWindowFunc(a, b);
+			break;
+		case T_ArrayRef:
+			retval = _equalArrayRef(a, b);
+			break;
+		case T_FuncExpr:
+			retval = _equalFuncExpr(a, b);
+			break;
+		case T_NamedArgExpr:
+			retval = _equalNamedArgExpr(a, b);
+			break;
+		case T_OpExpr:
+			retval = _equalOpExpr(a, b);
+			break;
+		case T_DistinctExpr:
+			retval = _equalDistinctExpr(a, b);
+			break;
+		case T_NullIfExpr:
+			retval = _equalNullIfExpr(a, b);
+			break;
+		case T_ScalarArrayOpExpr:
+			retval = _equalScalarArrayOpExpr(a, b);
+			break;
+		case T_BoolExpr:
+			retval = _equalBoolExpr(a, b);
+			break;
+		case T_SubLink:
+			retval = _equalSubLink(a, b);
+			break;
+		case T_SubPlan:
+			retval = _equalSubPlan(a, b);
+			break;
+		case T_AlternativeSubPlan:
+			retval = _equalAlternativeSubPlan(a, b);
+			break;
+		case T_FieldSelect:
+			retval = _equalFieldSelect(a, b);
+			break;
+		case T_FieldStore:
+			retval = _equalFieldStore(a, b);
+			break;
+		case T_RelabelType:
+			retval = _equalRelabelType(a, b);
+			break;
+		case T_CoerceViaIO:
+			retval = _equalCoerceViaIO(a, b);
+			break;
+		case T_ArrayCoerceExpr:
+			retval = _equalArrayCoerceExpr(a, b);
+			break;
+		case T_ConvertRowtypeExpr:
+			retval = _equalConvertRowtypeExpr(a, b);
+			break;
+		case T_CollateExpr:
+			retval = _equalCollateExpr(a, b);
+			break;
+		case T_CaseExpr:
+			retval = _equalCaseExpr(a, b);
+			break;
+		case T_CaseWhen:
+			retval = _equalCaseWhen(a, b);
+			break;
+		case T_CaseTestExpr:
+			retval = _equalCaseTestExpr(a, b);
+			break;
+		case T_ArrayExpr:
+			retval = _equalArrayExpr(a, b);
+			break;
+		case T_RowExpr:
+			retval = _equalRowExpr(a, b);
+			break;
+		case T_RowCompareExpr:
+			retval = _equalRowCompareExpr(a, b);
+			break;
+		case T_CoalesceExpr:
+			retval = _equalCoalesceExpr(a, b);
+			break;
+		case T_MinMaxExpr:
+			retval = _equalMinMaxExpr(a, b);
+			break;
+		case T_XmlExpr:
+			retval = _equalXmlExpr(a, b);
+			break;
+		case T_NullTest:
+			retval = _equalNullTest(a, b);
+			break;
+		case T_BooleanTest:
+			retval = _equalBooleanTest(a, b);
+			break;
+		case T_CoerceToDomain:
+			retval = _equalCoerceToDomain(a, b);
+			break;
+		case T_CoerceToDomainValue:
+			retval = _equalCoerceToDomainValue(a, b);
+			break;
+		case T_SetToDefault:
+			retval = _equalSetToDefault(a, b);
+			break;
+		case T_CurrentOfExpr:
+			retval = _equalCurrentOfExpr(a, b);
+			break;
+		case T_TargetEntry:
+			retval = _equalTargetEntry(a, b);
+			break;
+		case T_RangeTblRef:
+			retval = _equalRangeTblRef(a, b);
+			break;
+		case T_FromExpr:
+			retval = _equalFromExpr(a, b);
+			break;
+		case T_JoinExpr:
+			retval = _equalJoinExpr(a, b);
+			break;
+		case T_MemoClause:
+			retval = equalMemoClause(a, b);
+			break;
 
-	case T_List:
-	case T_IntList:
-	case T_OidList:
-		retval = _equalList(a, b);
-		break;
+			/*
+			 * RELATION NODES
+			 */
+		case T_PathKey:
+			retval = _equalPathKey(a, b);
+			break;
+		case T_RestrictInfo:
+			retval = _equalRestrictInfo(a, b);
+			break;
+		case T_PlaceHolderVar:
+			retval = _equalPlaceHolderVar(a, b);
+			break;
+		case T_SpecialJoinInfo:
+			retval = _equalSpecialJoinInfo(a, b);
+			break;
+		case T_LateralJoinInfo:
+			retval = _equalLateralJoinInfo(a, b);
+			break;
+		case T_AppendRelInfo:
+			retval = _equalAppendRelInfo(a, b);
+			break;
+		case T_PlaceHolderInfo:
+			retval = _equalPlaceHolderInfo(a, b);
+			break;
 
-	case T_Integer:
-	case T_Float:
-	case T_String:
-	case T_BitString:
-	case T_Null:
-		retval = _equalValue(a, b);
-		break;
+		case T_List:
+		case T_IntList:
+		case T_OidList:
+			retval = _equalList(a, b);
+			break;
 
-		/*
-		 * PARSE NODES
-		 */
-	case T_Query:
-		retval = _equalQuery(a, b);
-		break;
-	case T_InsertStmt:
-		retval = _equalInsertStmt(a, b);
-		break;
-	case T_DeleteStmt:
-		retval = _equalDeleteStmt(a, b);
-		break;
-	case T_UpdateStmt:
-		retval = _equalUpdateStmt(a, b);
-		break;
-	case T_SelectStmt:
-		retval = _equalSelectStmt(a, b);
-		break;
-	case T_SetOperationStmt:
-		retval = _equalSetOperationStmt(a, b);
-		break;
-	case T_AlterTableStmt:
-		retval = _equalAlterTableStmt(a, b);
-		break;
-	case T_AlterTableCmd:
-		retval = _equalAlterTableCmd(a, b);
-		break;
-	case T_AlterDomainStmt:
-		retval = _equalAlterDomainStmt(a, b);
-		break;
-	case T_GrantStmt:
-		retval = _equalGrantStmt(a, b);
-		break;
-	case T_GrantRoleStmt:
-		retval = _equalGrantRoleStmt(a, b);
-		break;
-	case T_AlterDefaultPrivilegesStmt:
-		retval = _equalAlterDefaultPrivilegesStmt(a, b);
-		break;
-	case T_DeclareCursorStmt:
-		retval = _equalDeclareCursorStmt(a, b);
-		break;
-	case T_ClosePortalStmt:
-		retval = _equalClosePortalStmt(a, b);
-		break;
-	case T_ClusterStmt:
-		retval = _equalClusterStmt(a, b);
-		break;
-	case T_CopyStmt:
-		retval = _equalCopyStmt(a, b);
-		break;
-	case T_CreateStmt:
-		retval = _equalCreateStmt(a, b);
-		break;
-	case T_TableLikeClause:
-		retval = _equalTableLikeClause(a, b);
-		break;
-	case T_DefineStmt:
-		retval = _equalDefineStmt(a, b);
-		break;
-	case T_DropStmt:
-		retval = _equalDropStmt(a, b);
-		break;
-	case T_TruncateStmt:
-		retval = _equalTruncateStmt(a, b);
-		break;
-	case T_CommentStmt:
-		retval = _equalCommentStmt(a, b);
-		break;
-	case T_SecLabelStmt:
-		retval = _equalSecLabelStmt(a, b);
-		break;
-	case T_FetchStmt:
-		retval = _equalFetchStmt(a, b);
-		break;
-	case T_IndexStmt:
-		retval = _equalIndexStmt(a, b);
-		break;
-	case T_CreateFunctionStmt:
-		retval = _equalCreateFunctionStmt(a, b);
-		break;
-	case T_FunctionParameter:
-		retval = _equalFunctionParameter(a, b);
-		break;
-	case T_AlterFunctionStmt:
-		retval = _equalAlterFunctionStmt(a, b);
-		break;
-	case T_DoStmt:
-		retval = _equalDoStmt(a, b);
-		break;
-	case T_RenameStmt:
-		retval = _equalRenameStmt(a, b);
-		break;
-	case T_AlterObjectSchemaStmt:
-		retval = _equalAlterObjectSchemaStmt(a, b);
-		break;
-	case T_AlterOwnerStmt:
-		retval = _equalAlterOwnerStmt(a, b);
-		break;
-	case T_RuleStmt:
-		retval = _equalRuleStmt(a, b);
-		break;
-	case T_NotifyStmt:
-		retval = _equalNotifyStmt(a, b);
-		break;
-	case T_ListenStmt:
-		retval = _equalListenStmt(a, b);
-		break;
-	case T_UnlistenStmt:
-		retval = _equalUnlistenStmt(a, b);
-		break;
-	case T_TransactionStmt:
-		retval = _equalTransactionStmt(a, b);
-		break;
-	case T_CompositeTypeStmt:
-		retval = _equalCompositeTypeStmt(a, b);
-		break;
-	case T_CreateEnumStmt:
-		retval = _equalCreateEnumStmt(a, b);
-		break;
-	case T_CreateRangeStmt:
-		retval = _equalCreateRangeStmt(a, b);
-		break;
-	case T_AlterEnumStmt:
-		retval = _equalAlterEnumStmt(a, b);
-		break;
-	case T_ViewStmt:
-		retval = _equalViewStmt(a, b);
-		break;
-	case T_LoadStmt:
-		retval = _equalLoadStmt(a, b);
-		break;
-	case T_CreateDomainStmt:
-		retval = _equalCreateDomainStmt(a, b);
-		break;
-	case T_CreateOpClassStmt:
-		retval = _equalCreateOpClassStmt(a, b);
-		break;
-	case T_CreateOpClassItem:
-		retval = _equalCreateOpClassItem(a, b);
-		break;
-	case T_CreateOpFamilyStmt:
-		retval = _equalCreateOpFamilyStmt(a, b);
-		break;
-	case T_AlterOpFamilyStmt:
-		retval = _equalAlterOpFamilyStmt(a, b);
-		break;
-	case T_CreatedbStmt:
-		retval = _equalCreatedbStmt(a, b);
-		break;
-	case T_AlterDatabaseStmt:
-		retval = _equalAlterDatabaseStmt(a, b);
-		break;
-	case T_AlterDatabaseSetStmt:
-		retval = _equalAlterDatabaseSetStmt(a, b);
-		break;
-	case T_DropdbStmt:
-		retval = _equalDropdbStmt(a, b);
-		break;
-	case T_VacuumStmt:
-		retval = _equalVacuumStmt(a, b);
-		break;
-	case T_ExplainStmt:
-		retval = _equalExplainStmt(a, b);
-		break;
-	case T_CreateTableAsStmt:
-		retval = _equalCreateTableAsStmt(a, b);
-		break;
-	case T_RefreshMatViewStmt:
-		retval = _equalRefreshMatViewStmt(a, b);
-		break;
-	case T_ReplicaIdentityStmt:
-		retval = _equalReplicaIdentityStmt(a, b);
-		break;
-	case T_AlterSystemStmt:
-		retval = _equalAlterSystemStmt(a, b);
-		break;
-	case T_CreateSeqStmt:
-		retval = _equalCreateSeqStmt(a, b);
-		break;
-	case T_AlterSeqStmt:
-		retval = _equalAlterSeqStmt(a, b);
-		break;
-	case T_VariableSetStmt:
-		retval = _equalVariableSetStmt(a, b);
-		break;
-	case T_VariableShowStmt:
-		retval = _equalVariableShowStmt(a, b);
-		break;
-	case T_DiscardStmt:
-		retval = _equalDiscardStmt(a, b);
-		break;
-	case T_CreateTableSpaceStmt:
-		retval = _equalCreateTableSpaceStmt(a, b);
-		break;
-	case T_DropTableSpaceStmt:
-		retval = _equalDropTableSpaceStmt(a, b);
-		break;
-	case T_AlterTableSpaceOptionsStmt:
-		retval = _equalAlterTableSpaceOptionsStmt(a, b);
-		break;
-	case T_AlterTableSpaceMoveStmt:
-		retval = _equalAlterTableSpaceMoveStmt(a, b);
-		break;
-	case T_CreateExtensionStmt:
-		retval = _equalCreateExtensionStmt(a, b);
-		break;
-	case T_AlterExtensionStmt:
-		retval = _equalAlterExtensionStmt(a, b);
-		break;
-	case T_AlterExtensionContentsStmt:
-		retval = _equalAlterExtensionContentsStmt(a, b);
-		break;
-	case T_CreateFdwStmt:
-		retval = _equalCreateFdwStmt(a, b);
-		break;
-	case T_AlterFdwStmt:
-		retval = _equalAlterFdwStmt(a, b);
-		break;
-	case T_CreateForeignServerStmt:
-		retval = _equalCreateForeignServerStmt(a, b);
-		break;
-	case T_AlterForeignServerStmt:
-		retval = _equalAlterForeignServerStmt(a, b);
-		break;
-	case T_CreateUserMappingStmt:
-		retval = _equalCreateUserMappingStmt(a, b);
-		break;
-	case T_AlterUserMappingStmt:
-		retval = _equalAlterUserMappingStmt(a, b);
-		break;
-	case T_DropUserMappingStmt:
-		retval = _equalDropUserMappingStmt(a, b);
-		break;
-	case T_CreateForeignTableStmt:
-		retval = _equalCreateForeignTableStmt(a, b);
-		break;
-	case T_CreateTrigStmt:
-		retval = _equalCreateTrigStmt(a, b);
-		break;
-	case T_CreateEventTrigStmt:
-		retval = _equalCreateEventTrigStmt(a, b);
-		break;
-	case T_AlterEventTrigStmt:
-		retval = _equalAlterEventTrigStmt(a, b);
-		break;
-	case T_CreatePLangStmt:
-		retval = _equalCreatePLangStmt(a, b);
-		break;
-	case T_CreateRoleStmt:
-		retval = _equalCreateRoleStmt(a, b);
-		break;
-	case T_AlterRoleStmt:
-		retval = _equalAlterRoleStmt(a, b);
-		break;
-	case T_AlterRoleSetStmt:
-		retval = _equalAlterRoleSetStmt(a, b);
-		break;
-	case T_DropRoleStmt:
-		retval = _equalDropRoleStmt(a, b);
-		break;
-	case T_LockStmt:
-		retval = _equalLockStmt(a, b);
-		break;
-	case T_ConstraintsSetStmt:
-		retval = _equalConstraintsSetStmt(a, b);
-		break;
-	case T_ReindexStmt:
-		retval = _equalReindexStmt(a, b);
-		break;
-	case T_CheckPointStmt:
-		retval = true;
-		break;
-	case T_CreateSchemaStmt:
-		retval = _equalCreateSchemaStmt(a, b);
-		break;
-	case T_CreateConversionStmt:
-		retval = _equalCreateConversionStmt(a, b);
-		break;
-	case T_CreateCastStmt:
-		retval = _equalCreateCastStmt(a, b);
-		break;
-	case T_PrepareStmt:
-		retval = _equalPrepareStmt(a, b);
-		break;
-	case T_ExecuteStmt:
-		retval = _equalExecuteStmt(a, b);
-		break;
-	case T_DeallocateStmt:
-		retval = _equalDeallocateStmt(a, b);
-		break;
-	case T_DropOwnedStmt:
-		retval = _equalDropOwnedStmt(a, b);
-		break;
-	case T_ReassignOwnedStmt:
-		retval = _equalReassignOwnedStmt(a, b);
-		break;
-	case T_AlterTSDictionaryStmt:
-		retval = _equalAlterTSDictionaryStmt(a, b);
-		break;
-	case T_AlterTSConfigurationStmt:
-		retval = _equalAlterTSConfigurationStmt(a, b);
-		break;
+		case T_Integer:
+		case T_Float:
+		case T_String:
+		case T_BitString:
+		case T_Null:
+			retval = _equalValue(a, b);
+			break;
 
-	case T_A_Expr:
-		retval = _equalAExpr(a, b);
-		break;
-	case T_ColumnRef:
-		retval = _equalColumnRef(a, b);
-		break;
-	case T_ParamRef:
-		retval = _equalParamRef(a, b);
-		break;
-	case T_A_Const:
-		retval = _equalAConst(a, b);
-		break;
-	case T_FuncCall:
-		retval = _equalFuncCall(a, b);
-		break;
-	case T_A_Star:
-		retval = _equalAStar(a, b);
-		break;
-	case T_A_Indices:
-		retval = _equalAIndices(a, b);
-		break;
-	case T_A_Indirection:
-		retval = _equalA_Indirection(a, b);
-		break;
-	case T_A_ArrayExpr:
-		retval = _equalA_ArrayExpr(a, b);
-		break;
-	case T_ResTarget:
-		retval = _equalResTarget(a, b);
-		break;
-	case T_TypeCast:
-		retval = _equalTypeCast(a, b);
-		break;
-	case T_CollateClause:
-		retval = _equalCollateClause(a, b);
-		break;
-	case T_SortBy:
-		retval = _equalSortBy(a, b);
-		break;
-	case T_WindowDef:
-		retval = _equalWindowDef(a, b);
-		break;
-	case T_RangeSubselect:
-		retval = _equalRangeSubselect(a, b);
-		break;
-	case T_RangeFunction:
-		retval = _equalRangeFunction(a, b);
-		break;
-	case T_TypeName:
-		retval = _equalTypeName(a, b);
-		break;
-	case T_IndexElem:
-		retval = _equalIndexElem(a, b);
-		break;
-	case T_ColumnDef:
-		retval = _equalColumnDef(a, b);
-		break;
-	case T_Constraint:
-		retval = _equalConstraint(a, b);
-		break;
-	case T_DefElem:
-		retval = _equalDefElem(a, b);
-		break;
-	case T_LockingClause:
-		retval = _equalLockingClause(a, b);
-		break;
-	case T_RangeTblEntry:
-		retval = _equalRangeTblEntry(a, b);
-		break;
-	case T_RangeTblFunction:
-		retval = _equalRangeTblFunction(a, b);
-		break;
-	case T_WithCheckOption:
-		retval = _equalWithCheckOption(a, b);
-		break;
-	case T_SortGroupClause:
-		retval = _equalSortGroupClause(a, b);
-		break;
-	case T_WindowClause:
-		retval = _equalWindowClause(a, b);
-		break;
-	case T_RowMarkClause:
-		retval = _equalRowMarkClause(a, b);
-		break;
-	case T_WithClause:
-		retval = _equalWithClause(a, b);
-		break;
-	case T_CommonTableExpr:
-		retval = _equalCommonTableExpr(a, b);
-		break;
-	case T_PrivGrantee:
-		retval = _equalPrivGrantee(a, b);
-		break;
-	case T_FuncWithArgs:
-		retval = _equalFuncWithArgs(a, b);
-		break;
-	case T_AccessPriv:
-		retval = _equalAccessPriv(a, b);
-		break;
-	case T_XmlSerialize:
-		retval = _equalXmlSerialize(a, b);
-		break;
+			/*
+			 * PARSE NODES
+			 */
+		case T_Query:
+			retval = _equalQuery(a, b);
+			break;
+		case T_InsertStmt:
+			retval = _equalInsertStmt(a, b);
+			break;
+		case T_DeleteStmt:
+			retval = _equalDeleteStmt(a, b);
+			break;
+		case T_UpdateStmt:
+			retval = _equalUpdateStmt(a, b);
+			break;
+		case T_SelectStmt:
+			retval = _equalSelectStmt(a, b);
+			break;
+		case T_SetOperationStmt:
+			retval = _equalSetOperationStmt(a, b);
+			break;
+		case T_AlterTableStmt:
+			retval = _equalAlterTableStmt(a, b);
+			break;
+		case T_AlterTableCmd:
+			retval = _equalAlterTableCmd(a, b);
+			break;
+		case T_AlterDomainStmt:
+			retval = _equalAlterDomainStmt(a, b);
+			break;
+		case T_GrantStmt:
+			retval = _equalGrantStmt(a, b);
+			break;
+		case T_GrantRoleStmt:
+			retval = _equalGrantRoleStmt(a, b);
+			break;
+		case T_AlterDefaultPrivilegesStmt:
+			retval = _equalAlterDefaultPrivilegesStmt(a, b);
+			break;
+		case T_DeclareCursorStmt:
+			retval = _equalDeclareCursorStmt(a, b);
+			break;
+		case T_ClosePortalStmt:
+			retval = _equalClosePortalStmt(a, b);
+			break;
+		case T_ClusterStmt:
+			retval = _equalClusterStmt(a, b);
+			break;
+		case T_CopyStmt:
+			retval = _equalCopyStmt(a, b);
+			break;
+		case T_CreateStmt:
+			retval = _equalCreateStmt(a, b);
+			break;
+		case T_TableLikeClause:
+			retval = _equalTableLikeClause(a, b);
+			break;
+		case T_DefineStmt:
+			retval = _equalDefineStmt(a, b);
+			break;
+		case T_DropStmt:
+			retval = _equalDropStmt(a, b);
+			break;
+		case T_TruncateStmt:
+			retval = _equalTruncateStmt(a, b);
+			break;
+		case T_CommentStmt:
+			retval = _equalCommentStmt(a, b);
+			break;
+		case T_SecLabelStmt:
+			retval = _equalSecLabelStmt(a, b);
+			break;
+		case T_FetchStmt:
+			retval = _equalFetchStmt(a, b);
+			break;
+		case T_IndexStmt:
+			retval = _equalIndexStmt(a, b);
+			break;
+		case T_CreateFunctionStmt:
+			retval = _equalCreateFunctionStmt(a, b);
+			break;
+		case T_FunctionParameter:
+			retval = _equalFunctionParameter(a, b);
+			break;
+		case T_AlterFunctionStmt:
+			retval = _equalAlterFunctionStmt(a, b);
+			break;
+		case T_DoStmt:
+			retval = _equalDoStmt(a, b);
+			break;
+		case T_RenameStmt:
+			retval = _equalRenameStmt(a, b);
+			break;
+		case T_AlterObjectSchemaStmt:
+			retval = _equalAlterObjectSchemaStmt(a, b);
+			break;
+		case T_AlterOwnerStmt:
+			retval = _equalAlterOwnerStmt(a, b);
+			break;
+		case T_RuleStmt:
+			retval = _equalRuleStmt(a, b);
+			break;
+		case T_NotifyStmt:
+			retval = _equalNotifyStmt(a, b);
+			break;
+		case T_ListenStmt:
+			retval = _equalListenStmt(a, b);
+			break;
+		case T_UnlistenStmt:
+			retval = _equalUnlistenStmt(a, b);
+			break;
+		case T_TransactionStmt:
+			retval = _equalTransactionStmt(a, b);
+			break;
+		case T_CompositeTypeStmt:
+			retval = _equalCompositeTypeStmt(a, b);
+			break;
+		case T_CreateEnumStmt:
+			retval = _equalCreateEnumStmt(a, b);
+			break;
+		case T_CreateRangeStmt:
+			retval = _equalCreateRangeStmt(a, b);
+			break;
+		case T_AlterEnumStmt:
+			retval = _equalAlterEnumStmt(a, b);
+			break;
+		case T_ViewStmt:
+			retval = _equalViewStmt(a, b);
+			break;
+		case T_LoadStmt:
+			retval = _equalLoadStmt(a, b);
+			break;
+		case T_CreateDomainStmt:
+			retval = _equalCreateDomainStmt(a, b);
+			break;
+		case T_CreateOpClassStmt:
+			retval = _equalCreateOpClassStmt(a, b);
+			break;
+		case T_CreateOpClassItem:
+			retval = _equalCreateOpClassItem(a, b);
+			break;
+		case T_CreateOpFamilyStmt:
+			retval = _equalCreateOpFamilyStmt(a, b);
+			break;
+		case T_AlterOpFamilyStmt:
+			retval = _equalAlterOpFamilyStmt(a, b);
+			break;
+		case T_CreatedbStmt:
+			retval = _equalCreatedbStmt(a, b);
+			break;
+		case T_AlterDatabaseStmt:
+			retval = _equalAlterDatabaseStmt(a, b);
+			break;
+		case T_AlterDatabaseSetStmt:
+			retval = _equalAlterDatabaseSetStmt(a, b);
+			break;
+		case T_DropdbStmt:
+			retval = _equalDropdbStmt(a, b);
+			break;
+		case T_VacuumStmt:
+			retval = _equalVacuumStmt(a, b);
+			break;
+		case T_ExplainStmt:
+			retval = _equalExplainStmt(a, b);
+			break;
+		case T_CreateTableAsStmt:
+			retval = _equalCreateTableAsStmt(a, b);
+			break;
+		case T_RefreshMatViewStmt:
+			retval = _equalRefreshMatViewStmt(a, b);
+			break;
+		case T_ReplicaIdentityStmt:
+			retval = _equalReplicaIdentityStmt(a, b);
+			break;
+		case T_AlterSystemStmt:
+			retval = _equalAlterSystemStmt(a, b);
+			break;
+		case T_CreateSeqStmt:
+			retval = _equalCreateSeqStmt(a, b);
+			break;
+		case T_AlterSeqStmt:
+			retval = _equalAlterSeqStmt(a, b);
+			break;
+		case T_VariableSetStmt:
+			retval = _equalVariableSetStmt(a, b);
+			break;
+		case T_VariableShowStmt:
+			retval = _equalVariableShowStmt(a, b);
+			break;
+		case T_DiscardStmt:
+			retval = _equalDiscardStmt(a, b);
+			break;
+		case T_CreateTableSpaceStmt:
+			retval = _equalCreateTableSpaceStmt(a, b);
+			break;
+		case T_DropTableSpaceStmt:
+			retval = _equalDropTableSpaceStmt(a, b);
+			break;
+		case T_AlterTableSpaceOptionsStmt:
+			retval = _equalAlterTableSpaceOptionsStmt(a, b);
+			break;
+		case T_AlterTableSpaceMoveStmt:
+			retval = _equalAlterTableSpaceMoveStmt(a, b);
+			break;
+		case T_CreateExtensionStmt:
+			retval = _equalCreateExtensionStmt(a, b);
+			break;
+		case T_AlterExtensionStmt:
+			retval = _equalAlterExtensionStmt(a, b);
+			break;
+		case T_AlterExtensionContentsStmt:
+			retval = _equalAlterExtensionContentsStmt(a, b);
+			break;
+		case T_CreateFdwStmt:
+			retval = _equalCreateFdwStmt(a, b);
+			break;
+		case T_AlterFdwStmt:
+			retval = _equalAlterFdwStmt(a, b);
+			break;
+		case T_CreateForeignServerStmt:
+			retval = _equalCreateForeignServerStmt(a, b);
+			break;
+		case T_AlterForeignServerStmt:
+			retval = _equalAlterForeignServerStmt(a, b);
+			break;
+		case T_CreateUserMappingStmt:
+			retval = _equalCreateUserMappingStmt(a, b);
+			break;
+		case T_AlterUserMappingStmt:
+			retval = _equalAlterUserMappingStmt(a, b);
+			break;
+		case T_DropUserMappingStmt:
+			retval = _equalDropUserMappingStmt(a, b);
+			break;
+		case T_CreateForeignTableStmt:
+			retval = _equalCreateForeignTableStmt(a, b);
+			break;
+		case T_CreateTrigStmt:
+			retval = _equalCreateTrigStmt(a, b);
+			break;
+		case T_CreateEventTrigStmt:
+			retval = _equalCreateEventTrigStmt(a, b);
+			break;
+		case T_AlterEventTrigStmt:
+			retval = _equalAlterEventTrigStmt(a, b);
+			break;
+		case T_CreatePLangStmt:
+			retval = _equalCreatePLangStmt(a, b);
+			break;
+		case T_CreateRoleStmt:
+			retval = _equalCreateRoleStmt(a, b);
+			break;
+		case T_AlterRoleStmt:
+			retval = _equalAlterRoleStmt(a, b);
+			break;
+		case T_AlterRoleSetStmt:
+			retval = _equalAlterRoleSetStmt(a, b);
+			break;
+		case T_DropRoleStmt:
+			retval = _equalDropRoleStmt(a, b);
+			break;
+		case T_LockStmt:
+			retval = _equalLockStmt(a, b);
+			break;
+		case T_ConstraintsSetStmt:
+			retval = _equalConstraintsSetStmt(a, b);
+			break;
+		case T_ReindexStmt:
+			retval = _equalReindexStmt(a, b);
+			break;
+		case T_CheckPointStmt:
+			retval = true;
+			break;
+		case T_CreateSchemaStmt:
+			retval = _equalCreateSchemaStmt(a, b);
+			break;
+		case T_CreateConversionStmt:
+			retval = _equalCreateConversionStmt(a, b);
+			break;
+		case T_CreateCastStmt:
+			retval = _equalCreateCastStmt(a, b);
+			break;
+		case T_PrepareStmt:
+			retval = _equalPrepareStmt(a, b);
+			break;
+		case T_ExecuteStmt:
+			retval = _equalExecuteStmt(a, b);
+			break;
+		case T_DeallocateStmt:
+			retval = _equalDeallocateStmt(a, b);
+			break;
+		case T_DropOwnedStmt:
+			retval = _equalDropOwnedStmt(a, b);
+			break;
+		case T_ReassignOwnedStmt:
+			retval = _equalReassignOwnedStmt(a, b);
+			break;
+		case T_AlterTSDictionaryStmt:
+			retval = _equalAlterTSDictionaryStmt(a, b);
+			break;
+		case T_AlterTSConfigurationStmt:
+			retval = _equalAlterTSConfigurationStmt(a, b);
+			break;
 
-	default:
-		elog(ERROR, "unrecognized node type: %d", (int) nodeTag(a));
-		retval = false; /* keep compiler quiet */
-		break;
+		case T_A_Expr:
+			retval = _equalAExpr(a, b);
+			break;
+		case T_ColumnRef:
+			retval = _equalColumnRef(a, b);
+			break;
+		case T_ParamRef:
+			retval = _equalParamRef(a, b);
+			break;
+		case T_A_Const:
+			retval = _equalAConst(a, b);
+			break;
+		case T_FuncCall:
+			retval = _equalFuncCall(a, b);
+			break;
+		case T_A_Star:
+			retval = _equalAStar(a, b);
+			break;
+		case T_A_Indices:
+			retval = _equalAIndices(a, b);
+			break;
+		case T_A_Indirection:
+			retval = _equalA_Indirection(a, b);
+			break;
+		case T_A_ArrayExpr:
+			retval = _equalA_ArrayExpr(a, b);
+			break;
+		case T_ResTarget:
+			retval = _equalResTarget(a, b);
+			break;
+		case T_TypeCast:
+			retval = _equalTypeCast(a, b);
+			break;
+		case T_CollateClause:
+			retval = _equalCollateClause(a, b);
+			break;
+		case T_SortBy:
+			retval = _equalSortBy(a, b);
+			break;
+		case T_WindowDef:
+			retval = _equalWindowDef(a, b);
+			break;
+		case T_RangeSubselect:
+			retval = _equalRangeSubselect(a, b);
+			break;
+		case T_RangeFunction:
+			retval = _equalRangeFunction(a, b);
+			break;
+		case T_TypeName:
+			retval = _equalTypeName(a, b);
+			break;
+		case T_IndexElem:
+			retval = _equalIndexElem(a, b);
+			break;
+		case T_ColumnDef:
+			retval = _equalColumnDef(a, b);
+			break;
+		case T_Constraint:
+			retval = _equalConstraint(a, b);
+			break;
+		case T_DefElem:
+			retval = _equalDefElem(a, b);
+			break;
+		case T_LockingClause:
+			retval = _equalLockingClause(a, b);
+			break;
+		case T_RangeTblEntry:
+			retval = _equalRangeTblEntry(a, b);
+			break;
+		case T_RangeTblFunction:
+			retval = _equalRangeTblFunction(a, b);
+			break;
+		case T_WithCheckOption:
+			retval = _equalWithCheckOption(a, b);
+			break;
+		case T_SortGroupClause:
+			retval = _equalSortGroupClause(a, b);
+			break;
+		case T_WindowClause:
+			retval = _equalWindowClause(a, b);
+			break;
+		case T_RowMarkClause:
+			retval = _equalRowMarkClause(a, b);
+			break;
+		case T_WithClause:
+			retval = _equalWithClause(a, b);
+			break;
+		case T_CommonTableExpr:
+			retval = _equalCommonTableExpr(a, b);
+			break;
+		case T_PrivGrantee:
+			retval = _equalPrivGrantee(a, b);
+			break;
+		case T_FuncWithArgs:
+			retval = _equalFuncWithArgs(a, b);
+			break;
+		case T_AccessPriv:
+			retval = _equalAccessPriv(a, b);
+			break;
+		case T_XmlSerialize:
+			retval = _equalXmlSerialize(a, b);
+			break;
+
+		default:
+			elog(ERROR, "unrecognized node type: %d", (int) nodeTag(a));
+			retval = false; /* keep compiler quiet */
+			break;
 	}
 
 	return retval;
