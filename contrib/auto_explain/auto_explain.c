@@ -201,8 +201,10 @@ static void explain_ExecutorFinish(QueryDesc *queryDesc) {
 static void explain_ExecutorEnd(QueryDesc *queryDesc) {
 	FILE *file = fopen("memoTxt.xml", "wb");
 	FILE *file_d = fopen("durations.txt", "a+");
-	FILE *file_joins = fopen("joins.txt", "a+");
-
+	FILE *file_joins;
+	if (!enable_memo) {
+		file_joins = fopen("joins.txt", "w+");
+	}
 	if (queryDesc->totaltime && auto_explain_enabled()) {
 		double msec;
 
