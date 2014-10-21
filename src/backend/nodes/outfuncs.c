@@ -161,25 +161,25 @@ static void _outList(ArgType type, StringInfo str, const List *node, bool sim) {
 
 				/*if (lnext(lc)) {
 
-					switch (nodeTag(lfirst(lc))) {
+				 switch (nodeTag(lfirst(lc))) {
 
-						case T_OpExpr:
-						case T_BoolExpr:
-						case T_RestrictInfo:
-						case T_MemoClause:
-						case T_ScalarArrayOpExpr:
-							if (type == S_NULL)
-								appendStringInfoChar(str, ',');
+				 case T_OpExpr:
+				 case T_BoolExpr:
+				 case T_RestrictInfo:
+				 case T_MemoClause:
+				 case T_ScalarArrayOpExpr:
+				 if (type == S_NULL)
+				 appendStringInfoChar(str, ',');
 
-							break;
-						default:
-							//printf("node tag not colon %d \n",  nodeTag(lfirst(lc)) );
-							//fflush(stdout);
+				 break;
+				 default:
+				 //printf("node tag not colon %d \n",  nodeTag(lfirst(lc)) );
+				 //fflush(stdout);
 
-							break;
-					}
+				 break;
+				 }
 
-				}*/
+				 }*/
 			}
 		} else if (IsA(node, IntList))
 			appendStringInfo(str, " %d", lfirst_int(lc));
@@ -927,8 +927,8 @@ static void _outFuncExpr(StringInfo str, const FuncExpr *node) {
 	WRITE_LOCATION_FIELD(location);
 }
 static void _outSimFuncExpr(StringInfo str, const FuncExpr *node) {
-	WRITE_NODE_SIM_FIELD(S_NULL, args);
-	appendStringInfoSpaces(str, 1);
+	appendStringInfo(str, ":" CppAsString(args) " ") ;
+	_outSimNode(S_NULL,str, node->args);
 
 }
 
@@ -2427,10 +2427,10 @@ static void _outConstraint(StringInfo str, const Constraint *node) {
 	}
 }
 static char * getVarName(Index index) {
-	if (index >= curr_rte->size || curr_rte->rte_table[index] == NULL ){
+	if (index >= curr_rte->size || curr_rte->rte_table[index] == NULL) {
 		StringInfoData str;
 		initStringInfo(&str);
-		appendStringInfo(&str,"%u",index);
+		appendStringInfo(&str, "%u", index);
 
 		return str.data;
 	}
@@ -3030,14 +3030,15 @@ void _outSimParam(StringInfo str, const Param *node) {
 }
 void _outSimSubPlan(StringInfo str, const SubPlan *node) {
 
-	WRITE_STRING_FIELD(plan_name);
+	appendStringInfo(str, ":" CppAsString(pla_name) " ");
+	_outToken(str, node->plan_name);
 	WRITE_NODE_SIM_FIELD(S_NULL, args);
-	appendStringInfoSpaces(str, 1);
 
 }
 void _outSimRelabelType(StringInfo str, const RelabelType *node) {
-	WRITE_NODE_SIM_FIELD(S_NULL, arg);
-	appendStringInfoSpaces(str, 1);
+	appendStringInfo(str, ":" CppAsString(arg) " ");
+	_outSimNode(S_NULL, str, node->arg);
+
 }
 void _outSimRestrictInfo(StringInfo str, const RestrictInfo *node) {
 	/* NB: this isn't a complete set of fields */
