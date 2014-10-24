@@ -70,6 +70,7 @@ typedef struct RteReferences {
 	Value **rte_table;
 	int size;
 } RteReferences;
+extern bool lcontains(RelOptInfo *rel, List *clauses);
 extern List * restictInfoToMemoClauses(List *clauses) ;
 extern void push_reference(Index index,  Value * name);
 extern void * fetch_unique_rte_reference(void);
@@ -94,5 +95,7 @@ extern void set_plain_rel_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, Pa
 extern void set_join_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, JoinPath *pathnode);
 extern void set_agg_sizes_from_memo(PlannerInfo *root, Path *path);
 extern void free_memo_cache(void);
+extern void check_NoMemo_queries(void);
+
 #endif /* MEMOCACHE_H_ */
 

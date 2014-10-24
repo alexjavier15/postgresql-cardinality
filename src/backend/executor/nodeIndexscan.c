@@ -102,7 +102,6 @@ IndexNext(IndexScanState *node)
 				continue;
 			}
 		}
-
 		return slot;
 	}
 
