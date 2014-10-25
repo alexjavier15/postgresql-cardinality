@@ -358,7 +358,9 @@ void set_cheapest(RelOptInfo *parent_rel) {
  *
  * Returns nothing, but modifies parent_rel->pathlist.
  */
-void add_path(RelOptInfo *parent_rel, Path *new_path) {
+
+void add_path_final(RelOptInfo *parent_rel, Path *new_path) {
+
 	bool accept_new = true; /* unless we find a superior old path */
 	ListCell *insert_after = NULL; /* where to insert new item */
 	List *new_path_pathkeys;
@@ -525,27 +527,25 @@ void add_path(RelOptInfo *parent_rel, Path *new_path) {
 		if (!IsA(new_path, IndexPath))
 			pfree(new_path);
 	}
+
+}
+void add_path_tmp(RelOptInfo *parent_rel, Path *new_path) {
+
+	parent_rel->tmp_pathlist = lcons(new_path, parent_rel->tmp_pathlist);
+
 }
 
-/*
- * add_path_precheck
- *	  Check whether a proposed new path could possibly get accepted.
- *	  We assume we know the path's pathkeys and parameterization accurately,
- *	  and have lower bounds for its costs.
- *
- * Note that we do not know the path's rowcount, since getting an estimate for
- * that is too expensive to do before prechecking.	We assume here that paths
- * of a superset parameterization will generate fewer rows; if that holds,
- * then paths with different parameterizations cannot dominate each other
- * and so we can simply ignore existing paths of another parameterization.
- * (In the infrequent cases where that rule of thumb fails, add_path will
- * get rid of the inferior path.)
- *
- * At the time this is called, we haven't actually built a Path structure,
- * so the required information has to be passed piecemeal.
- */
-bool add_path_precheck(RelOptInfo *parent_rel, Cost startup_cost, Cost total_cost, List *pathkeys,
+void add_path(RelOptInfo *parent_rel, Path *new_path) {
+	if (!enable_memo || parent_rel->rtekind != RTE_JOIN)
+		add_path_final(parent_rel, new_path);
+	else
+
+		add_path_tmp(parent_rel, new_path);
+}
+
+bool add_path_precheck_final(RelOptInfo *parent_rel, Cost startup_cost, Cost total_cost, List *pathkeys,
 		Relids required_outer) {
+
 	List *new_path_pathkeys;
 	ListCell *p1;
 
@@ -592,6 +592,30 @@ bool add_path_precheck(RelOptInfo *parent_rel, Cost startup_cost, Cost total_cos
 		}
 	}
 
+	return true;
+
+}
+/*
+ * add_path_precheck
+ *	  Check whether a proposed new path could possibly get accepted.
+ *	  We assume we know the path's pathkeys and parameterization accurately,
+ *	  and have lower bounds for its costs.
+ *
+ * Note that we do not know the path's rowcount, since getting an estimate for
+ * that is too expensive to do before prechecking.	We assume here that paths
+ * of a superset parameterization will generate fewer rows; if that holds,
+ * then paths with different parameterizations cannot dominate each other
+ * and so we can simply ignore existing paths of another parameterization.
+ * (In the infrequent cases where that rule of thumb fails, add_path will
+ * get rid of the inferior path.)
+ *
+ * At the time this is called, we haven't actually built a Path structure,
+ * so the required information has to be passed piecemeal.
+ */
+bool add_path_precheck(RelOptInfo *parent_rel, Cost startup_cost, Cost total_cost, List *pathkeys,
+		Relids required_outer) {
+	if (!enable_memo)
+		return add_path_precheck_final(parent_rel, startup_cost, total_cost, pathkeys, required_outer);
 	return true;
 }
 
@@ -1615,6 +1639,7 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 	 * because the restrict_clauses list can affect the size and cost
 	 * estimates for this path.
 	 */
+	pathnode->required_outer = required_outer;
 	pathnode->path.restrictList = NIL;
 	pathnode->path.restrictList = list_concat(pathnode->path.restrictList, list_copy(restrict_clauses));
 	if (bms_overlap(inner_req_outer, outer_path->parent->relids)) {
@@ -1641,9 +1666,11 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 	pathnode->innerjoinpath = inner_path;
 	pathnode->joinrestrictinfo = restrict_clauses;
 	if (inner_path->parent->rtekind == RTE_JOIN)
-		pathnode->path.restrictList = list_concat_unique(pathnode->path.restrictList, list_copy(inner_path->restrictList));
+		pathnode->path.restrictList = list_concat_unique(pathnode->path.restrictList,
+				list_copy(inner_path->restrictList));
 	if (outer_path->parent->rtekind == RTE_JOIN)
-		pathnode->path.restrictList = list_concat_unique(pathnode->path.restrictList, list_copy(outer_path->restrictList));
+		pathnode->path.restrictList = list_concat_unique(pathnode->path.restrictList,
+				list_copy(outer_path->restrictList));
 
 	if (!lcontains(joinrel, pathnode->path.restrictList)) {
 		store_join(joinrel->rel_name, root->query_level, list_copy(pathnode->path.restrictList), joinrel->rows, false);
@@ -1654,6 +1681,7 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 	set_join_sizes_from_memo(root, joinrel, pathnode);
 
 	final_cost_nestloop(root, pathnode, workspace, sjinfo, semifactors);
+	pathnode->workspace = workspace;
 
 	return pathnode;
 }
@@ -1683,6 +1711,7 @@ create_mergejoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
 		Relids required_outer, List *mergeclauses, List *outersortkeys, List *innersortkeys) {
 	MergePath *pathnode = makeNode(MergePath);
 
+	pathnode->jpath.required_outer = required_outer;
 	pathnode->jpath.path.pathtype = T_MergeJoin;
 	pathnode->jpath.path.parent = joinrel;
 	pathnode->jpath.path.param_info = get_joinrel_parampathinfo(root, joinrel, outer_path, inner_path, sjinfo,
@@ -1719,6 +1748,7 @@ create_mergejoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
 	/* pathnode->materialize_inner will be set by final_cost_mergejoin */
 
 	final_cost_mergejoin(root, pathnode, workspace, sjinfo);
+	pathnode->jpath.workspace = workspace;
 
 	return pathnode;
 }
@@ -1749,6 +1779,7 @@ create_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 	pathnode->jpath.path.parent = joinrel;
 	pathnode->jpath.path.param_info = get_joinrel_parampathinfo(root, joinrel, outer_path, inner_path, sjinfo,
 			required_outer, &restrict_clauses);
+	pathnode->jpath.required_outer = required_outer;
 
 	/*
 	 * A hashjoin never has pathkeys, since its output ordering is
@@ -1788,6 +1819,7 @@ create_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 	/* final_cost_hashjoin will fill in pathnode->num_batches */
 
 	final_cost_hashjoin(root, pathnode, workspace, sjinfo, semifactors);
+	pathnode->jpath.workspace = workspace;
 
 	return pathnode;
 }

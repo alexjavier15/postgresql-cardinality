@@ -70,6 +70,7 @@ typedef struct RteReferences {
 	Value **rte_table;
 	int size;
 } RteReferences;
+extern void recost_paths(PlannerInfo *root, RelOptInfo *joinrel);
 extern bool lcontains(RelOptInfo *rel, List *clauses);
 extern List * restictInfoToMemoClauses(List *clauses) ;
 extern void push_reference(Index index,  Value * name);

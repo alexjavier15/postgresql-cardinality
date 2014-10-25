@@ -400,7 +400,7 @@ void discard_existing_joins(void) {
 			dlist_foreach_modify (iter2, &memo_query_ptr->content[i]) {
 				MemoRelation *existingjoin = dlist_container(MemoRelation,list_node, iter2.cur);
 
-				if (equals(cachedjoin, existingjoin) && cachedjoin->level == existingjoin->level  ) {
+				if (equals(cachedjoin, existingjoin) && cachedjoin->level == existingjoin->level) {
 
 					MemoInfoData1 resultClause;
 
@@ -1507,4 +1507,59 @@ void set_agg_sizes_from_memo(PlannerInfo *root, Path *path) {
 
 		path->rows = 0;
 	}
+}
+void recost_paths(PlannerInfo *root, RelOptInfo *joinrel) {
+	ListCell *lc;
+
+	foreach(lc,joinrel->tmp_pathlist) {
+		JoinPath *joinpath = (JoinPath *) lfirst(lc);
+		List *pathkeys = NIL;
+		JoinCostWorkspace *workspace = NULL;
+		Relids required_outer = NULL;
+		switch (joinpath->path.pathtype) {
+			case T_MergeJoin:
+				workspace = ((MergePath *) joinpath)->jpath.workspace;
+
+				initial_cost_mergejoin(root, workspace, ((MergePath *) joinpath)->jpath.jointype,
+						((MergePath *) joinpath)->path_mergeclauses, ((MergePath *) joinpath)->jpath.outerjoinpath,
+						((MergePath *) joinpath)->jpath.innerjoinpath, ((MergePath *) joinpath)->outersortkeys,
+						((MergePath *) joinpath)->innersortkeys, NULL);
+				final_cost_mergejoin(root, (MergePath *) joinpath, workspace, NULL);
+				pathkeys = ((MergePath *) joinpath)->jpath.path.pathkeys;
+				required_outer = ((MergePath *) joinpath)->jpath.required_outer;
+				break;
+			case T_HashJoin:
+				workspace = ((HashPath *) joinpath)->jpath.workspace;
+
+				initial_cost_hashjoin(root, workspace, ((HashPath *) joinpath)->jpath.jointype,
+						((HashPath *) joinpath)->path_hashclauses, ((HashPath *) joinpath)->jpath.outerjoinpath,
+						((HashPath *) joinpath)->jpath.innerjoinpath, NULL, workspace->semifactors);
+				final_cost_hashjoin(root, (HashPath *) joinpath, workspace, NULL, workspace->semifactors);
+				pathkeys = ((HashPath *) joinpath)->jpath.path.pathkeys;
+				required_outer = ((HashPath *) joinpath)->jpath.required_outer;
+				break;
+				break;
+			case T_NestLoop:
+				workspace = joinpath->workspace;
+
+				initial_cost_nestloop(root, workspace, joinpath->jointype, joinpath->outerjoinpath,
+						joinpath->innerjoinpath, NULL, workspace->semifactors);
+				final_cost_nestloop(root, joinpath, workspace, NULL, workspace->semifactors);
+				pathkeys = joinpath->path.pathkeys;
+				required_outer = joinpath->required_outer;
+				break;
+			default:
+				elog(ERROR, "unrecognized node type: %d", (int) joinpath->path.pathtype);
+				break;
+		}
+
+		if (add_path_precheck_final(joinrel, workspace->startup_cost, workspace->total_cost, pathkeys,
+				required_outer)) {
+
+			add_path_final(joinrel, (Path*) joinpath);
+
+		}
+
+	}
+
 }
