@@ -1574,6 +1574,7 @@ void add_recosted_paths(RelOptInfo *joinrel) {
 				required_outer = ((MergePath *) joinpath)->jpath.required_outer;
 				break;
 			case T_HashJoin:
+				workspace = ((HashPath *) joinpath)->jpath.workspace;
 
 				pathkeys = ((HashPath *) joinpath)->jpath.path.pathkeys;
 				required_outer = ((HashPath *) joinpath)->jpath.required_outer;
