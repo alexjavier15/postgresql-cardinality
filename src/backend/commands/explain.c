@@ -1057,19 +1057,24 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 		double startup_sec = 1000.0 * planstate->instrument->startup / nloops;
 		double total_sec = 1000.0 * planstate->instrument->total / nloops;
 		double rows = planstate->instrument->ntuples;
+		double mtuples = planstate->instrument->mtuples;
 
 		if (es->format == EXPLAIN_FORMAT_TEXT) {
 			if (planstate->instrument->need_timer)
-				appendStringInfo(es->str, " (actual time=%.3f..%.3f rows=%.0f loops=%.0f)", startup_sec, total_sec,
-						rows, nloops);
+				appendStringInfo(es->str, " (actual time=%.3f..%.3f rows=%.0f mtuples%.0f loops=%.0f)", startup_sec, total_sec,
+						rows,mtuples, nloops);
 			else
 				appendStringInfo(es->str, " (actual rows=%.5f loops=%.0f)", rows, nloops);
+
+
+
 		} else {
 			if (planstate->instrument->need_timer) {
 				ExplainPropertyFloat("Actual Startup Time", startup_sec, 3, es);
 				ExplainPropertyFloat("Actual Total Time", total_sec, 3, es);
 			}
 			ExplainPropertyFloat("Actual Rows", rows, 0, es);
+			ExplainPropertyFloat("Actual Mtuples", mtuples, 0, es);
 			ExplainPropertyFloat("Actual Loops", nloops, 0, es);
 		}
 	} else if (es->analyze) {

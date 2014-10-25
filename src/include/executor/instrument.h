@@ -61,6 +61,10 @@ typedef struct Instrumentation
 	double		nfiltered1;		/* # tuples removed by scanqual or joinqual */
 	double		nfiltered2;		/* # tuples removed by "other" quals */
 	BufferUsage bufusage;		/* Total buffer usage */
+	double		mtuples;		/* Total tuples produced */
+
+
+
 } Instrumentation;
 
 extern PGDLLIMPORT BufferUsage pgBufferUsage;

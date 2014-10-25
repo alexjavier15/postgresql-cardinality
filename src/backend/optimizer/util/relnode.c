@@ -131,6 +131,7 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptKind reloptkind) {
 	rel->last_memorel = NULL;
 	rel->last_restrictList = NIL;
 	rel->paramloops = 0;
+	rel->memo_checked=false;
 
 	/* Check type of rtable entry */
 	switch (rte->rtekind) {
@@ -316,6 +317,8 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 	RelOptInfo *joinrel;
 	//Relation relation;
 	List *restrictlist;
+	List *restrictlist1;
+
 	//ListCell *lc;
 
 	/*
@@ -328,13 +331,23 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 		 * Yes, so we only need to figure the restrictlist for this particular
 		 * pair of component relations.
 		 */
-		if (restrictlist_ptr) {
-			*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
 
+		if (joinrel) {
+			/*
+			 * Yes, so we only need to figure the restrictlist for this particular
+			 * pair of component relations.
+			 */
+			if (restrictlist_ptr) {
+				*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
 
+				if (enable_memo && !joinrel->memo_checked && outer_rel->memo_checked)
+					set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo, list_copy(*restrictlist_ptr));
+
+			}
+
+			return joinrel;
 		}
 
-		return joinrel;
 	}
 
 	/*
@@ -391,8 +404,8 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 	joinrel->last_level = 0;
 	joinrel->last_memorel = NULL;
 	joinrel->last_restrictList = NIL;
-	joinrel->paramloops=0;
-
+	joinrel->paramloops = 0;
+	joinrel->all_restrictList = NIL;
 	//}
 
 	/*
@@ -429,11 +442,11 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 	 * Set estimates of the joinrel's size.
 	 */
 
-	joinrel->restrictList = list_concat_unique(joinrel->restrictList, list_copy(inner_rel->restrictList));
-	joinrel->restrictList = list_concat_unique(joinrel->restrictList, list_copy(outer_rel->restrictList));
-	joinrel->restrictList = list_concat_unique(joinrel->restrictList,
-			generate_join_implied_equalities(root, joinrel->relids, outer_rel->relids, inner_rel));
-
+	/*joinrel->restrictList = list_concat_unique(joinrel->restrictList, list_copy(inner_rel->restrictList));
+	 joinrel->restrictList = list_concat_unique(joinrel->restrictList, list_copy(outer_rel->restrictList));
+	 joinrel->restrictList = list_concat_unique(joinrel->restrictList,
+	 generate_join_implied_equalities(root, joinrel->relids, outer_rel->relids, inner_rel));*/
+	//joinrel->restrictList = list_copy(restrictlist);
 	set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo, restrictlist);
 
 	/*
@@ -763,7 +776,7 @@ get_baserel_parampathinfo(PlannerInfo *root, RelOptInfo *baserel, Relids require
 	//don't forget to clean paramoops after affectation
 	if (baserel->paramloops)
 		ppi->paramloops = baserel->paramloops;
-	ppi->restrictList =list_concat(list_copy(pclauses), baserel->baserestrictinfo);
+	ppi->restrictList = list_concat(list_copy(pclauses), baserel->baserestrictinfo);
 	ppi->ppi_clauses = pclauses;
 	baserel->ppilist = lappend(baserel->ppilist, ppi);
 	baserel->paramloops = 0;
@@ -881,12 +894,12 @@ get_joinrel_parampathinfo(PlannerInfo *root, RelOptInfo *joinrel, Path *outer_pa
 	ppi = makeNode(ParamPathInfo);
 	ppi->ppi_req_outer = required_outer;
 	ppi->ppi_rows = rows;
-	if(joinrel->paramloops)
-		ppi->paramloops=joinrel->paramloops;
+	if (joinrel->paramloops)
+		ppi->paramloops = joinrel->paramloops;
 	ppi->ppi_clauses = NIL;
 	ppi->restrictList = list_concat_unique(list_copy(*restrict_clauses), joinrel->restrictList);
 	joinrel->ppilist = lappend(joinrel->ppilist, ppi);
-	joinrel->paramloops= 0;
+	joinrel->paramloops = 0;
 	return ppi;
 }
 

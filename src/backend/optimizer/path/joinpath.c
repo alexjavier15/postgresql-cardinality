@@ -420,6 +420,7 @@ try_mergejoin_path(PlannerInfo *root,
 									   mergeclauses,
 									   outersortkeys,
 									   innersortkeys));
+
 	}
 	else
 	{

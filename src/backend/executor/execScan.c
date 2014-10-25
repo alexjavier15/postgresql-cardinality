@@ -225,6 +225,7 @@ ExecScan(ScanState *node,
 		/*
 		 * Tuple fails qual, so free per-tuple memory and try again.
 		 */
+
 		ResetExprContext(econtext);
 	}
 }

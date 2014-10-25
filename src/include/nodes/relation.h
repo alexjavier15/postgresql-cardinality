@@ -530,6 +530,7 @@ typedef struct RelOptInfo
 	bool		has_eclass_joins;		/* T means joininfo is incomplete */
 	/* used by memo calculations */
 	List *		restrictList;
+	List		*joinRestrictList;
 	List		*rel_name;
 	bool		memo_checked;
 	List		*last_restrictList;
@@ -537,6 +538,7 @@ typedef struct RelOptInfo
 	bool		last_index_type;
 	MemoRelation		*last_memorel;
 	double		paramloops;
+	List* 		all_restrictList;
 
 
 } RelOptInfo;

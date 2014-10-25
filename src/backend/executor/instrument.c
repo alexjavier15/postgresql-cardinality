@@ -19,26 +19,21 @@
 
 BufferUsage pgBufferUsage;
 
-static void BufferUsageAccumDiff(BufferUsage *dst,
-					 const BufferUsage *add, const BufferUsage *sub);
-
+static void BufferUsageAccumDiff(BufferUsage *dst, const BufferUsage *add, const BufferUsage *sub);
 
 /* Allocate new instrumentation structure(s) */
 Instrumentation *
-InstrAlloc(int n, int instrument_options)
-{
+InstrAlloc(int n, int instrument_options) {
 	Instrumentation *instr;
 
 	/* initialize all fields to zeroes, then modify as needed */
 	instr = palloc0(n * sizeof(Instrumentation));
-	if (instrument_options & (INSTRUMENT_BUFFERS | INSTRUMENT_TIMER))
-	{
-		bool		need_buffers = (instrument_options & INSTRUMENT_BUFFERS) != 0;
-		bool		need_timer = (instrument_options & INSTRUMENT_TIMER) != 0;
-		int			i;
+	if (instrument_options & (INSTRUMENT_BUFFERS | INSTRUMENT_TIMER)) {
+		bool need_buffers = (instrument_options & INSTRUMENT_BUFFERS) != 0;
+		bool need_timer = (instrument_options & INSTRUMENT_TIMER) != 0;
+		int i;
 
-		for (i = 0; i < n; i++)
-		{
+		for (i = 0; i < n; i++) {
 			instr[i].need_bufusage = need_buffers;
 			instr[i].need_timer = need_timer;
 		}
@@ -48,11 +43,8 @@ InstrAlloc(int n, int instrument_options)
 }
 
 /* Entry to a plan node */
-void
-InstrStartNode(Instrumentation *instr)
-{
-	if (instr->need_timer)
-	{
+void InstrStartNode(Instrumentation *instr) {
+	if (instr->need_timer) {
 		if (INSTR_TIME_IS_ZERO(instr->starttime))
 			INSTR_TIME_SET_CURRENT(instr->starttime);
 		else
@@ -65,17 +57,16 @@ InstrStartNode(Instrumentation *instr)
 }
 
 /* Exit from a plan node */
-void
-InstrStopNode(Instrumentation *instr, double nTuples)
-{
-	instr_time	endtime;
+void InstrStopNode(Instrumentation *instr, double nTuples) {
+	instr_time endtime;
 
 	/* count the returned tuples */
+	if (instr->tuplecount)
+		instr->mtuples += 1;
 	instr->tuplecount += nTuples;
 
 	/* let's update the time only if the timer was requested */
-	if (instr->need_timer)
-	{
+	if (instr->need_timer) {
 		if (INSTR_TIME_IS_ZERO(instr->starttime))
 			elog(ERROR, "InstrStopNode called without start");
 
@@ -87,22 +78,18 @@ InstrStopNode(Instrumentation *instr, double nTuples)
 
 	/* Add delta of buffer usage since entry to node's totals */
 	if (instr->need_bufusage)
-		BufferUsageAccumDiff(&instr->bufusage,
-							 &pgBufferUsage, &instr->bufusage_start);
+		BufferUsageAccumDiff(&instr->bufusage, &pgBufferUsage, &instr->bufusage_start);
 
 	/* Is this the first tuple of this cycle? */
-	if (!instr->running)
-	{
+	if (!instr->running) {
 		instr->running = true;
 		instr->firsttuple = INSTR_TIME_GET_DOUBLE(instr->counter);
 	}
 }
 
 /* Finish a run cycle for a plan node */
-void
-InstrEndLoop(Instrumentation *instr)
-{
-	double		totaltime;
+void InstrEndLoop(Instrumentation *instr) {
+	double totaltime;
 
 	/* Skip if nothing has happened, or already shut down */
 	if (!instr->running)
@@ -128,11 +115,7 @@ InstrEndLoop(Instrumentation *instr)
 }
 
 /* dst += add - sub */
-static void
-BufferUsageAccumDiff(BufferUsage *dst,
-					 const BufferUsage *add,
-					 const BufferUsage *sub)
-{
+static void BufferUsageAccumDiff(BufferUsage *dst, const BufferUsage *add, const BufferUsage *sub) {
 	dst->shared_blks_hit += add->shared_blks_hit - sub->shared_blks_hit;
 	dst->shared_blks_read += add->shared_blks_read - sub->shared_blks_read;
 	dst->shared_blks_dirtied += add->shared_blks_dirtied - sub->shared_blks_dirtied;
@@ -143,8 +126,6 @@ BufferUsageAccumDiff(BufferUsage *dst,
 	dst->local_blks_written += add->local_blks_written - sub->local_blks_written;
 	dst->temp_blks_read += add->temp_blks_read - sub->temp_blks_read;
 	dst->temp_blks_written += add->temp_blks_written - sub->temp_blks_written;
-	INSTR_TIME_ACCUM_DIFF(dst->blk_read_time,
-						  add->blk_read_time, sub->blk_read_time);
-	INSTR_TIME_ACCUM_DIFF(dst->blk_write_time,
-						  add->blk_write_time, sub->blk_write_time);
+	INSTR_TIME_ACCUM_DIFF(dst->blk_read_time, add->blk_read_time, sub->blk_read_time);
+	INSTR_TIME_ACCUM_DIFF(dst->blk_write_time, add->blk_write_time, sub->blk_write_time);
 }
