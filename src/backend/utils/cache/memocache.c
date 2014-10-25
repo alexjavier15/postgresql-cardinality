@@ -1073,6 +1073,10 @@ void check_NoMemo_queries(void) {
 		}
 	}
 
+	printf("New memo cache state :\n-----------------------\n");
+
+	printMemoCache();
+	printf("End\n-----------------------\n");
 
 }
 static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation **relation2,

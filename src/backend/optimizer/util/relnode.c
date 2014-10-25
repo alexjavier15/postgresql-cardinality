@@ -131,6 +131,7 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptKind reloptkind) {
 	rel->last_memorel = NULL;
 	rel->last_restrictList = NIL;
 	rel->paramloops = 0;
+	rel->memo_checked=false;
 
 	/* Check type of rtable entry */
 	switch (rte->rtekind) {
@@ -330,19 +331,23 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 		 * Yes, so we only need to figure the restrictlist for this particular
 		 * pair of component relations.
 		 */
-		if (restrictlist_ptr) {
-			*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
 
+		if (joinrel) {
+			/*
+			 * Yes, so we only need to figure the restrictlist for this particular
+			 * pair of component relations.
+			 */
+			if (restrictlist_ptr) {
+				*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
 
-				if (enable_memo && !joinrel->memo_checked && outer_rel->memo_checked) {
+				if (enable_memo && !joinrel->memo_checked && outer_rel->memo_checked)
+					set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo, list_copy(*restrictlist_ptr));
 
-					set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo, *restrictlist_ptr);
+			}
 
-				}
-
-
+			return joinrel;
 		}
-		return joinrel;
+
 	}
 
 	/*
@@ -400,7 +405,7 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 	joinrel->last_memorel = NULL;
 	joinrel->last_restrictList = NIL;
 	joinrel->paramloops = 0;
-	joinrel->all_restrictList=NIL;
+	joinrel->all_restrictList = NIL;
 	//}
 
 	/*

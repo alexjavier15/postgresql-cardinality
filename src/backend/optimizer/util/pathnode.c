@@ -1641,9 +1641,9 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 	pathnode->innerjoinpath = inner_path;
 	pathnode->joinrestrictinfo = restrict_clauses;
 	if (inner_path->parent->rtekind == RTE_JOIN)
-		pathnode->path.restrictList = list_concat_unique(pathnode->path.restrictList, inner_path->restrictList);
+		pathnode->path.restrictList = list_concat_unique(pathnode->path.restrictList, list_copy(inner_path->restrictList));
 	if (outer_path->parent->rtekind == RTE_JOIN)
-		pathnode->path.restrictList = list_concat_unique(pathnode->path.restrictList, outer_path->restrictList);
+		pathnode->path.restrictList = list_concat_unique(pathnode->path.restrictList, list_copy(outer_path->restrictList));
 
 	if (!lcontains(joinrel, pathnode->path.restrictList)) {
 		store_join(joinrel->rel_name, root->query_level, list_copy(pathnode->path.restrictList), joinrel->rows, false);
@@ -1702,15 +1702,15 @@ create_mergejoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
 			list_copy(restrict_clauses));
 	if (inner_path->parent->rtekind == RTE_JOIN)
 		pathnode->jpath.path.restrictList = list_concat_unique(pathnode->jpath.path.restrictList,
-				inner_path->restrictList);
+				list_copy(inner_path->restrictList));
 	if (outer_path->parent->rtekind == RTE_JOIN)
 		pathnode->jpath.path.restrictList = list_concat_unique(pathnode->jpath.path.restrictList,
-				outer_path->restrictList);
+				list_copy(outer_path->restrictList));
 
 	if (!lcontains(joinrel, pathnode->jpath.path.restrictList)) {
 		store_join(joinrel->rel_name, root->query_level, list_copy(pathnode->jpath.path.restrictList), joinrel->rows,
 				false);
-		joinrel->all_restrictList = lappend(joinrel->all_restrictList, pathnode->jpath.path.restrictList);
+		joinrel->all_restrictList = lappend(joinrel->all_restrictList, list_copy(pathnode->jpath.path.restrictList));
 
 	}
 
@@ -1774,10 +1774,10 @@ create_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 			list_copy(restrict_clauses));
 	if (inner_path->parent->rtekind == RTE_JOIN)
 		pathnode->jpath.path.restrictList = list_concat_unique(pathnode->jpath.path.restrictList,
-				inner_path->restrictList);
+				list_copy(inner_path->restrictList));
 	if (outer_path->parent->rtekind == RTE_JOIN)
 		pathnode->jpath.path.restrictList = list_concat_unique(pathnode->jpath.path.restrictList,
-				outer_path->restrictList);
+				list_copy(outer_path->restrictList));
 
 	if (!lcontains(joinrel, pathnode->jpath.path.restrictList)) {
 		store_join(joinrel->rel_name, root->query_level, list_copy(pathnode->jpath.path.restrictList), joinrel->rows,
