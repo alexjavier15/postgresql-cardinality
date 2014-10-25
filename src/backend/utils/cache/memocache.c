@@ -400,7 +400,7 @@ void discard_existing_joins(void) {
 			dlist_foreach_modify (iter2, &memo_query_ptr->content[i]) {
 				MemoRelation *existingjoin = dlist_container(MemoRelation,list_node, iter2.cur);
 
-				if (equals(cachedjoin, existingjoin)) {
+				if (equals(cachedjoin, existingjoin) && cachedjoin->level == existingjoin->level  ) {
 
 					MemoInfoData1 resultClause;
 
@@ -1040,7 +1040,7 @@ void check_NoMemo_queries(void) {
 				rellen = list_length(target->relationname);
 				/*		printf("Checking :\n**********************\n");
 				 print_relation(target);
-				 printf("********************************\n");*/
+				 printf("********************************\n")*/;
 				query = find_seeder_relations(&relation1, &relation2, &commonrelation, target->relationname,
 						target->clauses, target->level, rellen);
 
@@ -1215,7 +1215,7 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 		memorelation = dlist_container(MemoRelation,list_node, iter.cur);
 		equal = equalSet(list_copy(memorelation->relationname), list_copy(relname));
 
-		if (equal) {
+		if (equal && memorelation->level == level) {
 			if (isParam == 3) {
 				result->found = FULL_MATCHED;
 				*relation = &(*memorelation);
@@ -1223,7 +1223,7 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 
 			}
 
-			if ((isParam < 2 && memorelation->isParameterized == isParam) || isParam > 2) {
+			if ((isParam < 2 && memorelation->isParameterized == isParam) || isParam >= 2) {
 				//	print_relation(memorelation);
 				if (result != NULL) {
 
