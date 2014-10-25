@@ -1123,7 +1123,7 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 						// relation just from one base relation
 
 						contains(NULL, &commonrel, (CacheM *) query, resultName_ptr->matches, NIL, level, 2);
-						if (commonrel != NULL) {
+						if (commonrel != NULL && !commonrel->isParameterized) {
 							/*bool diff_realIndex = false;
 							 bool com_realIndex = false;*/
 							contains(NULL, &diffrel, (CacheM *) query, resultName_ptr->unmatches, NIL, level, 2);
@@ -1223,7 +1223,7 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 
 			}
 
-			if ((isParam < 2 && memorelation->isParameterized == isParam) || isParam >= 2) {
+			if ((isParam < 2 && memorelation->isParameterized == isParam) || isParam == 2) {
 				//	print_relation(memorelation);
 				if (result != NULL) {
 
@@ -1249,9 +1249,6 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 						leftmatched = memorelation;
 
 					}
-				} else {
-					*relation = &(*memorelation);
-					return;
 				}
 
 			}
