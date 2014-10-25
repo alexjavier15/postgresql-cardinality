@@ -3135,7 +3135,7 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 	}
 	if (!enable_memo || nrows == -1) {
 
-		nrows = rel->tuples * clauselist_selectivity(root, allclauses, rel->relid, JOIN_INNER, NULL);
+		nrows = rel->tuples * clauselist_selectivity(root, allclauses, rel->relid, JOIN_INNER, NULL)/1000;
 
 	}
 	nrows = clamp_row_est(nrows);
