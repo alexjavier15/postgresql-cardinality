@@ -317,7 +317,6 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 	RelOptInfo *joinrel;
 	//Relation relation;
 	List *restrictlist;
-	List *restrictlist1;
 
 	//ListCell *lc;
 
