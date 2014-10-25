@@ -1261,6 +1261,7 @@ static Cost bitmap_scan_cost_est(PlannerInfo *root, RelOptInfo *rel, Path *ipath
 	bpath.path.pathkeys = NIL;
 	bpath.bitmapqual = ipath;
 	bpath.loop = get_loop_count(root, required_outer);
+	set_plain_rel_sizes_from_memo(root, rel, &bpath,NULL, true);
 
 	cost_bitmap_heap_scan(&bpath.path, root, rel, bpath.path.param_info, ipath, bpath.loop);
 
