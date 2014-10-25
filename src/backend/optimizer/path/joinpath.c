@@ -500,7 +500,6 @@ try_hashjoin_path(PlannerInfo *root,
 		/* Waste no memory when we reject a path here */
 		bms_free(required_outer);
 	}
-	joinrel->workspace = &workspace;
 }
 
 /*

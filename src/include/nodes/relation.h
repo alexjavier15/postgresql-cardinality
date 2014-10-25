@@ -515,21 +515,21 @@ typedef struct RelOptInfo
 	/* use "struct Plan" to avoid including plannodes.h here */
 	struct Plan *subplan;		/* if subquery */
 	PlannerInfo *subroot;		/* if subquery */
-	List	   *subplan_params; /* if subquery */
+	List	    *subplan_params; /* if subquery */
 	/* use "struct FdwRoutine" to avoid including fdwapi.h here */
 	struct FdwRoutine *fdwroutine;		/* if foreign table */
-	void	   *fdw_private;	/* if foreign table */
+	void	    *fdw_private;	/* if foreign table */
 
 	JoinCostWorkspace *workspace; /* used for calculating cost on cardinality injection*/
 	/* used by various scans and joins: */
-	List	   *baserestrictinfo;		/* RestrictInfo structures (if base
+	List	    *baserestrictinfo;		/* RestrictInfo structures (if base
 										 * rel) */
 	QualCost	baserestrictcost;		/* cost of evaluating the above */
-	List	   *joininfo;		/* RestrictInfo structures for join clauses
+	List	    *joininfo;		/* RestrictInfo structures for join clauses
 								 * involving this rel */
 	bool		has_eclass_joins;		/* T means joininfo is incomplete */
 	/* used by memo calculations */
-	List *		restrictList;
+	List        *restrictList;
 	List		*joinRestrictList;
 	List		*rel_name;
 	bool		memo_checked;
@@ -538,7 +538,8 @@ typedef struct RelOptInfo
 	bool		last_index_type;
 	MemoRelation		*last_memorel;
 	double		paramloops;
-	List* 		all_restrictList;
+	List	    *all_restrictList;
+	List 		*tmp_pathlist;
 
 
 } RelOptInfo;
@@ -1079,8 +1080,10 @@ typedef struct JoinPath
 	JoinType	jointype;
 	Path	   *outerjoinpath;	/* path for the outer side of the join */
 	Path	   *innerjoinpath;	/* path for the inner side of the join */
-
 	List	   *joinrestrictinfo;		/* RestrictInfos to apply to join */
+	JoinCostWorkspace *workspace;
+	Relids      required_outer;
+
 	/*used by memo calculations*/
 
 
