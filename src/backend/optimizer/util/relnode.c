@@ -131,7 +131,7 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptKind reloptkind) {
 	rel->last_memorel = NULL;
 	rel->last_restrictList = NIL;
 	rel->paramloops = 0;
-	rel->memo_checked=false;
+	rel->memo_checked = false;
 
 	/* Check type of rtable entry */
 	switch (rte->rtekind) {
@@ -340,9 +340,16 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 			if (restrictlist_ptr) {
 				*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
 
-				if (enable_memo && !joinrel->memo_checked && inner_rel->memo_checked)
-					set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo, list_copy(*restrictlist_ptr));
+				if (enable_memo && !joinrel->memo_checked && inner_rel->memo_checked) {
+					int nrows = joinrel->rows;
+					set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo,
+							list_copy(*restrictlist_ptr));
+					if (joinrel->rows != nrows) {
+						joinrel->pathlist = NIL;
+						recost_paths(root, joinrel);
+					}
 
+				}
 			}
 
 			return joinrel;
