@@ -1553,10 +1553,47 @@ void recost_paths(PlannerInfo *root, RelOptInfo *joinrel) {
 				break;
 		}
 
+	}
+
+}
+
+void add_recosted_paths(RelOptInfo *joinrel) {
+
+	ListCell *lc;
+
+	foreach(lc,joinrel->tmp_pathlist) {
+		JoinPath *joinpath = (JoinPath *) lfirst(lc);
+		List *pathkeys = NIL;
+		JoinCostWorkspace *workspace = NULL;
+		Relids required_outer = NULL;
+		switch (joinpath->path.pathtype) {
+			case T_MergeJoin:
+				workspace = ((MergePath *) joinpath)->jpath.workspace;
+
+				pathkeys = ((MergePath *) joinpath)->jpath.path.pathkeys;
+				required_outer = ((MergePath *) joinpath)->jpath.required_outer;
+				break;
+			case T_HashJoin:
+
+				pathkeys = ((HashPath *) joinpath)->jpath.path.pathkeys;
+				required_outer = ((HashPath *) joinpath)->jpath.required_outer;
+				break;
+				break;
+			case T_NestLoop:
+				workspace = joinpath->workspace;
+
+				pathkeys = joinpath->path.pathkeys;
+				required_outer = joinpath->required_outer;
+				break;
+			default:
+				elog(ERROR, "unrecognized node type: %d", (int) joinpath->path.pathtype);
+				break;
+		}
+
 		if (add_path_precheck_final(joinrel, workspace->startup_cost, workspace->total_cost, pathkeys,
 				required_outer)) {
 
-			add_path_final(joinrel, (Path*) joinpath);
+			add_path_final(joinrel, (Path *) joinpath);
 
 		}
 
