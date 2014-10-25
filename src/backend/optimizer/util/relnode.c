@@ -340,7 +340,7 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 			if (restrictlist_ptr) {
 				*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
 
-				if (enable_memo && !joinrel->memo_checked && outer_rel->memo_checked)
+				if (enable_memo && !joinrel->memo_checked && inner_rel->memo_checked)
 					set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo, list_copy(*restrictlist_ptr));
 
 			}
@@ -777,6 +777,7 @@ get_baserel_parampathinfo(PlannerInfo *root, RelOptInfo *baserel, Relids require
 	if (baserel->paramloops)
 		ppi->paramloops = baserel->paramloops;
 	ppi->restrictList = list_concat(list_copy(pclauses), baserel->baserestrictinfo);
+
 	ppi->ppi_clauses = pclauses;
 	baserel->ppilist = lappend(baserel->ppilist, ppi);
 	baserel->paramloops = 0;

@@ -288,10 +288,8 @@ void cost_index(IndexPath *path, PlannerInfo *root, double loop_count) {
 	run_cost += indexTotalCost - indexStartupCost;
 
 	/* estimate number of main-table tuples fetched */
-	if (enable_memo && path->path.total_rows) {
-		tuples_fetched = clamp_row_est(path->path.total_rows / loop_count);
-	} else
-		tuples_fetched = clamp_row_est(indexSelectivity * baserel->tuples);
+
+	tuples_fetched = clamp_row_est(indexSelectivity * baserel->tuples);
 
 	/* fetch estimated page costs for tablespace containing table */
 	get_tablespace_page_costs(baserel->reltablespace, &spc_random_page_cost, &spc_seq_page_cost);
@@ -3058,10 +3056,11 @@ static double approx_tuple_count(PlannerInfo *root, JoinPath *path, List *quals)
  *	baserestrictcost: estimated cost of evaluating baserestrictinfo clauses.
  */
 void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
-	double nrows;
+	double nrows = -1;
 	MemoInfoData1 result;
 
 //	ListCell *lc;
+	printMemo(rel->baserestrictinfo);
 
 	/* Should only be applied to base relations */
 	Assert(rel->relid > 0);
@@ -3074,14 +3073,16 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 		//printMemo(rel->baserestrictinfo);
 		get_relation_size(&result, root, rel, rel->baserestrictinfo, false, NULL);
 		nrows = result.rows;
-	} else {
+	}
+
+	if (!enable_memo || nrows == -1) {
 
 		nrows = rel->tuples * clauselist_selectivity(root, rel->baserestrictinfo, 0, JOIN_INNER, NULL);
 
 	}
 
 	rel->rows = clamp_row_est(nrows);
-	//printMemo(rel->rel_name);
+	printMemo(rel->rel_name);
 
 	printf("final  base rows are : %f \n", rel->rows);
 
@@ -3100,11 +3101,12 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
  */
 double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *param_clauses) {
 	List *allclauses;
-	double nrows;
+	double nrows = -1;
 	MemoInfoData1 result;
 	//ListCell *lc;
 
 	allclauses = list_concat(list_copy(param_clauses), rel->baserestrictinfo);
+	printMemo(allclauses);
 
 	//printf(" quals at cost plan level \n %s : \n", (char *) res);
 	//fflush(stdout);
@@ -3130,7 +3132,8 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 		nrows = result.rows;
 		rel->paramloops = result.loops >= 1 ? result.loops : 0;
 
-	} else {
+	}
+	if (!enable_memo || nrows == -1) {
 
 		nrows = rel->tuples * clauselist_selectivity(root, allclauses, rel->relid, JOIN_INNER, NULL);
 
@@ -3145,7 +3148,7 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 	/* For safety, make sure result is not more than the base estimate */
 	if (nrows > rel->rows)
 		nrows = rel->rows;
-	//printMemo(rel->rel_name);
+	printMemo(rel->rel_name);
 	printf("final  base para  rows are : %f \n", nrows);
 
 	return nrows;
@@ -3205,7 +3208,7 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 	}
 	rel->rows = nrows;
 
-	if (enable_memo && outer_rel->memo_checked) {
+	if (enable_memo && inner_rel->memo_checked) {
 		MemoRelation *newRelation = NULL;
 
 		rel->memo_checked = true;
@@ -3221,7 +3224,6 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 	printMemo(rel->rel_name);
 
 	printf("final  base join rows are : %f \n", rel->rows);
-
 
 }
 
@@ -3284,7 +3286,6 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 //	printf("PArameterized :\n outer : %lf, inner %lf, rows: %lf\n End\n", outer_rows, outer_rows, nrows);
 
 	/* For safety, make sure result is not more than the base estimate */
-
 
 	printf("final  param join rows are : %f \n", nrows);
 
