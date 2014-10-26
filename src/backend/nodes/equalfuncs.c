@@ -94,6 +94,7 @@
  */
 
 bool equalSet(const List *a, const List *b);
+bool equalSetRestrictList(const List *a, const List *b);
 
 static bool _equalAlias(const Alias *a, const Alias *b) {
 	COMPARE_STRING_FIELD(aliasname);
@@ -2019,6 +2020,7 @@ static bool _equalXmlSerialize(const XmlSerialize *a, const XmlSerialize *b) {
 
 	return true;
 }
+
 bool equalSet(const List *a, const List *b) {
 	ListCell *item_a;
 	if (list_length(a) != list_length(b))
@@ -2047,10 +2049,10 @@ static bool equalMemoClause(const MemoClause *a, const MemoClause *b) {
 		 */
 		return false;
 	}
-	if (a->opno ==1 ) {
+	if (a->opno == 1) {
 		/*printMemo(a);
-		printMemo(b);*/
-		return equalSet(a1,b1);
+		 printMemo(b);*/
+		return equalSet(a1, b1);
 
 	}
 	foreach(lc, a1) {

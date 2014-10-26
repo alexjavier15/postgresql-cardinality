@@ -74,11 +74,9 @@ RteReferences *rte_ref_ptr = &rte_ref;
 static struct MemoCache memo_cache;
 static struct SelectivityCache sel_cache;
 static struct CachedJoins join_cache;
-static struct CachedJoins tmp_join_cache;
 
 MemoQuery *memo_query_ptr;
 CachedJoins *join_cache_ptr = &join_cache;
-CachedJoins *tmp_join_cache_ptr = &join_cache;
 
 MemoCache *memo_cache_ptr = &memo_cache;
 SelectivityCache *sel_cache_ptr = &sel_cache;
@@ -301,6 +299,7 @@ void InitMemoCache(void) {
 }
 void InitJoinCache(void) {
 	int i = 0;
+
 	printf("Initializing join cache\n------------------------\n");
 	join_cache_ptr->type = M_JoinCache;
 	join_cache_ptr->length = DEFAULT_MAX_JOIN_SIZE;
@@ -310,17 +309,9 @@ void InitJoinCache(void) {
 	for (i = 0; i < DEFAULT_MAX_JOIN_SIZE; i++) {
 		dlist_init(&join_cache_ptr->content[i]);
 	}
-	tmp_join_cache_ptr->type = M_JoinCache;
-	tmp_join_cache_ptr->length = DEFAULT_MAX_JOIN_SIZE;
-	tmp_join_cache_ptr->content = (dlist_head *) palloc0((DEFAULT_MAX_JOIN_SIZE) * sizeof(dlist_head));
-	MemSetAligned(join_cache_ptr->content, 0, (DEFAULT_MAX_JOIN_SIZE) * sizeof(dlist_head));
 
-	for (i = 0; i < DEFAULT_MAX_JOIN_SIZE; i++) {
-		dlist_init(&tmp_join_cache_ptr->content[i]);
-	}
 	if (joincache != NULL && enable_memo_propagation)
 		readAndFillFromFile(joincache, join_cache_ptr);
-
 	printContentRelations((CacheM *) join_cache_ptr);
 
 	printf("Join cache ending\n-----------------------\n");
@@ -331,6 +322,10 @@ void InitJoinCache(void) {
 	if (enable_memo && enable_memo_propagation) {
 		set_memo_join_sizes();
 	}
+	printf("New memo cache state :\n-----------------------\n");
+
+	printMemoCache();
+	printf("End\n-----------------------\n");
 }
 
 static void append_equalities_clauses(List *clauses) {
@@ -385,6 +380,25 @@ static MemoClause * equival_clause(MemoClause *cl1, MemoClause *cl2) {
 
 	return NULL;
 
+}
+void update_cached_joins(List *joinname, int level, double rows) {
+
+	dlist_mutable_iter iter;
+	int index = list_length(joinname) - 1;
+	//printContentRelations((CacheM *) join_cache_ptr);
+
+	dlist_foreach_modify (iter, &join_cache_ptr->content[index]) {
+
+		MemoRelation *cachedjoin = dlist_container(MemoRelation,list_node, iter.cur);
+		if (equalSet(list_copy(cachedjoin->relationname), list_copy(joinname)) && cachedjoin->level == level) {
+
+			dlist_delete(&(cachedjoin->list_node));
+			cachedjoin->rows = rows;
+			add_node(memo_query_ptr, cachedjoin, list_length(joinname));
+
+		}
+
+	}
 }
 void discard_existing_joins(void) {
 
@@ -597,7 +611,6 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 	MemoRelation * memo_rel = NULL;
 	double mrows = 1;
 	List *final_clauses = NIL;
-	bool isNew = false;
 	int level = rel->rtekind > RTE_SUBQUERY ? root->query_level : root->query_level + rel->rtekind;
 
 	result->loops = 1;
@@ -637,7 +650,6 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 					final_clauses = lappend(final_clauses, ((MemoClause *) lfirst(lc))->parent);
 
 				}
-				isNew = true;
 			}
 			break;
 		}
@@ -648,7 +660,6 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 				final_clauses = NIL;
 				result->rows = rel->tuples * clauselist_selectivity(root, quals, 0, JOIN_INNER, NULL);
 				result->rows = result->rows >= mrows ? result->rows : mrows;
-				isNew = true;
 			}
 			break;
 		}
@@ -659,7 +670,6 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 				//printMemo(final_clauses);
 				result->rows = rel->tuples;
 				//printf("result->rows : %lf\n", result->rows);
-				isNew = true;
 
 			}
 			break;
@@ -669,11 +679,7 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 			|| (sjinfo && result->found == MATCHED_LEFT && sjinfo->jointype == JOIN_INNER)) {
 		result->rows = result->rows * clauselist_selectivity(root, final_clauses, 0, JOIN_INNER, NULL);
 		result->rows = clamp_row_est(result->rows);
-		if (isNew) {
-			MemoRelation *newRelation = create_memo_realation(level, isParam, rel->rel_name, result->rows,
-					result->loops, final_clauses);
-			add_node(memo_query_ptr, newRelation, list_length(rel->rel_name));
-		}
+
 	} else {
 		result->rows = -1;
 		result->loops = 1;
@@ -1038,12 +1044,11 @@ void check_NoMemo_queries(void) {
 			dlist_foreach_modify (iter, &join_cache_ptr->content[i]) {
 				MemoRelation *target = dlist_container(MemoRelation,list_node, iter.cur);
 				rellen = list_length(target->relationname);
-				/*		printf("Checking :\n**********************\n");
+				/*	printf("Checking :\n**********************\n");
 				 print_relation(target);
-				 printf("********************************\n")*/;
-				query = find_seeder_relations(&relation1, &relation2, &commonrelation, target->relationname,
-						target->clauses, target->level, rellen);
-
+				 printf("********************************\n");*/
+				query = find_seeder_relations(&relation1, &relation2, &commonrelation, list_copy(target->relationname),
+						list_copy(target->clauses), target->level, rellen);
 				//check for candidates matches existence
 				if (relation1 != NULL && relation2 != NULL && query != NULL) {
 					// delete the current NoMemoRelation from the un_cache
@@ -1055,14 +1060,7 @@ void check_NoMemo_queries(void) {
 					dlist_delete(&(target->list_node));
 					//printf("Founds rows :\n%lf\n**********************\n", target->rows);
 
-					if (target->rows >= 1) {
-
-						add_node(query, target, rellen);
-
-					} else {
-						add_node(tmp_join_cache_ptr, target, rellen);
-
-					}
+					add_node(query, target, rellen);
 
 				}
 				relation1 = NULL;
@@ -1070,13 +1068,10 @@ void check_NoMemo_queries(void) {
 				commonrelation = NULL;
 				//printf("\n");
 			}
+			discard_existing_joins();
+
 		}
 	}
-
-	printf("New memo cache state :\n-----------------------\n");
-
-	printMemoCache();
-	printf("End\n-----------------------\n");
 
 }
 static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation **relation2,
@@ -1105,11 +1100,10 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 			// we fetch the joins with the expected rellen number of relations
 			dlist_foreach (iter1, &query->content[joinlen-1]) {
 				MemoRelation * commonrel = NULL;
-				MemoRelation * diffrel = NULL;
 				List *clauses = NIL;
 				MemoRelation *memorelation = dlist_container(MemoRelation,list_node, iter1.cur);
 				// ATTENTION: the candidate relation must be at the same query level!
-				if (true) {
+				if (memorelation->level == level) {
 					cmp_lists(resultName_ptr, memorelation->relationname, targetName);
 
 					//printf("matches %d \n", resultName_ptr->nbmatches);
@@ -1122,31 +1116,24 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 						// In the firstfind_seeder_relations pass we need to find a relation who differs from the target
 						// relation just from one base relation
 
-						contains(NULL, &commonrel, (CacheM *) query, resultName_ptr->matches, NIL, level, 2);
+						contains(NULL, &commonrel, (CacheM *) query, resultName_ptr->matches, NIL, level, 3);
 						if (commonrel != NULL && !commonrel->isParameterized) {
 							/*bool diff_realIndex = false;
 							 bool com_realIndex = false;*/
-							contains(NULL, &diffrel, (CacheM *) query, resultName_ptr->unmatches, NIL, level, 2);
 
 							clauses = list_union(memorelation->clauses, targetClauses);
-							/*
 
-							 if (diffrel != NULL)
-							 diff_realIndex = IsIndex(diffrel) && diffrel->loops > 1;
-							 com_realIndex = IsIndex(commonrel) && commonrel->loops > 1;
-							 */
-
-							/*printf("Common relation is:\n");
+							/*	printf("Common relation is:\n");
 
 							 print_relation(commonrel);*/
-							if ((list_length(resultName_ptr->matches) == (joinlen - 1)) && diffrel != NULL) {
+							if ((list_length(resultName_ptr->matches) == (joinlen - 1))) {
 								//Mark the first relation and build the resulted expected target join
 								//relation for matching
 								*relation1 = memorelation;
 								*commonrelation = commonrel;
 
 								tmp1 = list_union(targetName, memorelation->relationname);
-								/*		printf("Looking for relation:\n");
+								/*printf("Looking for relation:\n");
 								 printMemo(tmp1);
 								 printClause(clauses);*/
 								return find_seeder_relations(relation1, relation2, commonrelation, tmp1, clauses, level,
@@ -1157,11 +1144,11 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 
 					} else {
 						List *b = list_copy(targetClauses);
-						/*						printf("chcking second loop");*/
-						Assert(*relation2 == NULL);
-						//In the second pass we have  to match a full join  then
-						//the number of base realtion matches are equal to joinlen
-						//print_relation(memorelation);
+						/*		printf("chcking second loop");
+						 Assert(*relation2 == NULL);
+						 //In the second pass we have  to match a full join  then
+						 //the number of base realtion matches are equal to joinlen
+						 print_relation(memorelation);*/
 						if (list_length(resultName_ptr->matches) == joinlen
 								&& equalSet(list_copy(memorelation->clauses), b)) {
 							pfree(b);
@@ -1176,9 +1163,7 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 						}
 
 					}
-
 				}
-
 			}
 		}
 
@@ -1187,11 +1172,17 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 }
 bool lcontains(RelOptInfo *rel, List *clauses) {
 	ListCell *lc;
-
+	List *b = restictInfoToMemoClauses(list_copy(clauses));
 	foreach(lc,rel->all_restrictList) {
-		if (equalSet(list_copy(clauses), list_copy(lfirst(lc))))
+		List *a = restictInfoToMemoClauses(list_copy(lfirst(lc)));
+		if (equalSet(a, list_copy(b))) {
+			list_free(a);
 			return true;
+			break;
+		}
 	}
+
+	list_free(b);
 	return false;
 }
 
@@ -1209,6 +1200,8 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 	bool equal = false;
 	if (relname == NIL)
 		return;
+	if (isParam != 3)
+		lquals = restictInfoToMemoClauses(clauses);
 
 	dlist_foreach(iter, &cache->content[rellen-1]) {
 
@@ -1217,7 +1210,8 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 
 		if (equal && memorelation->level == level) {
 			if (isParam == 3) {
-				result->found = FULL_MATCHED;
+				if (result != NULL)
+					result->found = FULL_MATCHED;
 				*relation = &(*memorelation);
 				return;
 
@@ -1227,8 +1221,6 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 				//	print_relation(memorelation);
 				if (result != NULL) {
 
-					lquals = restictInfoToMemoClauses(clauses);
-
 					cmp_lists(result, memorelation->clauses, lquals);
 					/*if (list_length(relname) == 4) {
 
@@ -1237,7 +1229,7 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 					 printMemo(relname);
 					 }*/
 					if (isFullMatched(result)) {
-						//	printf("IS FULL MATCHED\n!");
+						list_free(lquals);
 						*relation = &(*memorelation);
 						return;
 					}
@@ -1256,7 +1248,20 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 		}
 
 	}
-	*relation = leftmatched == NULL ? &(*rightmatched) : NULL;
+	if (lquals != NIL)
+		list_free(lquals);
+	if (leftmatched) {
+		result->found = MATCHED_LEFT;
+		*relation = leftmatched;
+
+	} else {
+		if (rightmatched) {
+			result->found = MATCHED_RIGHT;
+			*relation = rightmatched;
+
+		}
+
+	}
 }
 static void set_estimated_join_rows(MemoRelation *relation1, MemoRelation *relation2, MemoRelation * commonrelation,
 		MemoRelation *target) {
@@ -1277,7 +1282,11 @@ void store_join(List *lrelName, int level, List *clauses, double rows, bool isPa
 	MemoRelation *relation;
 	StringInfoData str;
 	initStringInfo(&str);
+	if (list_length(clauses) == 1 && list_length(lrelName) > 2) {
 
+		relation = NULL;
+
+	}
 	explicitNode(rte_ref_ptr, clauses, &str);
 
 	relation = newMemoRelation();
@@ -1416,7 +1425,7 @@ void set_memo_join_sizes(void) {
 	if (enable_memo) {
 		discard_existing_joins();
 		check_NoMemo_queries();
-		join_cache_ptr = &tmp_join_cache;
+
 	}
 
 }
@@ -1475,14 +1484,6 @@ void set_plain_rel_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, Path *pat
 }
 void set_join_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, JoinPath *pathnode) {
 
-	if (pathnode->path.param_info) {
-		pathnode->path.rows = pathnode->path.param_info->ppi_rows;
-		//pathnode->path.restrictList = list_copy(pathnode->path.param_info->restrictList);
-
-	} else {
-		pathnode->path.rows = pathnode->path.parent->rows;
-		//pathnode->path.restrictList = list_copy(pathnode->path.parent->restrictList);
-	}
 	pathnode->path.isParameterized = pathnode->path.param_info != NULL;
 
 }
@@ -1505,46 +1506,52 @@ void set_agg_sizes_from_memo(PlannerInfo *root, Path *path) {
 		path->rows = 0;
 	}
 }
+void update_and_recost(PlannerInfo *root, RelOptInfo *joinrel) {
+	MemoRelation *memo_rel;
+	memo_rel = get_Memorelation(NULL, list_copy(joinrel->rel_name), root->query_level, NIL, 3);
+	if (memo_rel)
+		joinrel->rows = clamp_row_est(memo_rel->rows / memo_rel->loops);
+	recost_paths(root, joinrel);
+	add_recosted_paths(joinrel);
+}
+
 void recost_paths(PlannerInfo *root, RelOptInfo *joinrel) {
 	ListCell *lc;
 
 	foreach(lc,joinrel->tmp_pathlist) {
 		JoinPath *joinpath = (JoinPath *) lfirst(lc);
-		List *pathkeys = NIL;
 		JoinCostWorkspace *workspace = NULL;
-		Relids required_outer = NULL;
 		switch (joinpath->path.pathtype) {
 			case T_MergeJoin:
 				workspace = ((MergePath *) joinpath)->jpath.workspace;
-
 				initial_cost_mergejoin(root, workspace, ((MergePath *) joinpath)->jpath.jointype,
 						((MergePath *) joinpath)->path_mergeclauses, ((MergePath *) joinpath)->jpath.outerjoinpath,
 						((MergePath *) joinpath)->jpath.innerjoinpath, ((MergePath *) joinpath)->outersortkeys,
 						((MergePath *) joinpath)->innersortkeys, NULL);
 				final_cost_mergejoin(root, (MergePath *) joinpath, workspace, NULL);
-				pathkeys = ((MergePath *) joinpath)->jpath.path.pathkeys;
-				required_outer = ((MergePath *) joinpath)->jpath.required_outer;
 				break;
-			case T_HashJoin:
+			case T_HashJoin: {
+				HashPath *hpath = (HashPath *) joinpath;
 				workspace = ((HashPath *) joinpath)->jpath.workspace;
 
-				initial_cost_hashjoin(root, workspace, ((HashPath *) joinpath)->jpath.jointype,
-						((HashPath *) joinpath)->path_hashclauses, ((HashPath *) joinpath)->jpath.outerjoinpath,
-						((HashPath *) joinpath)->jpath.innerjoinpath, NULL, workspace->semifactors);
-				final_cost_hashjoin(root, (HashPath *) joinpath, workspace, NULL, workspace->semifactors);
-				pathkeys = ((HashPath *) joinpath)->jpath.path.pathkeys;
-				required_outer = ((HashPath *) joinpath)->jpath.required_outer;
+				initial_cost_hashjoin(root, workspace, hpath->jpath.jointype, hpath->path_hashclauses,
+						hpath->jpath.outerjoinpath, hpath->jpath.innerjoinpath, NULL, workspace->semifactors);
+				final_cost_hashjoin(root, hpath, workspace, NULL, workspace->semifactors);
 				break;
-				break;
+			}
 			case T_NestLoop:
 				workspace = joinpath->workspace;
-
 				initial_cost_nestloop(root, workspace, joinpath->jointype, joinpath->outerjoinpath,
 						joinpath->innerjoinpath, NULL, workspace->semifactors);
 				final_cost_nestloop(root, joinpath, workspace, NULL, workspace->semifactors);
-				pathkeys = joinpath->path.pathkeys;
-				required_outer = joinpath->required_outer;
 				break;
+			case T_Material:
+				cost_material(&joinpath->path, ((MaterialPath *) joinpath)->subpath->startup_cost,
+						((MaterialPath *) joinpath)->subpath->total_cost, ((MaterialPath *) joinpath)->subpath->rows,
+						joinrel->width);
+
+				break;
+
 			default:
 				elog(ERROR, "unrecognized node type: %d", (int) joinpath->path.pathtype);
 				break;
@@ -1554,42 +1561,46 @@ void recost_paths(PlannerInfo *root, RelOptInfo *joinrel) {
 
 }
 
+static Relids get_requiredouter(Path *path) {
+
+	switch (path->type) {
+		case T_MergePath:
+
+			return ((MergePath *) path)->jpath.required_outer;
+			break;
+		case T_HashPath:
+
+			return ((HashPath *) path)->jpath.required_outer;
+			break;
+		case T_NestPath:
+			return ((NestPath *) path)->required_outer;
+			break;
+		case T_MaterialPath:
+			return get_requiredouter(((MaterialPath *) path)->subpath);
+
+			break;
+		default:
+
+			elog(ERROR, "unrecognized node type: %d", (int) path->pathtype);
+
+			return NULL;
+			break;
+	}
+	return NULL;
+}
+
 void add_recosted_paths(RelOptInfo *joinrel) {
 
 	ListCell *lc;
 
 	foreach(lc,joinrel->tmp_pathlist) {
-		JoinPath *joinpath = (JoinPath *) lfirst(lc);
-		List *pathkeys = NIL;
-		JoinCostWorkspace *workspace = NULL;
-		Relids required_outer = NULL;
-		switch (joinpath->path.pathtype) {
-			case T_MergeJoin:
-				workspace = ((MergePath *) joinpath)->jpath.workspace;
+		Path *joinpath = (Path *) lfirst(lc);
+		List *pathkeys = joinpath->pathkeys;
+		Relids required_outer = get_requiredouter(joinpath);
+		Cost startup_cost = joinpath->startup_cost;
+		Cost total_cost = joinpath->total_cost;
 
-				pathkeys = ((MergePath *) joinpath)->jpath.path.pathkeys;
-				required_outer = ((MergePath *) joinpath)->jpath.required_outer;
-				break;
-			case T_HashJoin:
-				workspace = ((HashPath *) joinpath)->jpath.workspace;
-
-				pathkeys = ((HashPath *) joinpath)->jpath.path.pathkeys;
-				required_outer = ((HashPath *) joinpath)->jpath.required_outer;
-				break;
-				break;
-			case T_NestLoop:
-				workspace = joinpath->workspace;
-
-				pathkeys = joinpath->path.pathkeys;
-				required_outer = joinpath->required_outer;
-				break;
-			default:
-				elog(ERROR, "unrecognized node type: %d", (int) joinpath->path.pathtype);
-				break;
-		}
-
-		if (add_path_precheck_final(joinrel, workspace->startup_cost, workspace->total_cost, pathkeys,
-				required_outer)) {
+		if (add_path_precheck_final(joinrel, startup_cost, total_cost, pathkeys, required_outer)) {
 
 			add_path_final(joinrel, (Path *) joinpath);
 

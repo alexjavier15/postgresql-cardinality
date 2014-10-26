@@ -496,7 +496,8 @@ void add_path_final(RelOptInfo *parent_rel, Path *new_path) {
 			/*
 			 * Delete the data pointed-to by the deleted cell, if possible
 			 */
-			if (!IsA(old_path, IndexPath))
+			if (!IsA(old_path, IndexPath)&& final_pass)
+
 				pfree(old_path);
 			/* p1_prev does not advance */
 		} else {
@@ -524,7 +525,7 @@ void add_path_final(RelOptInfo *parent_rel, Path *new_path) {
 			parent_rel->pathlist = lcons(new_path, parent_rel->pathlist);
 	} else {
 		/* Reject and recycle the new path */
-		if (!IsA(new_path, IndexPath))
+		if (!IsA(new_path, IndexPath) && final_pass)
 			pfree(new_path);
 	}
 
@@ -955,7 +956,7 @@ create_material_path(RelOptInfo *rel, Path *subpath) {
 	pathnode->path.parent = rel;
 	pathnode->path.param_info = subpath->param_info;
 	pathnode->path.pathkeys = subpath->pathkeys;
-	pathnode->path.restrictList = NIL;
+	pathnode->path.restrictList = list_copy(subpath->restrictList);
 
 	pathnode->subpath = subpath;
 
@@ -1672,9 +1673,9 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 		pathnode->path.restrictList = list_concat_unique(pathnode->path.restrictList,
 				list_copy(outer_path->restrictList));
 
-	if (!lcontains(joinrel, pathnode->path.restrictList)) {
+	if (!lcontains(joinrel, pathnode->path.restrictList) && !enable_memo) {
 		store_join(joinrel->rel_name, root->query_level, list_copy(pathnode->path.restrictList), joinrel->rows, false);
-		joinrel->all_restrictList = lappend(joinrel->all_restrictList, pathnode->path.restrictList);
+		joinrel->all_restrictList = lappend(joinrel->all_restrictList, list_copy(pathnode->path.restrictList));
 
 	}
 
@@ -1736,7 +1737,7 @@ create_mergejoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
 		pathnode->jpath.path.restrictList = list_concat_unique(pathnode->jpath.path.restrictList,
 				list_copy(outer_path->restrictList));
 
-	if (!lcontains(joinrel, pathnode->jpath.path.restrictList)) {
+	if (!lcontains(joinrel, pathnode->jpath.path.restrictList)&& !enable_memo) {
 		store_join(joinrel->rel_name, root->query_level, list_copy(pathnode->jpath.path.restrictList), joinrel->rows,
 				false);
 		joinrel->all_restrictList = lappend(joinrel->all_restrictList, list_copy(pathnode->jpath.path.restrictList));
@@ -1810,10 +1811,10 @@ create_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 		pathnode->jpath.path.restrictList = list_concat_unique(pathnode->jpath.path.restrictList,
 				list_copy(outer_path->restrictList));
 
-	if (!lcontains(joinrel, pathnode->jpath.path.restrictList)) {
+	if (!lcontains(joinrel, pathnode->jpath.path.restrictList)&& !enable_memo) {
 		store_join(joinrel->rel_name, root->query_level, list_copy(pathnode->jpath.path.restrictList), joinrel->rows,
 				false);
-		joinrel->all_restrictList = lappend(joinrel->all_restrictList, pathnode->jpath.path.restrictList);
+		joinrel->all_restrictList = lappend(joinrel->all_restrictList, list_copy(pathnode->jpath.path.restrictList));
 	}
 	set_join_sizes_from_memo(root, joinrel, &pathnode->jpath);
 	/* final_cost_hashjoin will fill in pathnode->num_batches */

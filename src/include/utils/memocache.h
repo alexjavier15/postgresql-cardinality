@@ -43,7 +43,6 @@ typedef struct MemoInfoData1 {
 	double loops;
 	double removed_rows;
 
-
 } MemoInfoData1;
 
 typedef enum CacheTag {
@@ -72,14 +71,18 @@ typedef struct RteReferences {
 } RteReferences;
 extern void recost_paths(PlannerInfo *root, RelOptInfo *joinrel);
 extern bool lcontains(RelOptInfo *rel, List *clauses);
-extern List * restictInfoToMemoClauses(List *clauses) ;
-extern void push_reference(Index index,  Value * name);
+extern List * restictInfoToMemoClauses(List *clauses);
+extern void push_reference(Index index, Value * name);
 extern void * fetch_unique_rte_reference(void);
 extern void * get_cur_rte_reference(void);
 extern void add_recosted_paths(RelOptInfo *joinrel);
+extern void update_and_recost(PlannerInfo *root, RelOptInfo *joinrel);
+
 extern void add_relation(MemoRelation * relation, int rellen);
 extern MemoRelation* create_memo_realation(int level, bool isParam, List *relname, double rows, int loops,
 		List *clauses);
+extern void update_cached_joins(List *joinname, int level, double rows);
+
 extern List * restictInfoToMemoClauses(List *clauses);
 extern void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel, List *quals, bool isParam,
 		SpecialJoinInfo * sjinfo);

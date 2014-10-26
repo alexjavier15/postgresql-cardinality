@@ -21,6 +21,7 @@
  */
 #define  DEFAULT_SIZE 256
 
+extern bool final_pass;
 extern int compare_path_costs(Path *path1, Path *path2, CostSelector criterion);
 extern int compare_fractional_path_costs(Path *path1, Path *path2,
 		double fraction);
@@ -123,6 +124,7 @@ typedef struct MemoInfoData {
 	double rows;
 
 } MemoInfoData;
+
 extern void get_join_memo_size(MemoInfoData *result, const List *lrelName, int level,
 		char *quals);
 extern void get_baserel_memo_size(MemoInfoData *result,const  List *lrelName,
