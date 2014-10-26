@@ -1589,7 +1589,12 @@ void final_cost_nestloop(PlannerInfo *root, NestPath *path, JoinCostWorkspace *w
 	Cost cpu_per_tuple;
 	QualCost restrict_qual_cost;
 	double ntuples;
+	if (path->path.param_info) {
+		path->path.rows = path->path.param_info->ppi_rows;
 
+	} else {
+		path->path.rows = path->path.parent->rows;
+	}
 	/* Mark the path with the correct row estimate */
 
 	/*
@@ -1883,7 +1888,12 @@ void final_cost_mergejoin(PlannerInfo *root, MergePath *path, JoinCostWorkspace 
 	QualCost qp_qual_cost;
 	double mergejointuples, rescannedtuples;
 	double rescanratio;
+	if (path->jpath.path.param_info) {
+		path->jpath.path.rows = path->jpath.path.param_info->ppi_rows;
 
+	} else {
+		path->jpath.path.rows = path->jpath.path.parent->rows;
+	}
 	/* Protect some assumptions below that rowcounts aren't zero or NaN */
 	if (inner_path_rows <= 0 || isnan(inner_path_rows))
 		inner_path_rows = 1;
@@ -2242,7 +2252,12 @@ void final_cost_hashjoin(PlannerInfo *root, HashPath *path, JoinCostWorkspace *w
 	double virtualbuckets;
 	Selectivity innerbucketsize;
 	ListCell *hcl;
+	if (path->jpath.path.param_info) {
+		path->jpath.path.rows = path->jpath.path.param_info->ppi_rows;
 
+	} else {
+		path->jpath.path.rows = path->jpath.path.parent->rows;
+	}
 	/* Mark the path with the correct row estimate */
 	/*if (path->jpath.path.param_info)
 	 path->jpath.path.rows = path->jpath.path.param_info->ppi_rows;
@@ -3071,7 +3086,7 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 		 printMemo(rel->rel_name);*/
 		//maybe memo hacked
 		//printMemo(rel->baserestrictinfo);
-		get_relation_size(&result, root, rel, rel->baserestrictinfo, false, NULL);
+		get_relation_size(&result, root, rel, rel->baserestrictinfo, 2, NULL);
 		nrows = result.rows;
 	}
 
@@ -3135,7 +3150,7 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 	}
 	if (!enable_memo || nrows == -1) {
 
-		nrows = rel->tuples * clauselist_selectivity(root, allclauses, rel->relid, JOIN_INNER, NULL)/1000;
+		nrows = rel->tuples * clauselist_selectivity(root, allclauses, rel->relid, JOIN_INNER, NULL) / 1000;
 
 	}
 	nrows = clamp_row_est(nrows);
@@ -3209,14 +3224,12 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 	rel->rows = nrows;
 
 	if (enable_memo && inner_rel->memo_checked) {
-		MemoRelation *newRelation = NULL;
 
 		rel->memo_checked = true;
 
-		newRelation = create_memo_realation(root->query_level, false, rel->rel_name, rel->rows, 1, final_clauses);
-
-		add_relation(newRelation, list_length(rel->rel_name));
+		update_cached_joins(rel->rel_name, root->query_level, rel->rows);
 		check_NoMemo_queries();
+
 	}
 	/*	printf("selectivity was  parameterized : %f \n", calc_joinrel_size_estimate(root, outer_rel->rows, inner_rel->rows, sjinfo, restrictlist));*/
 //	printf("outer : %lf, inner %lf, rows: %lf\n", outer_rel->rows, inner_rel->rows, nrows);

@@ -42,6 +42,7 @@
 
 /* These parameters are set by GUC */
 bool enable_geqo = false; /* just in case GUC doesn't set it */
+bool final_pass = false;
 int geqo_threshold;
 
 /* Hook for plugins to replace standard_join_search() */
@@ -1417,8 +1418,27 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels) {
 			debug_print_rel(root, rel);
 #endif
 		}
-	}
 
+	}
+	if (enable_memo) {
+
+		printf("Final memo cache state :\n-----------------------\n");
+
+		printMemoCache();
+		printf("End\n-----------------------\n");
+		final_pass = true;
+		for (lev = 2; lev <= levels_needed; lev++) {
+			ListCell *lc;
+
+			foreach(lc, root->join_rel_level[lev]) {
+				rel = (RelOptInfo *) lfirst(lc);
+				rel->pathlist = NIL;
+				update_and_recost(root, rel);
+				/* Find and save the cheapest paths for this rel */
+				set_cheapest(rel);
+			}
+		}
+	}
 	/*
 	 * We should have a single rel at the final level.
 	 */
