@@ -321,11 +321,12 @@ void InitJoinCache(void) {
 	printf("End\n-----------------------\n");
 	if (enable_memo && enable_memo_propagation) {
 		set_memo_join_sizes();
-	}
-	printf("New memo cache state :\n-----------------------\n");
+		printf("New memo cache state :\n-----------------------\n");
 
-	printMemoCache();
-	printf("End\n-----------------------\n");
+		printMemoCache();
+		printf("End\n-----------------------\n");
+	}
+
 }
 
 static void append_equalities_clauses(List *clauses) {
