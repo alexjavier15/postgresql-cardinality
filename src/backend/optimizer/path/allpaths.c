@@ -1403,7 +1403,8 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels) {
 		 * pair of lower-level relations.
 		 */
 		join_search_one_level(root, lev);
-
+		if (!enable_memo_propagation)
+			final_pass = true;
 		/*
 		 * Do cleanup work on each just-processed rel.
 		 */
@@ -1420,7 +1421,7 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels) {
 		}
 
 	}
-	if (enable_memo) {
+	if (enable_memo && enable_memo_propagation ) {
 
 		printf("Final memo cache state :\n-----------------------\n");
 
