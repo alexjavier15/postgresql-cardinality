@@ -367,7 +367,13 @@ void add_path_final(RelOptInfo *parent_rel, Path *new_path) {
 	ListCell *p1;
 	ListCell *p1_prev;
 	ListCell *p1_next;
+	if (parent_rel->rtekind == RTE_JOIN) {
 
+		if (((JoinPath *) new_path)->invalid == true) {
+			pfree(new_path);
+			return;
+		}
+	}
 	/*
 	 * This is a convenient place to check for query cancel --- no part of the
 	 * planner goes very long without calling add_path().
@@ -490,15 +496,20 @@ void add_path_final(RelOptInfo *parent_rel, Path *new_path) {
 		/*
 		 * Remove current element from pathlist if dominated by new.
 		 */
-		if (remove_old) {
-			parent_rel->pathlist = list_delete_cell(parent_rel->pathlist, p1, p1_prev);
+		if (remove_old && final_pass) {
 
+			if (final_pass) {
+				invalide_removed_path(parent_rel, old_path);
+
+				parent_rel->pathlist = list_delete_cell(parent_rel->pathlist, p1, p1_prev);
+			} else
+				parent_rel->pathlist = list_remove_cell(parent_rel->pathlist, p1, p1_prev);
 			/*
 			 * Delete the data pointed-to by the deleted cell, if possible
 			 */
-			if (!IsA(old_path, IndexPath)&& final_pass)
-
+			if (!IsA(old_path, IndexPath) && final_pass) {
 				pfree(old_path);
+			}
 			/* p1_prev does not advance */
 		} else {
 			/* new belongs after this old path if it has cost >= old's */
@@ -525,8 +536,10 @@ void add_path_final(RelOptInfo *parent_rel, Path *new_path) {
 			parent_rel->pathlist = lcons(new_path, parent_rel->pathlist);
 	} else {
 		/* Reject and recycle the new path */
-		if (!IsA(new_path, IndexPath) && final_pass)
+		if (!IsA(new_path, IndexPath) && final_pass) {
+
 			pfree(new_path);
+		}
 	}
 
 }
@@ -949,7 +962,6 @@ create_result_path(List *quals) {
 MaterialPath *
 create_material_path(RelOptInfo *rel, Path *subpath) {
 	MaterialPath *pathnode = makeNode(MaterialPath);
-
 	Assert(subpath->parent == rel);
 
 	pathnode->path.pathtype = T_Material;
@@ -1583,6 +1595,7 @@ Relids calc_nestloop_required_outer(Path *outer_path, Path *inner_path) {
 	required_outer = bms_del_members(required_outer, outer_path->parent->relids);
 	/* maintain invariant that required_outer is exactly NULL if empty */
 	if (bms_is_empty(required_outer)) {
+
 		bms_free(required_outer);
 		required_outer = NULL;
 	}
@@ -1683,7 +1696,9 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 
 	final_cost_nestloop(root, pathnode, workspace, sjinfo, semifactors);
 	pathnode->workspace = workspace;
-
+	//We mark children wth this path
+	attach_child_joinpath(pathnode, inner_path);
+	attach_child_joinpath(pathnode, outer_path);
 	return pathnode;
 }
 
@@ -1737,7 +1752,7 @@ create_mergejoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
 		pathnode->jpath.path.restrictList = list_concat_unique(pathnode->jpath.path.restrictList,
 				list_copy(outer_path->restrictList));
 
-	if (!lcontains(joinrel, pathnode->jpath.path.restrictList)&& !enable_memo) {
+	if (!lcontains(joinrel, pathnode->jpath.path.restrictList) && !enable_memo) {
 		store_join(joinrel->rel_name, root->query_level, list_copy(pathnode->jpath.path.restrictList), joinrel->rows,
 				false);
 		joinrel->all_restrictList = lappend(joinrel->all_restrictList, list_copy(pathnode->jpath.path.restrictList));
@@ -1750,7 +1765,9 @@ create_mergejoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
 
 	final_cost_mergejoin(root, pathnode, workspace, sjinfo);
 	pathnode->jpath.workspace = workspace;
-
+	//We mark children wth this path
+	attach_child_joinpath(pathnode, inner_path);
+	attach_child_joinpath(pathnode, outer_path);
 	return pathnode;
 }
 
@@ -1811,7 +1828,7 @@ create_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 		pathnode->jpath.path.restrictList = list_concat_unique(pathnode->jpath.path.restrictList,
 				list_copy(outer_path->restrictList));
 
-	if (!lcontains(joinrel, pathnode->jpath.path.restrictList)&& !enable_memo) {
+	if (!lcontains(joinrel, pathnode->jpath.path.restrictList) && !enable_memo) {
 		store_join(joinrel->rel_name, root->query_level, list_copy(pathnode->jpath.path.restrictList), joinrel->rows,
 				false);
 		joinrel->all_restrictList = lappend(joinrel->all_restrictList, list_copy(pathnode->jpath.path.restrictList));
@@ -1821,6 +1838,10 @@ create_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 
 	final_cost_hashjoin(root, pathnode, workspace, sjinfo, semifactors);
 	pathnode->jpath.workspace = workspace;
+
+	//We mark children wth this path
+	attach_child_joinpath(pathnode, inner_path);
+	attach_child_joinpath(pathnode, outer_path);
 
 	return pathnode;
 }

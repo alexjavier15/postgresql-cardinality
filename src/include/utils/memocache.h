@@ -77,7 +77,9 @@ extern void * fetch_unique_rte_reference(void);
 extern void * get_cur_rte_reference(void);
 extern void add_recosted_paths(RelOptInfo *joinrel);
 extern void update_and_recost(PlannerInfo *root, RelOptInfo *joinrel);
+extern void invalide_removed_path(RelOptInfo *rel, Path* path);
 
+extern void attach_child_joinpath(Path *parent_path, Path *child_path);
 extern void add_relation(MemoRelation * relation, int rellen);
 extern MemoRelation* create_memo_realation(int level, bool isParam, List *relname, double rows, int loops,
 		List *clauses);
