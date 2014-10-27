@@ -607,11 +607,11 @@ create_join_plan(PlannerInfo *root, JoinPath *best_path) {
 			((MergePath *) best_path)->jpath.innerjoinpath->mrows = inner_plan->mrows;
 			((HashPath *) best_path)->jpath.outerjoinpath->mtotal_cost = outer_plan->mtotal_cost;
 			((HashPath *) best_path)->jpath.innerjoinpath->mtotal_cost = inner_plan->mtotal_cost;
-
+/*
 			initial_cost_hashjoin(root, rel->workspace, ((HashPath *) best_path)->jpath.jointype,
 					((HashPath *) best_path)->path_hashclauses, ((HashPath *) best_path)->jpath.outerjoinpath,
 					((HashPath *) best_path)->jpath.innerjoinpath, NULL, rel->workspace->semifactors);
-			final_cost_hashjoin(root, (HashPath *) best_path, rel->workspace, NULL, rel->workspace->semifactors);
+			final_cost_hashjoin(root, (HashPath *) best_path, rel->workspace, NULL, rel->workspace->semifactors);*/
 
 			mcost = ((HashPath *) best_path)->jpath.path.mtotal_cost;
 		}
@@ -623,14 +623,14 @@ create_join_plan(PlannerInfo *root, JoinPath *best_path) {
 		/* Restore curOuterRels */
 		bms_free(root->curOuterRels);
 		root->curOuterRels = saveOuterRels;
-
+/*
 		if (enable_cost_check && best_path->path.memo_checked) {
 			initial_cost_nestloop(root, rel->workspace, best_path->jointype, best_path->outerjoinpath,
 					best_path->innerjoinpath, NULL, rel->workspace->semifactors);
 			final_cost_nestloop(root, best_path, rel->workspace, NULL, rel->workspace->semifactors);
 
 			mcost = best_path->path.mtotal_cost;
-		}
+		}*/
 
 		plan = (Plan *) create_nestloop_plan(root, (NestPath *) best_path, outer_plan, inner_plan);
 		((NestLoop *) plan)->join.restrictList = ((NestPath *) best_path)->path.restrictList;
