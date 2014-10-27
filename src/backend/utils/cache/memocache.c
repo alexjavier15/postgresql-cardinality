@@ -1535,27 +1535,30 @@ void recost_paths(PlannerInfo *root, RelOptInfo *joinrel) {
 					final_cost_mergejoin(root, (MergePath *) joinpath, workspace, NULL);
 					break;
 				case T_HashPath: {
+					SemiAntiJoinFactors semifactors;
+
 					HashPath *hpath = (HashPath *) joinpath;
 
 					workspace = ((HashPath *) joinpath)->jpath.workspace;
-					SemiAntiJoinFactors semifactors;
-					semifactors->match_count = workspace->match_count;
-					semifactors->outer_match_frac = workspace->outer_match_frac;
+					semifactors.match_count = workspace->match_count;
+					semifactors.outer_match_frac = workspace->outer_match_frac;
 
 					initial_cost_hashjoin(root, workspace, hpath->jpath.jointype, hpath->path_hashclauses,
 							hpath->jpath.outerjoinpath, hpath->jpath.innerjoinpath, NULL, &semifactors);
 					final_cost_hashjoin(root, hpath, workspace, NULL, NULL);
 					break;
 				}
-				case T_NestPath:
-					workspace = ((NestPath *) joinpath)->workspace;
+				case T_NestPath:{
 					SemiAntiJoinFactors semifactors;
-					semifactors->match_count = workspace->match_count;
-					semifactors->outer_match_frac = workspace->outer_match_frac;
+
+					workspace = ((NestPath *) joinpath)->workspace;
+					semifactors.match_count = workspace->match_count;
+					semifactors.outer_match_frac = workspace->outer_match_frac;
 					initial_cost_nestloop(root, workspace, ((NestPath *) joinpath)->jointype,
-							((NestPath *) joinpath)->outerjoinpath, ((NestPath *) joinpath)->innerjoinpath, NULL, &semifactors);
+							((NestPath *) joinpath)->outerjoinpath, ((NestPath *) joinpath)->innerjoinpath, NULL,
+							&semifactors);
 					final_cost_nestloop(root, ((NestPath *) joinpath), workspace, NULL, &semifactors);
-					break;
+					break;}
 				case T_MaterialPath:
 
 					cost_material(&((MaterialPath *) joinpath)->path,
