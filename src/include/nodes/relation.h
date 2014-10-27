@@ -323,9 +323,8 @@ typedef struct JoinCostWorkspace
 	double		inner_rows;
 	double		outer_skip_rows;
 	double		inner_skip_rows;
-
-	SemiAntiJoinFactors *semifactors;
-
+	Selectivity outer_match_frac;
+	Selectivity match_count;
 	/* private for cost_hashjoin code */
 	int			numbuckets;
 	int			numbatches;
