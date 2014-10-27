@@ -499,7 +499,6 @@ void add_path_final(RelOptInfo *parent_rel, Path *new_path) {
 		if (remove_old && final_pass) {
 
 			if (final_pass) {
-				invalide_removed_path(parent_rel, old_path);
 
 				parent_rel->pathlist = list_delete_cell(parent_rel->pathlist, p1, p1_prev);
 			} else
@@ -508,6 +507,8 @@ void add_path_final(RelOptInfo *parent_rel, Path *new_path) {
 			 * Delete the data pointed-to by the deleted cell, if possible
 			 */
 			if (!IsA(old_path, IndexPath) && final_pass) {
+				invalide_removed_path(parent_rel, old_path);
+
 				pfree(old_path);
 			}
 			/* p1_prev does not advance */
@@ -537,6 +538,7 @@ void add_path_final(RelOptInfo *parent_rel, Path *new_path) {
 	} else {
 		/* Reject and recycle the new path */
 		if (!IsA(new_path, IndexPath) && final_pass) {
+			invalide_removed_path(parent_rel, new_path);
 
 			pfree(new_path);
 		}
