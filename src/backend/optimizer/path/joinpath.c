@@ -223,7 +223,6 @@ static void try_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType j
 	 * Check to see if proposed path is still parameterized, and reject if the
 	 * parameterization wouldn't be sensible.
 	 */
-	workspace.semifactors=semifactors;
 
 	required_outer = calc_nestloop_required_outer(outer_path, inner_path);
 	if (required_outer && !bms_overlap(required_outer, param_source_rels)) {
@@ -328,7 +327,6 @@ static void try_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType j
 	 * Check to see if proposed path is still parameterized, and reject if the
 	 * parameterization wouldn't be sensible.
 	 */
-	workspace.semifactors=semifactors;
 	required_outer = calc_non_nestloop_required_outer(outer_path, inner_path);
 	if (required_outer && !bms_overlap(required_outer, param_source_rels)) {
 		/* Waste no memory when we reject a path here */
