@@ -1508,7 +1508,7 @@ void set_agg_sizes_from_memo(PlannerInfo *root, Path *path) {
 	}
 }
 void update_and_recost(PlannerInfo *root, RelOptInfo *joinrel) {
-	MemoRelation *memo_rel;
+	MemoRelation *memo_rel = NULL;
 	memo_rel = get_Memorelation(NULL, list_copy(joinrel->rel_name), root->query_level, NIL, 3);
 	if (memo_rel)
 		joinrel->rows = clamp_row_est(memo_rel->rows / memo_rel->loops);
@@ -1518,46 +1518,53 @@ void update_and_recost(PlannerInfo *root, RelOptInfo *joinrel) {
 
 void recost_paths(PlannerInfo *root, RelOptInfo *joinrel) {
 	ListCell *lc;
+	JoinCostWorkspace *workspace = NULL;
+
 
 	foreach(lc,joinrel->tmp_pathlist) {
-		JoinPath *joinpath = (JoinPath *) lfirst(lc);
-		JoinCostWorkspace *workspace = NULL;
-		switch (joinpath->path.pathtype) {
-			case T_MergeJoin:
-				workspace = ((MergePath *) joinpath)->jpath.workspace;
-				initial_cost_mergejoin(root, workspace, ((MergePath *) joinpath)->jpath.jointype,
-						((MergePath *) joinpath)->path_mergeclauses, ((MergePath *) joinpath)->jpath.outerjoinpath,
-						((MergePath *) joinpath)->jpath.innerjoinpath, ((MergePath *) joinpath)->outersortkeys,
-						((MergePath *) joinpath)->innersortkeys, NULL);
-				final_cost_mergejoin(root, (MergePath *) joinpath, workspace, NULL);
-				break;
-			case T_HashJoin: {
-				HashPath *hpath = (HashPath *) joinpath;
-				workspace = ((HashPath *) joinpath)->jpath.workspace;
 
-				initial_cost_hashjoin(root, workspace, hpath->jpath.jointype, hpath->path_hashclauses,
-						hpath->jpath.outerjoinpath, hpath->jpath.innerjoinpath, NULL, workspace->semifactors);
-				final_cost_hashjoin(root, hpath, workspace, NULL, workspace->semifactors);
-				break;
+		Path *joinpath = (Path *) lfirst(lc);
+		JoinPath *jpath = (JoinPath *) joinpath;
+		if (jpath->invalid == false) {
+			switch (joinpath->type) {
+				case T_MergePath:
+					workspace = ((MergePath *) joinpath)->jpath.workspace;
+					initial_cost_mergejoin(root, workspace, ((MergePath *) joinpath)->jpath.jointype,
+							((MergePath *) joinpath)->path_mergeclauses, ((MergePath *) joinpath)->jpath.outerjoinpath,
+							((MergePath *) joinpath)->jpath.innerjoinpath, ((MergePath *) joinpath)->outersortkeys,
+							((MergePath *) joinpath)->innersortkeys, NULL);
+					final_cost_mergejoin(root, (MergePath *) joinpath, workspace, NULL);
+					break;
+				case T_HashPath: {
+					HashPath *hpath = (HashPath *) joinpath;
+					workspace = ((HashPath *) joinpath)->jpath.workspace;
+
+					initial_cost_hashjoin(root, workspace, hpath->jpath.jointype, hpath->path_hashclauses,
+							hpath->jpath.outerjoinpath, hpath->jpath.innerjoinpath, NULL, workspace->semifactors);
+					final_cost_hashjoin(root, hpath, workspace, NULL, workspace->semifactors);
+					break;
+				}
+				case T_NestPath:
+					workspace = ((NestPath *) joinpath)->workspace;
+					initial_cost_nestloop(root, workspace, ((NestPath *) joinpath)->jointype,
+							((NestPath *) joinpath)->outerjoinpath, ((NestPath *) joinpath)->innerjoinpath, NULL,
+							workspace->semifactors);
+					final_cost_nestloop(root, ((NestPath *) joinpath), workspace, NULL, workspace->semifactors);
+					break;
+				case T_MaterialPath:
+
+					cost_material(&((MaterialPath *) joinpath)->path,
+							((MaterialPath *) joinpath)->subpath->startup_cost,
+							((MaterialPath *) joinpath)->subpath->total_cost,
+							((MaterialPath *) joinpath)->subpath->rows, joinrel->width);
+
+					break;
+
+				default:
+					elog(ERROR, "1 unrecognized node type: %d", (int) joinpath->type);
+					break;
 			}
-			case T_NestLoop:
-				workspace = joinpath->workspace;
-				initial_cost_nestloop(root, workspace, joinpath->jointype, joinpath->outerjoinpath,
-						joinpath->innerjoinpath, NULL, workspace->semifactors);
-				final_cost_nestloop(root, joinpath, workspace, NULL, workspace->semifactors);
-				break;
-			case T_Material:
-				cost_material(&joinpath->path, ((MaterialPath *) joinpath)->subpath->startup_cost,
-						((MaterialPath *) joinpath)->subpath->total_cost, ((MaterialPath *) joinpath)->subpath->rows,
-						joinrel->width);
-
-				break;
-
-			default:
-				elog(ERROR, "unrecognized node type: %d", (int) joinpath->path.pathtype);
-				break;
 		}
-
 	}
 
 }
@@ -1582,7 +1589,7 @@ static Relids get_requiredouter(Path *path) {
 			break;
 		default:
 
-			elog(ERROR, "unrecognized node type: %d", (int) path->pathtype);
+			elog(ERROR, "2 unrecognized node type: %d", (int) path->pathtype);
 
 			return NULL;
 			break;
@@ -1590,6 +1597,53 @@ static Relids get_requiredouter(Path *path) {
 	return NULL;
 }
 
+void invalide_removed_path(RelOptInfo *rel, Path* path) {
+
+	if (rel->rtekind == RTE_JOIN) {
+		ListCell *lc;
+
+		foreach(lc,((JoinPath *)path)->path.parent_paths) {
+			JoinPath *joinpath = (JoinPath *) lfirst(lc);
+			joinpath->invalid = true;
+			invalide_removed_path(joinpath->path.parent, (Path*) joinpath);
+		}
+	}
+}
+
+void attach_child_joinpath(Path *parent_path, Path *child_path) {
+
+	if (child_path->parent->rtekind != RTE_JOIN) {
+		return;
+	}
+	switch (child_path->type) {
+		case T_MergePath: {
+			MergePath * joinpath = (MergePath *) child_path;
+			joinpath->jpath.path.parent_paths = lappend(joinpath->jpath.path.parent_paths, parent_path);
+			break;
+		}
+		case T_HashPath: {
+			HashPath * joinpath = (HashPath *) child_path;
+			joinpath->jpath.path.parent_paths = lappend(joinpath->jpath.path.parent_paths, parent_path);
+			break;
+		}
+		case T_NestPath: {
+			NestPath * joinpath = (NestPath *) child_path;
+			joinpath->path.parent_paths = lappend(joinpath->path.parent_paths, parent_path);
+
+			break;
+
+		}
+		case T_MaterialPath:
+		case T_UniquePath:
+			attach_child_joinpath(parent_path, ((UniquePath *) child_path)->subpath);
+			break;
+		default:
+			elog(ERROR, "2 unrecognized node type: %d", (int) child_path->type);
+			break;
+
+	}
+
+}
 void add_recosted_paths(RelOptInfo *joinrel) {
 
 	ListCell *lc;
@@ -1603,7 +1657,7 @@ void add_recosted_paths(RelOptInfo *joinrel) {
 
 		if (add_path_precheck_final(joinrel, startup_cost, total_cost, pathkeys, required_outer)) {
 
-			add_path_final(joinrel, (Path *) joinpath);
+			add_path_final(joinrel, joinpath);
 
 		}
 

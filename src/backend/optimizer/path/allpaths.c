@@ -1402,16 +1402,19 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels) {
 		 * level, and build paths for making each one from every available
 		 * pair of lower-level relations.
 		 */
-		join_search_one_level(root, lev);
 		if (!enable_memo_propagation)
 			final_pass = true;
+
+		join_search_one_level(root, lev);
+
 		/*
 		 * Do cleanup work on each just-processed rel.
 		 */
 		foreach(lc, root->join_rel_level[lev]) {
 			rel = (RelOptInfo *) lfirst(lc);
-			if (enable_memo)
+			if (enable_memo) {
 				add_recosted_paths(rel);
+			}
 			/* Find and save the cheapest paths for this rel */
 			set_cheapest(rel);
 
@@ -1421,7 +1424,7 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels) {
 		}
 
 	}
-	if (enable_memo && enable_memo_propagation ) {
+	if (enable_memo && enable_memo_propagation) {
 
 		printf("Final memo cache state :\n-----------------------\n");
 
@@ -1440,6 +1443,8 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels) {
 			}
 		}
 	}
+	final_pass = false;
+
 	/*
 	 * We should have a single rel at the final level.
 	 */

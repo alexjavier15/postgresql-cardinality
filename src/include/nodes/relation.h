@@ -826,6 +826,7 @@ typedef struct Path
 	double 		removed_rows;
 	List       *nodename;
 	bool	    isParameterized;
+	List       *parent_paths;
 
 
 } Path;
@@ -1069,6 +1070,7 @@ typedef struct UniquePath
 	char 	   *name;
 } UniquePath;
 
+
 /*
  * All join-type paths share these fields.
  */
@@ -1083,6 +1085,7 @@ typedef struct JoinPath
 	List	   *joinrestrictinfo;		/* RestrictInfos to apply to join */
 	JoinCostWorkspace *workspace;
 	Relids      required_outer;
+	bool		invalid;
 
 	/*used by memo calculations*/
 

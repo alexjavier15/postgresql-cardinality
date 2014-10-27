@@ -345,7 +345,7 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 							list_copy(*restrictlist_ptr));
 					if (joinrel->rows != nrows) {
 						joinrel->pathlist = NIL;
-						recost_paths(root, joinrel);
+					//	recost_paths(root, joinrel);
 					}
 
 				}
