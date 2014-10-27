@@ -806,7 +806,7 @@ create_tidscan_path(PlannerInfo *root, RelOptInfo *rel, List *tidquals, Relids r
 	pathnode->path.pathkeys = NIL; /* always unordered */
 
 	pathnode->tidquals = tidquals;
-	set_plain_rel_sizes_from_memo(root, rel, pathnode, NULL, false);
+	set_plain_rel_sizes_from_memo(root, rel, (Path *)pathnode, NULL, false);
 
 	cost_tidscan(&pathnode->path, root, rel, tidquals, pathnode->path.param_info);
 
@@ -1695,12 +1695,13 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 	}
 
 	set_join_sizes_from_memo(root, joinrel, pathnode);
+	workspace->semifactors=semifactors;
 
 	final_cost_nestloop(root, pathnode, workspace, sjinfo, semifactors);
 	pathnode->workspace = workspace;
 	//We mark children wth this path
-	attach_child_joinpath(pathnode, inner_path);
-	attach_child_joinpath(pathnode, outer_path);
+	attach_child_joinpath((Path*)pathnode, inner_path);
+	attach_child_joinpath((Path*)pathnode, outer_path);
 	return pathnode;
 }
 
@@ -1768,8 +1769,8 @@ create_mergejoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
 	final_cost_mergejoin(root, pathnode, workspace, sjinfo);
 	pathnode->jpath.workspace = workspace;
 	//We mark children wth this path
-	attach_child_joinpath(pathnode, inner_path);
-	attach_child_joinpath(pathnode, outer_path);
+	attach_child_joinpath((Path*)pathnode, inner_path);
+	attach_child_joinpath((Path*)pathnode, outer_path);
 	return pathnode;
 }
 
@@ -1837,13 +1838,14 @@ create_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 	}
 	set_join_sizes_from_memo(root, joinrel, &pathnode->jpath);
 	/* final_cost_hashjoin will fill in pathnode->num_batches */
+	workspace->semifactors=semifactors;
 
 	final_cost_hashjoin(root, pathnode, workspace, sjinfo, semifactors);
 	pathnode->jpath.workspace = workspace;
 
 	//We mark children wth this path
-	attach_child_joinpath(pathnode, inner_path);
-	attach_child_joinpath(pathnode, outer_path);
+	attach_child_joinpath((Path*)pathnode, inner_path);
+	attach_child_joinpath((Path*)pathnode, outer_path);
 
 	return pathnode;
 }
