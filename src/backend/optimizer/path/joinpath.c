@@ -253,7 +253,6 @@ static void try_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType j
 				(Path *) create_nestloop_path(root, joinrel, jointype, &workspace, sjinfo, semifactors, outer_path,
 						inner_path, restrict_clauses, pathkeys, required_outer));
 	} else {
-		if (final_pass)
 			/* Waste no memory when we reject a path here */
 			bms_free(required_outer);
 	}
@@ -309,7 +308,6 @@ static void try_mergejoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType 
 
 	} else {
 		/* Waste no memory when we reject a path here */
-		if (final_pass)
 			bms_free(required_outer);
 	}
 }
@@ -353,7 +351,6 @@ static void try_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType j
 						inner_path, restrict_clauses, required_outer, hashclauses));
 	} else {
 		/* Waste no memory when we reject a path here */
-		if (final_pass)
 
 		bms_free(required_outer);
 	}
