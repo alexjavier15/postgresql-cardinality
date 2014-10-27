@@ -223,6 +223,8 @@ static void try_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType j
 	 * Check to see if proposed path is still parameterized, and reject if the
 	 * parameterization wouldn't be sensible.
 	 */
+	workspace.semifactors=semifactors;
+
 	required_outer = calc_nestloop_required_outer(outer_path, inner_path);
 	if (required_outer && !bms_overlap(required_outer, param_source_rels)) {
 		/* Waste no memory when we reject a path here */
@@ -326,6 +328,7 @@ static void try_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType j
 	 * Check to see if proposed path is still parameterized, and reject if the
 	 * parameterization wouldn't be sensible.
 	 */
+	workspace.semifactors=semifactors;
 	required_outer = calc_non_nestloop_required_outer(outer_path, inner_path);
 	if (required_outer && !bms_overlap(required_outer, param_source_rels)) {
 		/* Waste no memory when we reject a path here */
@@ -343,6 +346,7 @@ static void try_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType j
 	 * See comments in try_nestloop_path().  Also note that hashjoin paths
 	 * never have any output pathkeys, per comments in create_hashjoin_path.
 	 */
+
 	initial_cost_hashjoin(root, &workspace, jointype, hashclauses, outer_path, inner_path, sjinfo, semifactors);
 
 	if (add_path_precheck(joinrel, workspace.startup_cost, workspace.total_cost, NIL, required_outer)) {
