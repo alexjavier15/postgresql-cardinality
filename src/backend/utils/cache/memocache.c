@@ -1520,7 +1520,6 @@ void recost_paths(PlannerInfo *root, RelOptInfo *joinrel) {
 	ListCell *lc;
 	JoinCostWorkspace *workspace = NULL;
 
-
 	foreach(lc,joinrel->tmp_pathlist) {
 
 		Path *joinpath = (Path *) lfirst(lc);
@@ -1536,20 +1535,20 @@ void recost_paths(PlannerInfo *root, RelOptInfo *joinrel) {
 					final_cost_mergejoin(root, (MergePath *) joinpath, workspace, NULL);
 					break;
 				case T_HashPath: {
+					SemiAntiJoinFactors semifactors;
 					HashPath *hpath = (HashPath *) joinpath;
 					workspace = ((HashPath *) joinpath)->jpath.workspace;
-
 					initial_cost_hashjoin(root, workspace, hpath->jpath.jointype, hpath->path_hashclauses,
-							hpath->jpath.outerjoinpath, hpath->jpath.innerjoinpath, NULL, workspace->semifactors);
-					final_cost_hashjoin(root, hpath, workspace, NULL, workspace->semifactors);
+							hpath->jpath.outerjoinpath, hpath->jpath.innerjoinpath, NULL, NULL);
+					final_cost_hashjoin(root, hpath, workspace, NULL, NULL);
 					break;
 				}
 				case T_NestPath:
 					workspace = ((NestPath *) joinpath)->workspace;
 					initial_cost_nestloop(root, workspace, ((NestPath *) joinpath)->jointype,
 							((NestPath *) joinpath)->outerjoinpath, ((NestPath *) joinpath)->innerjoinpath, NULL,
-							workspace->semifactors);
-					final_cost_nestloop(root, ((NestPath *) joinpath), workspace, NULL, workspace->semifactors);
+							NULL);
+					final_cost_nestloop(root, ((NestPath *) joinpath), workspace, NULL, NULL);
 					break;
 				case T_MaterialPath:
 

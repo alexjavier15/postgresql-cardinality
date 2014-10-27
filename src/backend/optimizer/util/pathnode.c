@@ -1695,10 +1695,9 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 	}
 
 	set_join_sizes_from_memo(root, joinrel, pathnode);
-	workspace->semifactors = (SemiAntiJoinFactors *) palloc0(sizeof(SemiAntiJoinFactors));
 
-	workspace->semifactors->match_count = semifactors->match_count;
-	workspace->semifactors->outer_match_frac = semifactors->outer_match_frac;
+	workspace->match_count = semifactors->match_count;
+	workspace->outer_match_frac = semifactors->outer_match_frac;
 
 	final_cost_nestloop(root, pathnode, workspace, sjinfo, semifactors);
 	pathnode->workspace = workspace;
@@ -1841,10 +1840,9 @@ create_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 	}
 	set_join_sizes_from_memo(root, joinrel, &pathnode->jpath);
 	/* final_cost_hashjoin will fill in pathnode->num_batches */
-	workspace->semifactors = (SemiAntiJoinFactors *) palloc0(sizeof(SemiAntiJoinFactors));
 
-	workspace->semifactors->match_count = semifactors->match_count;
-	workspace->semifactors->outer_match_frac = semifactors->outer_match_frac;
+	workspace->match_count = semifactors->match_count;
+	workspace->outer_match_frac = semifactors->outer_match_frac;
 
 	final_cost_hashjoin(root, pathnode, workspace, sjinfo, semifactors);
 	pathnode->jpath.workspace = workspace;
