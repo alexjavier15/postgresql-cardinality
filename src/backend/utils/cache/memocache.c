@@ -1545,10 +1545,10 @@ void recost_paths(PlannerInfo *root, RelOptInfo *joinrel) {
 
 					initial_cost_hashjoin(root, workspace, hpath->jpath.jointype, hpath->path_hashclauses,
 							hpath->jpath.outerjoinpath, hpath->jpath.innerjoinpath, NULL, &semifactors);
-					final_cost_hashjoin(root, hpath, workspace, NULL, NULL);
+					final_cost_hashjoin(root, hpath, workspace, NULL, &semifactors);
 					break;
 				}
-				case T_NestPath:{
+				case T_NestPath: {
 					SemiAntiJoinFactors semifactors;
 
 					workspace = ((NestPath *) joinpath)->workspace;
@@ -1558,7 +1558,8 @@ void recost_paths(PlannerInfo *root, RelOptInfo *joinrel) {
 							((NestPath *) joinpath)->outerjoinpath, ((NestPath *) joinpath)->innerjoinpath, NULL,
 							&semifactors);
 					final_cost_nestloop(root, ((NestPath *) joinpath), workspace, NULL, &semifactors);
-					break;}
+					break;
+				}
 				case T_MaterialPath:
 
 					cost_material(&((MaterialPath *) joinpath)->path,
