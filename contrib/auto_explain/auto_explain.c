@@ -204,7 +204,16 @@ static void explain_ExecutorEnd(QueryDesc *queryDesc) {
 	FILE *file_joins;
 	if (!enable_memo) {
 		file_joins = fopen("joins.txt", "w+");
+	}else{
+
+
+		if(!enable_memo_propagation)
+			file_joins = fopen("joins_pro.txt", "w+");
+
 	}
+
+
+
 	if (queryDesc->totaltime && auto_explain_enabled()) {
 		double msec;
 
