@@ -3236,7 +3236,7 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 	printf("level: %d , id: %s", root->query_level, _outuBitmapset(rel->relids));
 	printMemo(rel->rel_name);
 
-	printf("final  base join rows are : %f \n", rel->rows);
+	printf("final  base join rows are : %f. outer rows: %f, inner rows: %f. \n", rel->rows, outer_rel->rows, inner_rel->rows);
 
 }
 
