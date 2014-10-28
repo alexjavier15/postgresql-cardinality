@@ -1688,7 +1688,8 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 		pathnode->path.restrictList = list_concat_unique(pathnode->path.restrictList,
 				list_copy(outer_path->restrictList));
 
-	if (!lcontains(joinrel, pathnode->path.restrictList) && !enable_memo) {
+	if ((!enable_memo || (enable_memo && !enable_memo_propagation))
+			&& !lcontains(joinrel, pathnode->path.restrictList)) {
 		store_join(joinrel->rel_name, root->query_level, list_copy(pathnode->path.restrictList), joinrel->rows, false);
 		joinrel->all_restrictList = lappend(joinrel->all_restrictList, list_copy(pathnode->path.restrictList));
 
@@ -1757,7 +1758,8 @@ create_mergejoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
 		pathnode->jpath.path.restrictList = list_concat_unique(pathnode->jpath.path.restrictList,
 				list_copy(outer_path->restrictList));
 
-	if (!lcontains(joinrel, pathnode->jpath.path.restrictList) && !enable_memo) {
+	if ((!enable_memo || (enable_memo && !enable_memo_propagation))
+			&& !lcontains(joinrel, pathnode->jpath.path.restrictList)) {
 		store_join(joinrel->rel_name, root->query_level, list_copy(pathnode->jpath.path.restrictList), joinrel->rows,
 				false);
 		joinrel->all_restrictList = lappend(joinrel->all_restrictList, list_copy(pathnode->jpath.path.restrictList));
@@ -1833,7 +1835,8 @@ create_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 		pathnode->jpath.path.restrictList = list_concat_unique(pathnode->jpath.path.restrictList,
 				list_copy(outer_path->restrictList));
 
-	if (!lcontains(joinrel, pathnode->jpath.path.restrictList) && !enable_memo) {
+	if ((!enable_memo || (enable_memo && !enable_memo_propagation))
+			&& !lcontains(joinrel, pathnode->jpath.path.restrictList)) {
 		store_join(joinrel->rel_name, root->query_level, list_copy(pathnode->jpath.path.restrictList), joinrel->rows,
 				false);
 		joinrel->all_restrictList = lappend(joinrel->all_restrictList, list_copy(pathnode->jpath.path.restrictList));
