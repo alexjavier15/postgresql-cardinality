@@ -74,9 +74,11 @@ RteReferences *rte_ref_ptr = &rte_ref;
 static struct MemoCache memo_cache;
 static struct SelectivityCache sel_cache;
 static struct CachedJoins join_cache;
+static struct CachedJoins join_cache_propagation;
 
 MemoQuery *memo_query_ptr;
 CachedJoins *join_cache_ptr = &join_cache;
+CachedJoins *join_cache_prop_ptr = &join_cache_propagation;
 
 MemoCache *memo_cache_ptr = &memo_cache;
 SelectivityCache *sel_cache_ptr = &sel_cache;
@@ -211,7 +213,7 @@ void push_reference(Index index, Value * name) {
 	if (index >= rte_ref_ptr->size) {
 
 		Value ** newtable = (Value **) palloc0((index + 1) * sizeof(Value *));
-		memcpy(newtable, rte_ref_ptr->rte_table, (rte_ref_ptr->size) * sizeof(Value));
+		memcpy(newtable, rte_ref_ptr->rte_table, (rte_ref_ptr->size) * sizeof(Value*));
 		rte_ref_ptr->rte_table = newtable;
 		rte_ref_ptr->size = index + 1;
 	}
@@ -313,7 +315,18 @@ void InitJoinCache(void) {
 	if (joincache != NULL && enable_memo_propagation)
 		readAndFillFromFile(joincache, join_cache_ptr);
 	printContentRelations((CacheM *) join_cache_ptr);
+	if (enable_memo && !enable_memo_propagation) {
 
+		join_cache_prop_ptr->type = M_JoinCache;
+		join_cache_prop_ptr->length = DEFAULT_MAX_JOIN_SIZE;
+		join_cache_prop_ptr->content = (dlist_head *) palloc0((DEFAULT_MAX_JOIN_SIZE) * sizeof(dlist_head));
+		MemSetAligned(join_cache_prop_ptr->content, 0, (DEFAULT_MAX_JOIN_SIZE) * sizeof(dlist_head));
+
+		for (i = 0; i < DEFAULT_MAX_JOIN_SIZE; i++) {
+			dlist_init(&join_cache_prop_ptr->content[i]);
+		}
+
+	}
 	printf("Join cache ending\n-----------------------\n");
 
 	//printf("New join cache state:\n-----------------------\n");
@@ -1302,7 +1315,13 @@ void store_join(List *lrelName, int level, List *clauses, double rows, bool isPa
 		relation->relationname = list_copy(lrelName);
 		relation->str_clauses = str.data;
 		relation->isParameterized = isParam;
-		add_node(join_cache_ptr, relation, list_length(lrelName));
+
+		if (enable_memo && !enable_memo_propagation)
+
+			add_node(join_cache_prop_ptr, relation, list_length(lrelName));
+		else
+			add_node(join_cache_ptr, relation, list_length(lrelName));
+
 	}
 	/*printf("Relation Stored\n -------------------------------- \n");
 	 print_relation(str1, str2, relation);
@@ -1311,12 +1330,16 @@ void store_join(List *lrelName, int level, List *clauses, double rows, bool isPa
 }
 void export_join(FILE *file) {
 	StringInfoData str;
-
-	int i;
-
+	CachedJoins *cptr = NULL;
 	dlist_iter iter;
+	int i= 0;
+	if (enable_memo && !enable_memo_propagation)
 
-	if (join_cache_ptr->size != 0 && file != NULL) {
+		cptr = join_cache_prop_ptr;
+	else
+		cptr = join_cache_ptr;
+
+	if (cptr->size != 0 && file != NULL) {
 		initStringInfo(&str);
 
 		for (i = 0; i < join_cache_ptr->length; ++i) {
