@@ -262,7 +262,7 @@ static void explain_ExecutorEnd(QueryDesc *queryDesc) {
 				ereport(LOG, (errmsg("duration: %.3f ms  plan:\n%s", msec, es.str->data), errhidestmt(true)));
 				fprintf(file_d, "%.3f", msec);
 
-				if (enable_memo) {
+				if (enable_memo && enable_memo_propagation) {
 					fprintf(file_d, "\n");
 				} else {
 					export_join(file_joins);

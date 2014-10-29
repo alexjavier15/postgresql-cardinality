@@ -188,7 +188,7 @@ MemoRelation* create_memo_realation(int level, bool isParam, List *relname, doub
 	relation->relationname = list_copy(relname);
 	relation->rows = rows;
 	relation->loops = loops;
-	relation->clauseslength = 1;
+	relation->clauseslength = list_length(clauses);
 	relation->clauses = restictInfoToMemoClauses(clauses);
 	return relation;
 }
@@ -1036,6 +1036,27 @@ void cmp_lists(MemoInfoData1 * result, List *lleft, List *lright) {
 
 	}
 }
+static void try_partial_join(MemoRelation *relation1, MemoRelation *relation2) {
+	MemoRelation *found_rel = NULL;
+	MemoRelation *newRelation = NULL;
+
+	//find the outer rel name;
+
+	List *diff_name = list_difference(relation2->relationname, relation1->relationname);
+
+	contains(NULL, &found_rel, (CacheM *) memo_query_ptr, diff_name, NIL, relation1->level, 1);
+	if (found_rel != NULL) {
+		List *newname = list_union(list_copy(relation1->relationname), list_copy(diff_name));
+		double rows = relation1->rows * clamp_row_est(found_rel->rows / found_rel->loops);
+		List *newclauses = list_union(relation1->clauses, found_rel->clauses);
+		newRelation = create_memo_realation(relation1->level, false, newname, rows, 1, NIL);
+		newRelation->nodeType = -1;
+		newRelation->clauses = newclauses;
+		add_relation(newRelation, list_length(newRelation->relationname));
+
+	}
+
+}
 
 void check_NoMemo_queries(void) {
 	MemoRelation *relation1 = NULL;
@@ -1051,9 +1072,10 @@ void check_NoMemo_queries(void) {
 
 	while (found_new) {
 		int i;
+		int k;
 		found_new = false;
 
-		for (i = 0; i < join_cache_ptr->length; ++i) {
+		for (i = 1; i < join_cache_ptr->length; i++) {
 
 			dlist_foreach_modify (iter, &join_cache_ptr->content[i]) {
 				MemoRelation *target = dlist_container(MemoRelation,list_node, iter.cur);
@@ -1061,25 +1083,32 @@ void check_NoMemo_queries(void) {
 				/*	printf("Checking :\n**********************\n");
 				 print_relation(target);
 				 printf("********************************\n");*/
-				query = find_seeder_relations(&relation1, &relation2, &commonrelation, list_copy(target->relationname),
-						list_copy(target->clauses), target->level, rellen);
-				//check for candidates matches existence
-				if (relation1 != NULL && relation2 != NULL && query != NULL) {
-					// delete the current NoMemoRelation from the un_cache
+				for (k = rellen; k > rellen / 2; k--) {
+					relation1 = NULL;
+					relation2 = NULL;
+					commonrelation = NULL;
+					query = find_seeder_relations(&relation1, &relation2, &commonrelation,
+							list_copy(target->relationname), list_copy(target->clauses), target->level, k);
+					//check for candidates matches existence
+					if (relation1 != NULL && relation2 != NULL && query != NULL) {
+						// delete the current NoMemoRelation from the un_cache
 
-					//Call the calculation function to get estimated rows and merk the RelOptInfo
-					//struct
-					found_new = true;
-					set_estimated_join_rows(relation1, relation2, commonrelation, target);
-					dlist_delete(&(target->list_node));
-					//printf("Founds rows :\n%lf\n**********************\n", target->rows);
+						//Call the calculation function to get estimated rows and merk the RelOptInfo
+						//struct
+						found_new = true;
+						set_estimated_join_rows(relation1, relation2, commonrelation, target);
+						dlist_delete(&(target->list_node));
+						//printf("Founds rows :\n%lf\n**********************\n", target->rows);
 
-					add_node(query, target, rellen);
+						add_node(query, target, rellen);
 
+						/*optional step*/
+
+						try_partial_join(relation1, relation2);
+						break;
+
+					}
 				}
-				relation1 = NULL;
-				relation2 = NULL;
-				commonrelation = NULL;
 				//printf("\n");
 			}
 			discard_existing_joins();
@@ -1230,10 +1259,17 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 				return;
 
 			}
+			if (isParam == 2 && memorelation->nodeType != -1) {
 
-			if ((isParam < 2 && memorelation->isParameterized == isParam) || isParam == 2) {
+				if (result != NULL)
+					result->found = FULL_MATCHED;
+				*relation = &(*memorelation);
+				return;
+			}
+
+			if ((isParam < 2 && memorelation->isParameterized == isParam)) {
 				//	print_relation(memorelation);
-				if (result != NULL) {
+				if (result != NULL || (!clauses && isParam == 2)) {
 
 					cmp_lists(result, memorelation->clauses, lquals);
 					/*if (list_length(relname) == 4) {
@@ -1255,6 +1291,7 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 						leftmatched = memorelation;
 
 					}
+
 				}
 
 			}
@@ -1332,7 +1369,7 @@ void export_join(FILE *file) {
 	StringInfoData str;
 	CachedJoins *cptr = NULL;
 	dlist_iter iter;
-	int i= 0;
+	int i = 0;
 	if (enable_memo && !enable_memo_propagation)
 
 		cptr = join_cache_prop_ptr;
@@ -1342,9 +1379,9 @@ void export_join(FILE *file) {
 	if (cptr->size != 0 && file != NULL) {
 		initStringInfo(&str);
 
-		for (i = 0; i < join_cache_ptr->length; ++i) {
+		for (i = 0; i < cptr->length; ++i) {
 
-			dlist_foreach (iter, &join_cache_ptr->content[i]) {
+			dlist_foreach (iter, &cptr->content[i]) {
 				MemoRelation *memorelation = dlist_container(MemoRelation,list_node, iter.cur);
 				buildSimpleStringList(&str, memorelation->relationname);
 
@@ -1532,7 +1569,7 @@ void set_agg_sizes_from_memo(PlannerInfo *root, Path *path) {
 }
 void update_and_recost(PlannerInfo *root, RelOptInfo *joinrel) {
 	MemoRelation *memo_rel = NULL;
-	memo_rel = get_Memorelation(NULL, list_copy(joinrel->rel_name), root->query_level, NIL, 3);
+	memo_rel = get_Memorelation(NULL, list_copy(joinrel->rel_name), root->query_level, NIL, 2);
 	if (memo_rel)
 		joinrel->rows = clamp_row_est(memo_rel->rows / memo_rel->loops);
 	recost_paths(root, joinrel);

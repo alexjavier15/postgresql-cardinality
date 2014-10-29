@@ -398,6 +398,30 @@ ExecEndNestLoop(NestLoopState *node)
 {
 	NL1_printf("ExecEndNestLoop: %s\n",
 			   "ending node processing");
+/*
+
+	ListCell *lc;
+	printf("ps.quals\n");
+	foreach(lc, node->js.ps.qual) {
+
+		ExprState *xst = (ExprState *) lfirst(lc);
+		printMemo(xst->expr);
+		printf("Tuples : %d\n", xst->count);
+
+	}
+	fflush(stdout);
+
+	printf("joinqual\n");
+	foreach(lc, node->js.joinqual) {
+
+		ExprState *xst = (ExprState *) lfirst(lc);
+		printMemo(xst->expr);
+		printf("Tuples : %d\n", xst->count);
+
+	}
+	fflush(stdout);
+*/
+
 
 	/*
 	 * Free the exprcontext

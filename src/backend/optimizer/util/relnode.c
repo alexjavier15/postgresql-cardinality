@@ -131,7 +131,8 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptKind reloptkind) {
 	rel->last_memorel = NULL;
 	rel->last_restrictList = NIL;
 	rel->paramloops = 0;
-	rel->memo_checked = false;
+	rel->rmemo_checked = false;
+	rel->lmemo_checked = false;
 
 	/* Check type of rtable entry */
 	switch (rte->rtekind) {
@@ -339,14 +340,16 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 			if (restrictlist_ptr) {
 				*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
 
-				if (enable_memo && !joinrel->memo_checked && inner_rel->memo_checked) {
+				if (enable_memo &&  !(joinrel->rmemo_checked && joinrel->lmemo_checked)   && outer_rel->rmemo_checked ) {
+
+
 					int nrows = joinrel->rows;
+					printf("Additional estimate pass\n");
 					set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo,
 							list_copy(*restrictlist_ptr));
-					if (joinrel->rows != nrows) {
-						joinrel->pathlist = NIL;
-					//	recost_paths(root, joinrel);
-					}
+					/*if (joinrel->rows != nrows) {
+						//	recost_paths(root, joinrel);
+					}*/
 
 				}
 			}
@@ -405,7 +408,9 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 //	if (enable_memo) {
 	joinrel->rel_name = list_copy(inner_rel->rel_name);
 	joinrel->rel_name = list_concat(joinrel->rel_name, list_copy(outer_rel->rel_name));
-	joinrel->memo_checked = false;
+	joinrel->rmemo_checked = false;
+	joinrel->lmemo_checked = false;
+
 	joinrel->last_index_type = 0;
 	joinrel->last_level = 0;
 	joinrel->last_memorel = NULL;

@@ -819,14 +819,23 @@ static struct config_bool ConfigureNamesBool[] =
 		NULL, NULL, NULL
 	},
 	{
-		{"enable_memo_convergent", PGC_USERSET, QUERY_TUNING_METHOD,
+		{"enable_memo_recosting", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Enables memo query optimization."),
 			NULL
 		},
-		&enable_memo_convergent,
+		&enable_memo_recosting,
 		false,
 		NULL, NULL, NULL
 	},
+	{
+		{"enable_memo_convergent", PGC_USERSET, QUERY_TUNING_METHOD,
+				gettext_noop("Enables memo query optimization."),
+				NULL
+			},
+			&enable_memo_convergent,
+			false,
+			NULL, NULL, NULL
+		},
 	{
 		{"enable_cost_check", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Enables memo query optimization."),

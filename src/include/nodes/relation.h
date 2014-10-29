@@ -531,7 +531,9 @@ typedef struct RelOptInfo
 	List        *restrictList;
 	List		*joinRestrictList;
 	List		*rel_name;
-	bool		memo_checked;
+	bool		rmemo_checked;
+	bool		lmemo_checked;
+
 	List		*last_restrictList;
 	int			last_level;
 	bool		last_index_type;
