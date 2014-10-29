@@ -554,6 +554,7 @@ struct ExprState
 	NodeTag		type;
 	Expr	   *expr;			/* associated Expr node */
 	ExprStateEvalFunc evalfunc; /* routine to run to execute node */
+	int			count;
 };
 
 /* ----------------

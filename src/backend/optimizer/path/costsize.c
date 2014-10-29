@@ -111,6 +111,7 @@ int effective_cache_size = -1;
 Cost disable_cost = 1.0e10;
 
 bool enable_memo = false;
+bool enable_memo_recosting = false;
 bool enable_memo_convergent = false;
 bool enable_memo_propagation = false;
 bool mode_cost_check = false;
@@ -3086,7 +3087,7 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 		 printMemo(rel->rel_name);*/
 		//maybe memo hacked
 		//printMemo(rel->baserestrictinfo);
-		get_relation_size(&result, root, rel, rel->baserestrictinfo, 2, NULL);
+		get_relation_size(&result, root, rel, rel->baserestrictinfo, false, NULL);
 		nrows = result.rows;
 	}
 
@@ -3150,7 +3151,7 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 	}
 	if (!enable_memo || nrows == -1) {
 
-		nrows = rel->tuples * clauselist_selectivity(root, allclauses, rel->relid, JOIN_INNER, NULL) / 1000;
+		nrows = rel->tuples * clauselist_selectivity(root, allclauses, rel->relid, JOIN_INNER, NULL);
 
 	}
 	nrows = clamp_row_est(nrows);
@@ -3195,23 +3196,27 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 		SpecialJoinInfo *sjinfo, List *restrictlist) {
 	double nrows = -1;
 	MemoInfoData1 result;
-	List * final_clauses = list_copy(restrictlist);
+	printMemo(restrictlist);
 	if (enable_memo) {
 
 		/*printf("checking join relation  ");*/
 
-		get_relation_size(&result, root, rel, list_copy(final_clauses), 3, sjinfo);
+		get_relation_size(&result, root, rel, NIL, 2, sjinfo);
 		nrows = result.rows;
 
 		if (nrows > 0) {
 
-			rel->memo_checked = true;
+			rel->rmemo_checked = true;
+			rel->lmemo_checked = true;
+
 		}
 	}
 	if (!enable_memo || nrows == -1) {
 
 		nrows = calc_joinrel_size_estimate(root, outer_rel->rows, inner_rel->rows, sjinfo, restrictlist);
 		nrows = clamp_row_est(nrows);
+
+
 		/*if (enable_memo) {
 		 MemoRelation *newRelation = NULL;
 
@@ -3223,9 +3228,10 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 	}
 	rel->rows = nrows;
 
-	if (enable_memo && inner_rel->memo_checked) {
+	if (enable_memo && !(rel->rmemo_checked && rel->lmemo_checked)) {
+		rel->rmemo_checked = outer_rel->rmemo_checked || nrows == outer_rel->rows;
+		rel->lmemo_checked = inner_rel->rmemo_checked || nrows == outer_rel->rows;
 
-		rel->memo_checked = true;
 
 		update_cached_joins(rel->rel_name, root->query_level, rel->rows);
 		check_NoMemo_queries();
@@ -3280,7 +3286,9 @@ double get_parameterized_joinrel_size(PlannerInfo *root, RelOptInfo *rel, double
 
 		if (nrows > 0) {
 
-			rel->memo_checked = true;
+			rel->rmemo_checked = true;
+			rel->lmemo_checked = true;
+
 		}
 	}
 	if (!enable_memo || nrows == -1) {
