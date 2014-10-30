@@ -17,6 +17,7 @@
 #include "nodes/relation.h"
 #include <time.h>
 #include <openssl/md5.h>
+#include "miscadmin.h"
 
 #define IsIndex(relation)	((relation)->nodeType == T_IndexOnlyScan  \
 		|| (relation)->nodeType == T_IndexScan || (relation)->nodeType == T_BitmapIndexScan)
@@ -91,7 +92,8 @@ static void InitSelectivityCache(void);
 static List * build_string_list(char * stringList, ListType type);
 static void buildSimpleStringList(StringInfo str, List *list);
 //static void fill_memo_cache(struct MemoCache *static void compt_lists(MemoInfoData *result, List *str1, const List *str2);
-
+static void recost_join_children(PlannerInfo *root, JoinPath * jpath);
+static void recost_path_recurse(PlannerInfo *root, Path * path);
 static MemoRelation *newMemoRelation(void);
 static void cmp_lists(MemoInfoData1 *result, List *str1, List *str2);
 static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation **relation2,
@@ -1576,63 +1578,97 @@ void update_and_recost(PlannerInfo *root, RelOptInfo *joinrel) {
 	add_recosted_paths(joinrel);
 }
 
+static void recost_join_children(PlannerInfo *root, JoinPath * jpath) {
+	if (jpath->innerjoinpath->type == T_UniquePath) {
+		recost_path_recurse(root, jpath->innerjoinpath);
+	}
+	if (jpath->outerjoinpath->type == T_UniquePath) {
+		recost_path_recurse(root, jpath->innerjoinpath);
+	}
+
+}
+static void recost_path_recurse(PlannerInfo *root, Path * path) {
+	JoinCostWorkspace *workspace = NULL;
+	switch (path->type) {
+		case T_MergePath:
+			recost_join_children(root, (JoinPath *) path);
+			workspace = ((MergePath *) path)->jpath.workspace;
+			initial_cost_mergejoin(root, workspace, ((MergePath *) path)->jpath.jointype,
+					((MergePath *) path)->path_mergeclauses, ((MergePath *) path)->jpath.outerjoinpath,
+					((MergePath *) path)->jpath.innerjoinpath, ((MergePath *) path)->outersortkeys,
+					((MergePath *) path)->innersortkeys, NULL);
+			final_cost_mergejoin(root, (MergePath *) path, workspace, NULL);
+			break;
+		case T_HashPath: {
+			SemiAntiJoinFactors semifactors;
+
+			HashPath *hpath = (HashPath *) path;
+			recost_join_children(root, (JoinPath *) path);
+
+			workspace = ((HashPath *) path)->jpath.workspace;
+			semifactors.match_count = workspace->match_count;
+			semifactors.outer_match_frac = workspace->outer_match_frac;
+
+			initial_cost_hashjoin(root, workspace, hpath->jpath.jointype, hpath->path_hashclauses,
+					hpath->jpath.outerjoinpath, hpath->jpath.innerjoinpath, NULL, &semifactors);
+			final_cost_hashjoin(root, hpath, workspace, NULL, &semifactors);
+			break;
+		}
+		case T_NestPath: {
+			SemiAntiJoinFactors semifactors;
+			recost_join_children(root, (JoinPath *) path);
+			workspace = ((NestPath *) path)->workspace;
+			semifactors.match_count = workspace->match_count;
+			semifactors.outer_match_frac = workspace->outer_match_frac;
+			initial_cost_nestloop(root, workspace, ((NestPath *) path)->jointype, ((NestPath *) path)->outerjoinpath,
+					((NestPath *) path)->innerjoinpath, NULL, &semifactors);
+			final_cost_nestloop(root, ((NestPath *) path), workspace, NULL, &semifactors);
+			break;
+		}
+		case T_MaterialPath:
+
+			cost_material(&((MaterialPath *) path)->path, ((MaterialPath *) path)->subpath->startup_cost,
+					((MaterialPath *) path)->subpath->total_cost, ((MaterialPath *) path)->subpath->rows,
+					((MaterialPath *) path)->subpath->parent->width);
+
+			break;
+		case T_UniquePath: {
+
+			UniquePath *upath = (UniquePath *) path;
+			switch (upath->umethod) {
+
+				case UNIQUE_PATH_SORT:
+					cost_sort(&upath->path, root, NIL, upath->subpath->total_cost, upath->path.parent->rows,
+							upath->path.parent->width, 0.0, work_mem, -1.0);
+
+				case UNIQUE_PATH_HASH:
+					cost_agg(&upath->path, root, AGG_HASHED, NULL, list_length(upath->uniq_exprs), upath->path.rows,
+							upath->subpath->startup_cost, upath->subpath->total_cost, upath->path.parent->rows);
+				default:
+					break;
+
+			}
+
+			break;
+
+		}
+
+		default:
+			elog(ERROR, "1 unrecognized node type: %d", (int) path->type);
+			break;
+	}
+
+}
 void recost_paths(PlannerInfo *root, RelOptInfo *joinrel) {
 	ListCell *lc;
-	JoinCostWorkspace *workspace = NULL;
 
 	foreach(lc,joinrel->tmp_pathlist) {
 
 		Path *joinpath = (Path *) lfirst(lc);
 		JoinPath *jpath = (JoinPath *) joinpath;
 		if (jpath->invalid == false) {
-			switch (joinpath->type) {
-				case T_MergePath:
-					workspace = ((MergePath *) joinpath)->jpath.workspace;
-					initial_cost_mergejoin(root, workspace, ((MergePath *) joinpath)->jpath.jointype,
-							((MergePath *) joinpath)->path_mergeclauses, ((MergePath *) joinpath)->jpath.outerjoinpath,
-							((MergePath *) joinpath)->jpath.innerjoinpath, ((MergePath *) joinpath)->outersortkeys,
-							((MergePath *) joinpath)->innersortkeys, NULL);
-					final_cost_mergejoin(root, (MergePath *) joinpath, workspace, NULL);
-					break;
-				case T_HashPath: {
-					SemiAntiJoinFactors semifactors;
+			recost_path_recurse(root, joinpath);
 
-					HashPath *hpath = (HashPath *) joinpath;
-
-					workspace = ((HashPath *) joinpath)->jpath.workspace;
-					semifactors.match_count = workspace->match_count;
-					semifactors.outer_match_frac = workspace->outer_match_frac;
-
-					initial_cost_hashjoin(root, workspace, hpath->jpath.jointype, hpath->path_hashclauses,
-							hpath->jpath.outerjoinpath, hpath->jpath.innerjoinpath, NULL, &semifactors);
-					final_cost_hashjoin(root, hpath, workspace, NULL, &semifactors);
-					break;
-				}
-				case T_NestPath: {
-					SemiAntiJoinFactors semifactors;
-
-					workspace = ((NestPath *) joinpath)->workspace;
-					semifactors.match_count = workspace->match_count;
-					semifactors.outer_match_frac = workspace->outer_match_frac;
-					initial_cost_nestloop(root, workspace, ((NestPath *) joinpath)->jointype,
-							((NestPath *) joinpath)->outerjoinpath, ((NestPath *) joinpath)->innerjoinpath, NULL,
-							&semifactors);
-					final_cost_nestloop(root, ((NestPath *) joinpath), workspace, NULL, &semifactors);
-					break;
-				}
-				case T_MaterialPath:
-
-					cost_material(&((MaterialPath *) joinpath)->path,
-							((MaterialPath *) joinpath)->subpath->startup_cost,
-							((MaterialPath *) joinpath)->subpath->total_cost,
-							((MaterialPath *) joinpath)->subpath->rows, joinrel->width);
-
-					break;
-
-				default:
-					elog(ERROR, "1 unrecognized node type: %d", (int) joinpath->type);
-					break;
-			}
 		}
 	}
 

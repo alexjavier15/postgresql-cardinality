@@ -36,3 +36,5 @@ pgsql.sln
 pgsql.sln.cache
 /Debug/
 /Release/
+ config.log   
+ config.status
