@@ -1926,9 +1926,7 @@ void final_cost_mergejoin(PlannerInfo *root, MergePath *path, JoinCostWorkspace 
 	 * Get approx # tuples passing the mergequals.  We use approx_tuple_count
 	 * here because we need an estimate done with JOIN_INNER semantics.
 	 */
-	if (enable_memo)
-		mergejointuples = path->jpath.path.rows;
-	else
+
 		mergejointuples = approx_tuple_count(root, &path->jpath, mergeclauses);
 
 	/*

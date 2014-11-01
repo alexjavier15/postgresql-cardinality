@@ -1430,6 +1430,7 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels) {
 		printMemoCache();
 		printf("End\n-----------------------\n");
 		if (enable_memo_recosting) {
+			printf("Recosting\n-----------------------\n");
 
 			final_pass = true;
 			for (lev = 2; lev <= levels_needed; lev++) {
