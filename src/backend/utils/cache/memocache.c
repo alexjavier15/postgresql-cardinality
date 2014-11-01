@@ -1583,7 +1583,7 @@ static void recost_join_children(PlannerInfo *root, JoinPath * jpath) {
 		recost_path_recurse(root, jpath->innerjoinpath);
 	}
 	if (jpath->outerjoinpath->type == T_UniquePath) {
-		recost_path_recurse(root, jpath->innerjoinpath);
+		recost_path_recurse(root, jpath->outerjoinpath);
 	}
 
 }
