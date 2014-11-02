@@ -37,6 +37,8 @@
 #include "utils/lsyscache.h"
 #include "utils/pg_locale.h"
 #include "utils/selfuncs.h"
+#include "utils/memocache.h"
+
 
 #define IsBooleanOpfamily(opfamily) \
 	((opfamily) == BOOL_BTREE_FAM_OID || (opfamily) == BOOL_HASH_FAM_OID)
@@ -145,7 +147,7 @@ static Const *string_to_const(const char *str, Oid datatype);
  * so it can be applied in any context.  A "parameterized" index scan uses
  * join clauses (plus restriction clauses, if available) in its indexqual.
  * When joining such a scan to one of the relations supplying the other
- * variables used in its indexqual, the parameterized scan must appear as
+ * variables used in its indexqual, the <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< scan must appear as
  * the inner relation of a nestloop join; it can't be used on the outer side,
  * nor in a merge or hash join.  In that context, values for the other rels'
  * attributes are available and fixed during any one scan of the indexpath.
@@ -1261,7 +1263,7 @@ static Cost bitmap_scan_cost_est(PlannerInfo *root, RelOptInfo *rel, Path *ipath
 	bpath.path.pathkeys = NIL;
 	bpath.bitmapqual = ipath;
 	bpath.loop = get_loop_count(root, required_outer);
-	set_plain_rel_sizes_from_memo(root, rel, &bpath,NULL, true);
+	set_plain_rel_sizes_from_memo(root, rel, &bpath.path,NULL, true);
 
 	cost_bitmap_heap_scan(&bpath.path, root, rel, bpath.path.param_info, ipath, bpath.loop);
 

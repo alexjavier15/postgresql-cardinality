@@ -610,25 +610,25 @@ static void ExplainPreScanNode(PlanState *planstate, Bitmapset **rels_used) {
 	Plan *plan = planstate->plan;
 
 	switch (nodeTag(plan)) {
-	case T_SeqScan:
-	case T_IndexScan:
-	case T_IndexOnlyScan:
-	case T_BitmapHeapScan:
-	case T_TidScan:
-	case T_SubqueryScan:
-	case T_FunctionScan:
-	case T_ValuesScan:
-	case T_CteScan:
-	case T_WorkTableScan:
-	case T_ForeignScan:
-		*rels_used = bms_add_member(*rels_used, ((Scan *) plan)->scanrelid);
-		break;
-	case T_ModifyTable:
-		/* cf ExplainModifyTarget */
-		*rels_used = bms_add_member(*rels_used, linitial_int(((ModifyTable *) plan)->resultRelations));
-		break;
-	default:
-		break;
+		case T_SeqScan:
+		case T_IndexScan:
+		case T_IndexOnlyScan:
+		case T_BitmapHeapScan:
+		case T_TidScan:
+		case T_SubqueryScan:
+		case T_FunctionScan:
+		case T_ValuesScan:
+		case T_CteScan:
+		case T_WorkTableScan:
+		case T_ForeignScan:
+			*rels_used = bms_add_member(*rels_used, ((Scan *) plan)->scanrelid);
+			break;
+		case T_ModifyTable:
+			/* cf ExplainModifyTarget */
+			*rels_used = bms_add_member(*rels_used, linitial_int(((ModifyTable *) plan)->resultRelations));
+			break;
+		default:
+			break;
 	}
 
 	/* initPlan-s */
@@ -645,29 +645,31 @@ static void ExplainPreScanNode(PlanState *planstate, Bitmapset **rels_used) {
 
 	/* special child plans */
 	switch (nodeTag(plan)) {
-	case T_ModifyTable:
-		ExplainPreScanMemberNodes(((ModifyTable *) plan)->plans, ((ModifyTableState *) planstate)->mt_plans, rels_used);
-		break;
-	case T_Append:
-		ExplainPreScanMemberNodes(((Append *) plan)->appendplans, ((AppendState *) planstate)->appendplans, rels_used);
-		break;
-	case T_MergeAppend:
-		ExplainPreScanMemberNodes(((MergeAppend *) plan)->mergeplans, ((MergeAppendState *) planstate)->mergeplans,
-				rels_used);
-		break;
-	case T_BitmapAnd:
-		ExplainPreScanMemberNodes(((BitmapAnd *) plan)->bitmapplans, ((BitmapAndState *) planstate)->bitmapplans,
-				rels_used);
-		break;
-	case T_BitmapOr:
-		ExplainPreScanMemberNodes(((BitmapOr *) plan)->bitmapplans, ((BitmapOrState *) planstate)->bitmapplans,
-				rels_used);
-		break;
-	case T_SubqueryScan:
-		ExplainPreScanNode(((SubqueryScanState *) planstate)->subplan, rels_used);
-		break;
-	default:
-		break;
+		case T_ModifyTable:
+			ExplainPreScanMemberNodes(((ModifyTable *) plan)->plans, ((ModifyTableState *) planstate)->mt_plans,
+					rels_used);
+			break;
+		case T_Append:
+			ExplainPreScanMemberNodes(((Append *) plan)->appendplans, ((AppendState *) planstate)->appendplans,
+					rels_used);
+			break;
+		case T_MergeAppend:
+			ExplainPreScanMemberNodes(((MergeAppend *) plan)->mergeplans, ((MergeAppendState *) planstate)->mergeplans,
+					rels_used);
+			break;
+		case T_BitmapAnd:
+			ExplainPreScanMemberNodes(((BitmapAnd *) plan)->bitmapplans, ((BitmapAndState *) planstate)->bitmapplans,
+					rels_used);
+			break;
+		case T_BitmapOr:
+			ExplainPreScanMemberNodes(((BitmapOr *) plan)->bitmapplans, ((BitmapOrState *) planstate)->bitmapplans,
+					rels_used);
+			break;
+		case T_SubqueryScan:
+			ExplainPreScanNode(((SubqueryScanState *) planstate)->subplan, rels_used);
+			break;
+		default:
+			break;
 	}
 
 	/* subPlan-s */
@@ -734,153 +736,153 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 	bool haschildren;
 
 	switch (nodeTag(plan)) {
-	case T_Result:
-		pname = sname = "Result";
-		break;
-	case T_ModifyTable:
-		sname = "ModifyTable";
-		switch (((ModifyTable *) plan)->operation) {
-		case CMD_INSERT:
-			pname = operation = "Insert";
+		case T_Result:
+			pname = sname = "Result";
 			break;
-		case CMD_UPDATE:
-			pname = operation = "Update";
+		case T_ModifyTable:
+			sname = "ModifyTable";
+			switch (((ModifyTable *) plan)->operation) {
+				case CMD_INSERT:
+					pname = operation = "Insert";
+					break;
+				case CMD_UPDATE:
+					pname = operation = "Update";
+					break;
+				case CMD_DELETE:
+					pname = operation = "Delete";
+					break;
+				default:
+					pname = "???";
+					break;
+			}
 			break;
-		case CMD_DELETE:
-			pname = operation = "Delete";
+		case T_Append:
+			pname = sname = "Append";
+			break;
+		case T_MergeAppend:
+			pname = sname = "Merge Append";
+			break;
+		case T_RecursiveUnion:
+			pname = sname = "Recursive Union";
+			break;
+		case T_BitmapAnd:
+			pname = sname = "BitmapAnd";
+			break;
+		case T_BitmapOr:
+			pname = sname = "BitmapOr";
+			break;
+		case T_NestLoop:
+			pname = sname = "Nested Loop";
+			break;
+		case T_MergeJoin:
+			pname = "Merge"; /* "Join" gets added by jointype switch */
+			sname = "Merge Join";
+			break;
+		case T_HashJoin:
+			pname = "Hash"; /* "Join" gets added by jointype switch */
+			sname = "Hash Join";
+			break;
+		case T_SeqScan:
+			pname = sname = "Seq Scan";
+			break;
+		case T_IndexScan:
+			pname = sname = "Index Scan";
+			break;
+		case T_IndexOnlyScan:
+			pname = sname = "Index Only Scan";
+			break;
+		case T_BitmapIndexScan:
+			pname = sname = "Bitmap Index Scan";
+			break;
+		case T_BitmapHeapScan:
+			pname = sname = "Bitmap Heap Scan";
+			break;
+		case T_TidScan:
+			pname = sname = "Tid Scan";
+			break;
+		case T_SubqueryScan:
+			pname = sname = "Subquery Scan";
+			break;
+		case T_FunctionScan:
+			pname = sname = "Function Scan";
+			break;
+		case T_ValuesScan:
+			pname = sname = "Values Scan";
+			break;
+		case T_CteScan:
+			pname = sname = "CTE Scan";
+			break;
+		case T_WorkTableScan:
+			pname = sname = "WorkTable Scan";
+			break;
+		case T_ForeignScan:
+			pname = sname = "Foreign Scan";
+			break;
+		case T_Material:
+			pname = sname = "Materialize";
+			break;
+		case T_Sort:
+			pname = sname = "Sort";
+			break;
+		case T_Group:
+			pname = sname = "Group";
+			break;
+		case T_Agg:
+			sname = "Aggregate";
+			switch (((Agg *) plan)->aggstrategy) {
+				case AGG_PLAIN:
+					pname = "Aggregate";
+					strategy = "Plain";
+					break;
+				case AGG_SORTED:
+					pname = "GroupAggregate";
+					strategy = "Sorted";
+					break;
+				case AGG_HASHED:
+					pname = "HashAggregate";
+					strategy = "Hashed";
+					break;
+				default:
+					pname = "Aggregate ???";
+					strategy = "???";
+					break;
+			}
+			break;
+		case T_WindowAgg:
+			pname = sname = "WindowAgg";
+			break;
+		case T_Unique:
+			pname = sname = "Unique";
+			break;
+		case T_SetOp:
+			sname = "SetOp";
+			switch (((SetOp *) plan)->strategy) {
+				case SETOP_SORTED:
+					pname = "SetOp";
+					strategy = "Sorted";
+					break;
+				case SETOP_HASHED:
+					pname = "HashSetOp";
+					strategy = "Hashed";
+					break;
+				default:
+					pname = "SetOp ???";
+					strategy = "???";
+					break;
+			}
+			break;
+		case T_LockRows:
+			pname = sname = "LockRows";
+			break;
+		case T_Limit:
+			pname = sname = "Limit";
+			break;
+		case T_Hash:
+			pname = sname = "Hash";
 			break;
 		default:
-			pname = "???";
+			pname = sname = "???";
 			break;
-		}
-		break;
-	case T_Append:
-		pname = sname = "Append";
-		break;
-	case T_MergeAppend:
-		pname = sname = "Merge Append";
-		break;
-	case T_RecursiveUnion:
-		pname = sname = "Recursive Union";
-		break;
-	case T_BitmapAnd:
-		pname = sname = "BitmapAnd";
-		break;
-	case T_BitmapOr:
-		pname = sname = "BitmapOr";
-		break;
-	case T_NestLoop:
-		pname = sname = "Nested Loop";
-		break;
-	case T_MergeJoin:
-		pname = "Merge"; /* "Join" gets added by jointype switch */
-		sname = "Merge Join";
-		break;
-	case T_HashJoin:
-		pname = "Hash"; /* "Join" gets added by jointype switch */
-		sname = "Hash Join";
-		break;
-	case T_SeqScan:
-		pname = sname = "Seq Scan";
-		break;
-	case T_IndexScan:
-		pname = sname = "Index Scan";
-		break;
-	case T_IndexOnlyScan:
-		pname = sname = "Index Only Scan";
-		break;
-	case T_BitmapIndexScan:
-		pname = sname = "Bitmap Index Scan";
-		break;
-	case T_BitmapHeapScan:
-		pname = sname = "Bitmap Heap Scan";
-		break;
-	case T_TidScan:
-		pname = sname = "Tid Scan";
-		break;
-	case T_SubqueryScan:
-		pname = sname = "Subquery Scan";
-		break;
-	case T_FunctionScan:
-		pname = sname = "Function Scan";
-		break;
-	case T_ValuesScan:
-		pname = sname = "Values Scan";
-		break;
-	case T_CteScan:
-		pname = sname = "CTE Scan";
-		break;
-	case T_WorkTableScan:
-		pname = sname = "WorkTable Scan";
-		break;
-	case T_ForeignScan:
-		pname = sname = "Foreign Scan";
-		break;
-	case T_Material:
-		pname = sname = "Materialize";
-		break;
-	case T_Sort:
-		pname = sname = "Sort";
-		break;
-	case T_Group:
-		pname = sname = "Group";
-		break;
-	case T_Agg:
-		sname = "Aggregate";
-		switch (((Agg *) plan)->aggstrategy) {
-		case AGG_PLAIN:
-			pname = "Aggregate";
-			strategy = "Plain";
-			break;
-		case AGG_SORTED:
-			pname = "GroupAggregate";
-			strategy = "Sorted";
-			break;
-		case AGG_HASHED:
-			pname = "HashAggregate";
-			strategy = "Hashed";
-			break;
-		default:
-			pname = "Aggregate ???";
-			strategy = "???";
-			break;
-		}
-		break;
-	case T_WindowAgg:
-		pname = sname = "WindowAgg";
-		break;
-	case T_Unique:
-		pname = sname = "Unique";
-		break;
-	case T_SetOp:
-		sname = "SetOp";
-		switch (((SetOp *) plan)->strategy) {
-		case SETOP_SORTED:
-			pname = "SetOp";
-			strategy = "Sorted";
-			break;
-		case SETOP_HASHED:
-			pname = "HashSetOp";
-			strategy = "Hashed";
-			break;
-		default:
-			pname = "SetOp ???";
-			strategy = "???";
-			break;
-		}
-		break;
-	case T_LockRows:
-		pname = sname = "LockRows";
-		break;
-	case T_Limit:
-		pname = sname = "Limit";
-		break;
-	case T_Hash:
-		pname = sname = "Hash";
-		break;
-	default:
-		pname = sname = "???";
-		break;
 	}
 
 	ExplainOpenGroup("Plan", relationship ? NULL : "Plan", true, es);
@@ -918,114 +920,114 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 	}
 
 	switch (nodeTag(plan)) {
-	case T_SeqScan:
-	case T_BitmapHeapScan:
-	case T_TidScan:
-	case T_SubqueryScan:
-	case T_FunctionScan:
-	case T_ValuesScan:
-	case T_CteScan:
-	case T_WorkTableScan:
-	case T_ForeignScan:
-		ExplainScanTarget((Scan *) plan, es);
-		break;
-	case T_IndexScan: {
-		IndexScan *indexscan = (IndexScan *) plan;
+		case T_SeqScan:
+		case T_BitmapHeapScan:
+		case T_TidScan:
+		case T_SubqueryScan:
+		case T_FunctionScan:
+		case T_ValuesScan:
+		case T_CteScan:
+		case T_WorkTableScan:
+		case T_ForeignScan:
+			ExplainScanTarget((Scan *) plan, es);
+			break;
+		case T_IndexScan: {
+			IndexScan *indexscan = (IndexScan *) plan;
 
-		ExplainIndexScanDetails(indexscan->indexid, indexscan->indexorderdir, es);
-		ExplainScanTarget((Scan *) indexscan, es);
-	}
-		break;
-	case T_IndexOnlyScan: {
-		IndexOnlyScan *indexonlyscan = (IndexOnlyScan *) plan;
+			ExplainIndexScanDetails(indexscan->indexid, indexscan->indexorderdir, es);
+			ExplainScanTarget((Scan *) indexscan, es);
+		}
+			break;
+		case T_IndexOnlyScan: {
+			IndexOnlyScan *indexonlyscan = (IndexOnlyScan *) plan;
 
-		ExplainIndexScanDetails(indexonlyscan->indexid, indexonlyscan->indexorderdir, es);
-		ExplainScanTarget((Scan *) indexonlyscan, es);
-	}
-		break;
-	case T_BitmapIndexScan: {
-		BitmapIndexScan *bitmapindexscan = (BitmapIndexScan *) plan;
-		const char *indexname = explain_get_index_name(bitmapindexscan->indexid);
-		ExplainScanTarget((Scan *) bitmapindexscan, es);
+			ExplainIndexScanDetails(indexonlyscan->indexid, indexonlyscan->indexorderdir, es);
+			ExplainScanTarget((Scan *) indexonlyscan, es);
+		}
+			break;
+		case T_BitmapIndexScan: {
+			BitmapIndexScan *bitmapindexscan = (BitmapIndexScan *) plan;
+			const char *indexname = explain_get_index_name(bitmapindexscan->indexid);
+			ExplainScanTarget((Scan *) bitmapindexscan, es);
 
-		if (es->format == EXPLAIN_FORMAT_TEXT)
-			appendStringInfo(es->str, " on %s", indexname);
-		else
-			ExplainPropertyText("Index Name", indexname, es);
-	}
-		break;
-	case T_ModifyTable:
-		ExplainModifyTarget((ModifyTable *) plan, es);
-		break;
-	case T_NestLoop:
-	case T_MergeJoin:
-	case T_HashJoin: {
-		const char *jointype;
+			if (es->format == EXPLAIN_FORMAT_TEXT)
+				appendStringInfo(es->str, " on %s", indexname);
+			else
+				ExplainPropertyText("Index Name", indexname, es);
+		}
+			break;
+		case T_ModifyTable:
+			ExplainModifyTarget((ModifyTable *) plan, es);
+			break;
+		case T_NestLoop:
+		case T_MergeJoin:
+		case T_HashJoin: {
+			const char *jointype;
 
-		switch (((Join *) plan)->jointype) {
-		case JOIN_INNER:
-			jointype = "Inner";
+			switch (((Join *) plan)->jointype) {
+				case JOIN_INNER:
+					jointype = "Inner";
+					break;
+				case JOIN_LEFT:
+					jointype = "Left";
+					break;
+				case JOIN_FULL:
+					jointype = "Full";
+					break;
+				case JOIN_RIGHT:
+					jointype = "Right";
+					break;
+				case JOIN_SEMI:
+					jointype = "Semi";
+					break;
+				case JOIN_ANTI:
+					jointype = "Anti";
+					break;
+				default:
+					jointype = "???";
+					break;
+			}
+			if (es->format == EXPLAIN_FORMAT_TEXT) {
+				/*
+				 * For historical reasons, the join type is interpolated
+				 * into the node type name...
+				 */
+				if (((Join *) plan)->jointype != JOIN_INNER)
+					appendStringInfo(es->str, " %s Join", jointype);
+				else if (!IsA(plan, NestLoop))
+					appendStringInfoString(es->str, " Join");
+			} else
+				ExplainPropertyText("Join Type", jointype, es);
+		}
 			break;
-		case JOIN_LEFT:
-			jointype = "Left";
-			break;
-		case JOIN_FULL:
-			jointype = "Full";
-			break;
-		case JOIN_RIGHT:
-			jointype = "Right";
-			break;
-		case JOIN_SEMI:
-			jointype = "Semi";
-			break;
-		case JOIN_ANTI:
-			jointype = "Anti";
+		case T_SetOp: {
+			const char *setopcmd;
+
+			switch (((SetOp *) plan)->cmd) {
+				case SETOPCMD_INTERSECT:
+					setopcmd = "Intersect";
+					break;
+				case SETOPCMD_INTERSECT_ALL:
+					setopcmd = "Intersect All";
+					break;
+				case SETOPCMD_EXCEPT:
+					setopcmd = "Except";
+					break;
+				case SETOPCMD_EXCEPT_ALL:
+					setopcmd = "Except All";
+					break;
+				default:
+					setopcmd = "???";
+					break;
+			}
+			if (es->format == EXPLAIN_FORMAT_TEXT)
+				appendStringInfo(es->str, " %s", setopcmd);
+			else
+				ExplainPropertyText("Command", setopcmd, es);
+		}
 			break;
 		default:
-			jointype = "???";
 			break;
-		}
-		if (es->format == EXPLAIN_FORMAT_TEXT) {
-			/*
-			 * For historical reasons, the join type is interpolated
-			 * into the node type name...
-			 */
-			if (((Join *) plan)->jointype != JOIN_INNER)
-				appendStringInfo(es->str, " %s Join", jointype);
-			else if (!IsA(plan, NestLoop))
-				appendStringInfoString(es->str, " Join");
-		} else
-			ExplainPropertyText("Join Type", jointype, es);
-	}
-		break;
-	case T_SetOp: {
-		const char *setopcmd;
-
-		switch (((SetOp *) plan)->cmd) {
-		case SETOPCMD_INTERSECT:
-			setopcmd = "Intersect";
-			break;
-		case SETOPCMD_INTERSECT_ALL:
-			setopcmd = "Intersect All";
-			break;
-		case SETOPCMD_EXCEPT:
-			setopcmd = "Except";
-			break;
-		case SETOPCMD_EXCEPT_ALL:
-			setopcmd = "Except All";
-			break;
-		default:
-			setopcmd = "???";
-			break;
-		}
-		if (es->format == EXPLAIN_FORMAT_TEXT)
-			appendStringInfo(es->str, " %s", setopcmd);
-		else
-			ExplainPropertyText("Command", setopcmd, es);
-	}
-		break;
-	default:
-		break;
 	}
 
 	if (enable_explain_memo && plan->isParameterized) {
@@ -1049,8 +1051,9 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 	 * We have to forcibly clean up the instrumentation state because we
 	 * haven't done ExecutorEnd yet.  This is pretty grotty ...
 	 */
-	if (planstate->instrument)
+	if (planstate->instrument) {
 		InstrEndLoop(planstate->instrument);
+	}
 
 	if (planstate->instrument && planstate->instrument->nloops > 0) {
 		double nloops = planstate->instrument->nloops;
@@ -1061,12 +1064,10 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 
 		if (es->format == EXPLAIN_FORMAT_TEXT) {
 			if (planstate->instrument->need_timer)
-				appendStringInfo(es->str, " (actual time=%.3f..%.3f rows=%.0f mtuples%.0f loops=%.0f)", startup_sec, total_sec,
-						rows,mtuples, nloops);
+				appendStringInfo(es->str, " (actual time=%.3f..%.3f rows=%.0f mtuples%.0f loops=%.0f)", startup_sec,
+						total_sec, rows, mtuples, nloops);
 			else
 				appendStringInfo(es->str, " (actual rows=%.5f loops=%.0f)", rows, nloops);
-
-
 
 		} else {
 			if (planstate->instrument->need_timer) {
@@ -1101,244 +1102,244 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 
 	/* quals, sort keys, etc */
 	switch (nodeTag(plan)) {
-	case T_IndexScan:
-		show_scan_qual(((IndexScan *) plan)->indexqualorig, "Index Cond", planstate, ancestors, es);
+		case T_IndexScan:
+			show_scan_qual(((IndexScan *) plan)->indexqualorig, "Index Cond", planstate, ancestors, es);
 
-		if (((IndexScan *) plan)->indexqualorig)
-			show_instrumentation_count("Rows Removed by Index Recheck", 2, planstate, es);
-		show_scan_qual(((IndexScan *) plan)->indexorderbyorig, "Order By", planstate, ancestors, es);
-		show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
-		if (plan->qual) {
-			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
-
-		}
-		if (enable_explain_memo) {
-			if (plan->scanclauses) {
-
-				show_scan_parsed_qual(plan->rte_reference,plan->scanclauses, "Restrict List", es);
-
-			}
-			if (((IndexScan *) plan)->indexqualorig) {
-				show_scan_parsed_qual(plan->rte_reference,((IndexScan *) plan)->indexqualorig, "PIndex Cond", es);
-			}
+			if (((IndexScan *) plan)->indexqualorig)
+				show_instrumentation_count("Rows Removed by Index Recheck", 2, planstate, es);
+			show_scan_qual(((IndexScan *) plan)->indexorderbyorig, "Order By", planstate, ancestors, es);
+			show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
 			if (plan->qual) {
-				show_scan_parsed_qual(plan->rte_reference,plan->qual, "PFilter", es);
+				show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
 
 			}
-
-		}
-
-		break;
-	case T_IndexOnlyScan:
-		show_scan_qual(((IndexOnlyScan *) plan)->indexqual, "Index Cond", planstate, ancestors, es);
-		if (((IndexOnlyScan *) plan)->indexqual)
-			show_instrumentation_count("Rows Removed by Index Recheck", 2, planstate, es);
-		show_scan_qual(((IndexOnlyScan *) plan)->indexorderby, "Order By", planstate, ancestors, es);
-		show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
-		if (plan->qual) {
-			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
-
-		}
-
-		if (enable_explain_memo) {
-			if (plan->scanclauses) {
-
-				show_scan_parsed_qual(plan->rte_reference,plan->scanclauses, "Restrict List", es);
-
-			}
-			if (((IndexOnlyScan *) plan)->indexqual) {
-				show_scan_parsed_qual(plan->rte_reference,((IndexOnlyScan *) plan)->indexqual, "PIndex Cond", es);
-			}
-			if (plan->qual) {
-				show_scan_parsed_qual(plan->rte_reference,plan->qual, "PFilter", es);
-
-			}
-		}
-
-		if (es->analyze)
-			ExplainPropertyLong("Heap Fetches", ((IndexOnlyScanState *) planstate)->ioss_HeapFetches, es);
-
-		break;
-	case T_BitmapIndexScan:
-		show_scan_qual(((BitmapIndexScan *) plan)->indexqualorig, "Index Cond", planstate, ancestors, es);
-
-		if (enable_explain_memo) {
-
-			if (plan->scanclauses)
-				show_scan_parsed_qual(plan->rte_reference,plan->scanclauses, "Restrict List", es);
-		}
-
-		break;
-	case T_BitmapHeapScan:
-		show_scan_qual(((BitmapHeapScan *) plan)->bitmapqualorig, "Recheck Cond", planstate, ancestors, es);
-		if (((BitmapHeapScan *) plan)->bitmapqualorig) {
-			show_instrumentation_count("Rows Removed by Index Recheck", 2, planstate, es);
 			if (enable_explain_memo) {
-				if (plan->scanclauses)
-					show_scan_parsed_qual(plan->rte_reference,plan->scanclauses, "Restrict List", es);
+				if (plan->scanclauses) {
+
+					show_scan_parsed_qual(plan->rte_reference, plan->scanclauses, "Restrict List", es);
+
+				}
+				if (((IndexScan *) plan)->indexqualorig) {
+					show_scan_parsed_qual(plan->rte_reference, ((IndexScan *) plan)->indexqualorig, "PIndex Cond", es);
+				}
 				if (plan->qual) {
-					show_scan_parsed_qual(plan->rte_reference,plan->qual, "PFilter", es);
+					show_scan_parsed_qual(plan->rte_reference, plan->qual, "PFilter", es);
+
+				}
+
+			}
+
+			break;
+		case T_IndexOnlyScan:
+			show_scan_qual(((IndexOnlyScan *) plan)->indexqual, "Index Cond", planstate, ancestors, es);
+			if (((IndexOnlyScan *) plan)->indexqual)
+				show_instrumentation_count("Rows Removed by Index Recheck", 2, planstate, es);
+			show_scan_qual(((IndexOnlyScan *) plan)->indexorderby, "Order By", planstate, ancestors, es);
+			show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
+			if (plan->qual) {
+				show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
+
+			}
+
+			if (enable_explain_memo) {
+				if (plan->scanclauses) {
+
+					show_scan_parsed_qual(plan->rte_reference, plan->scanclauses, "Restrict List", es);
+
+				}
+				if (((IndexOnlyScan *) plan)->indexqual) {
+					show_scan_parsed_qual(plan->rte_reference, ((IndexOnlyScan *) plan)->indexqual, "PIndex Cond", es);
+				}
+				if (plan->qual) {
+					show_scan_parsed_qual(plan->rte_reference, plan->qual, "PFilter", es);
 
 				}
 			}
-		}
-		show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
-		if (plan->qual) {
-			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
 
-		}
+			if (es->analyze)
+				ExplainPropertyLong("Heap Fetches", ((IndexOnlyScanState *) planstate)->ioss_HeapFetches, es);
 
-		if (es->analyze)
-			show_tidbitmap_info((BitmapHeapScanState *) planstate, es);
-		break;
-	case T_SeqScan:
-	case T_ValuesScan:
-	case T_CteScan:
-	case T_WorkTableScan:
-	case T_SubqueryScan:
-		show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
-		if (plan->qual) {
-			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
+			break;
+		case T_BitmapIndexScan:
+			show_scan_qual(((BitmapIndexScan *) plan)->indexqualorig, "Index Cond", planstate, ancestors, es);
+
 			if (enable_explain_memo) {
-				show_scan_parsed_qual(plan->rte_reference,plan->scanclauses, "Restrict List", es);
+
+				if (plan->scanclauses)
+					show_scan_parsed_qual(plan->rte_reference, plan->scanclauses, "Restrict List", es);
+			}
+
+			break;
+		case T_BitmapHeapScan:
+			show_scan_qual(((BitmapHeapScan *) plan)->bitmapqualorig, "Recheck Cond", planstate, ancestors, es);
+			if (((BitmapHeapScan *) plan)->bitmapqualorig) {
+				show_instrumentation_count("Rows Removed by Index Recheck", 2, planstate, es);
+				if (enable_explain_memo) {
+					if (plan->scanclauses)
+						show_scan_parsed_qual(plan->rte_reference, plan->scanclauses, "Restrict List", es);
+					if (plan->qual) {
+						show_scan_parsed_qual(plan->rte_reference, plan->qual, "PFilter", es);
+
+					}
+				}
+			}
+			show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
+			if (plan->qual) {
+				show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
 
 			}
 
-		}
-		if (enable_explain_memo) {
-		}
-		break;
-	case T_FunctionScan:
-		if (es->verbose) {
-			List *fexprs = NIL;
-			ListCell *lc;
+			if (es->analyze)
+				show_tidbitmap_info((BitmapHeapScanState *) planstate, es);
+			break;
+		case T_SeqScan:
+		case T_ValuesScan:
+		case T_CteScan:
+		case T_WorkTableScan:
+		case T_SubqueryScan:
+			show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
+			if (plan->qual) {
+				show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
+				if (enable_explain_memo) {
+					show_scan_parsed_qual(plan->rte_reference, plan->scanclauses, "Restrict List", es);
 
-			foreach(lc, ((FunctionScan *) plan)->functions) {
-				RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
+				}
 
-				fexprs = lappend(fexprs, rtfunc->funcexpr);
 			}
-			/* We rely on show_expression to insert commas as needed */
-			show_expression((Node *) fexprs, "Function Call", planstate, ancestors, es->verbose, es);
-		}
-		show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
-
-		if (plan->qual) {
-			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
 			if (enable_explain_memo) {
-				show_scan_parsed_qual(plan->rte_reference,plan->qual, "Restrict List", es);
+			}
+			break;
+		case T_FunctionScan:
+			if (es->verbose) {
+				List *fexprs = NIL;
+				ListCell *lc;
+
+				foreach(lc, ((FunctionScan *) plan)->functions) {
+					RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
+
+					fexprs = lappend(fexprs, rtfunc->funcexpr);
+				}
+				/* We rely on show_expression to insert commas as needed */
+				show_expression((Node *) fexprs, "Function Call", planstate, ancestors, es->verbose, es);
+			}
+			show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
+
+			if (plan->qual) {
+				show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
+				if (enable_explain_memo) {
+					show_scan_parsed_qual(plan->rte_reference, plan->qual, "Restrict List", es);
+				}
+			}
+			break;
+		case T_TidScan: {
+			/*
+			 * The tidquals list has OR semantics, so be sure to show it
+			 * as an OR condition.
+			 */
+			List *tidquals = ((TidScan *) plan)->tidquals;
+
+			if (list_length(tidquals) > 1)
+				tidquals = list_make1(make_orclause(tidquals));
+			show_scan_qual(tidquals, "TID Cond", planstate, ancestors, es);
+			show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
+			if (plan->qual) {
+				show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
+				if (enable_explain_memo) {
+					show_scan_parsed_qual(plan->rte_reference, plan->qual, "Restrict List", es);
+					//show_scan_parsed_qual(plan->qual, "TID Cond", es);
+				}
 			}
 		}
-		break;
-	case T_TidScan: {
-		/*
-		 * The tidquals list has OR semantics, so be sure to show it
-		 * as an OR condition.
-		 */
-		List *tidquals = ((TidScan *) plan)->tidquals;
 
-		if (list_length(tidquals) > 1)
-			tidquals = list_make1(make_orclause(tidquals));
-		show_scan_qual(tidquals, "TID Cond", planstate, ancestors, es);
-		show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
-		if (plan->qual) {
-			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
+			break;
+		case T_ForeignScan:
+			show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
+			if (plan->qual)
+				show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
+			show_foreignscan_info((ForeignScanState *) planstate, es);
+			break;
+		case T_NestLoop:
+			show_upper_qual(((NestLoop *) plan)->join.joinqual, "Join Filter", planstate, ancestors, es);
+			if (((NestLoop *) plan)->join.joinqual)
+				show_instrumentation_count("Rows Removed by Join Filter", 1, planstate, es);
+			show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
+			if (plan->qual)
+				show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
 			if (enable_explain_memo) {
-				show_scan_parsed_qual(plan->rte_reference,plan->qual, "Restrict List", es);
-				//show_scan_parsed_qual(plan->qual, "TID Cond", es);
-			}
-		}
-	}
+				show_scan_parsed_qual(plan->rte_reference, ((NestLoop *) plan)->join.restrictList, "Join Clauses", es);
+				if (plan->qual) {
+					show_scan_parsed_qual(plan->rte_reference, plan->qual, "PFilter", es);
 
-		break;
-	case T_ForeignScan:
-		show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
-		if (plan->qual)
-			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
-		show_foreignscan_info((ForeignScanState *) planstate, es);
-		break;
-	case T_NestLoop:
-		show_upper_qual(((NestLoop *) plan)->join.joinqual, "Join Filter", planstate, ancestors, es);
-		if (((NestLoop *) plan)->join.joinqual)
-			show_instrumentation_count("Rows Removed by Join Filter", 1, planstate, es);
-		show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
-		if (plan->qual)
-			show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
-		if (enable_explain_memo) {
-			show_scan_parsed_qual(plan->rte_reference,((NestLoop *) plan)->join.restrictList, "Join Clauses", es);
-			if (plan->qual) {
-				show_scan_parsed_qual(plan->rte_reference,plan->qual, "PFilter", es);
+				}
 
 			}
+			break;
+		case T_MergeJoin:
+			show_upper_qual(((MergeJoin *) plan)->mergeclauses, "Merge Cond", planstate, ancestors, es);
+			show_upper_qual(((MergeJoin *) plan)->join.joinqual, "Join Filter", planstate, ancestors, es);
+			if (((MergeJoin *) plan)->join.joinqual)
+				show_instrumentation_count("Rows Removed by Join Filter", 1, planstate, es);
+			show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
+			if (plan->qual)
+				show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
+			if (enable_explain_memo) {
+				show_scan_parsed_qual(plan->rte_reference, ((MergeJoin *) plan)->join.restrictList, "Join Clauses", es);
+				if (plan->qual) {
+					show_scan_parsed_qual(plan->rte_reference, plan->qual, "PFilter", es);
 
-		}
-		break;
-	case T_MergeJoin:
-		show_upper_qual(((MergeJoin *) plan)->mergeclauses, "Merge Cond", planstate, ancestors, es);
-		show_upper_qual(((MergeJoin *) plan)->join.joinqual, "Join Filter", planstate, ancestors, es);
-		if (((MergeJoin *) plan)->join.joinqual)
-			show_instrumentation_count("Rows Removed by Join Filter", 1, planstate, es);
-		show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
-		if (plan->qual)
-			show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
-		if (enable_explain_memo) {
-			show_scan_parsed_qual(plan->rte_reference,((MergeJoin *) plan)->join.restrictList, "Join Clauses", es);
-			if (plan->qual) {
-				show_scan_parsed_qual(plan->rte_reference,plan->qual, "PFilter", es);
-
-			}
-
-		}
-		break;
-	case T_HashJoin:
-		show_upper_qual(((HashJoin *) plan)->hashclauses, "Hash Cond", planstate, ancestors, es);
-		show_upper_qual(((HashJoin *) plan)->join.joinqual, "Join Filter", planstate, ancestors, es);
-		if (((HashJoin *) plan)->join.joinqual)
-			show_instrumentation_count("Rows Removed by Join Filter", 1, planstate, es);
-		show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
-		if (plan->qual)
-			show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
-		if (enable_explain_memo) {
-			show_scan_parsed_qual(plan->rte_reference,((HashJoin *) plan)->join.restrictList, "Join Clauses", es);
-			if (plan->qual) {
-				show_scan_parsed_qual(plan->rte_reference,plan->qual, "PFilter", es);
+				}
 
 			}
-		}
-		break;
-	case T_Agg:
-		show_agg_keys((AggState *) planstate, ancestors, es);
-		show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
-		if (plan->qual)
-			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
-		break;
-	case T_Group:
-		show_group_keys((GroupState *) planstate, ancestors, es);
-		show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
-		if (plan->qual)
-			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
-		break;
-	case T_Sort:
-		show_sort_keys((SortState *) planstate, ancestors, es);
-		show_sort_info((SortState *) planstate, es);
-		break;
-	case T_MergeAppend:
-		show_merge_append_keys((MergeAppendState *) planstate, ancestors, es);
-		break;
-	case T_Result:
-		show_upper_qual((List *) ((Result *) plan)->resconstantqual, "One-Time Filter", planstate, ancestors, es);
-		show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
-		if (plan->qual)
-			show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
-		break;
-	case T_ModifyTable:
-		show_modifytable_info((ModifyTableState *) planstate, es);
-		break;
-	case T_Hash:
-		show_hash_info((HashState *) planstate, es);
-		break;
-	default:
-		break;
+			break;
+		case T_HashJoin:
+			show_upper_qual(((HashJoin *) plan)->hashclauses, "Hash Cond", planstate, ancestors, es);
+			show_upper_qual(((HashJoin *) plan)->join.joinqual, "Join Filter", planstate, ancestors, es);
+			if (((HashJoin *) plan)->join.joinqual)
+				show_instrumentation_count("Rows Removed by Join Filter", 1, planstate, es);
+			show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
+			if (plan->qual)
+				show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
+			if (enable_explain_memo) {
+				show_scan_parsed_qual(plan->rte_reference, ((HashJoin *) plan)->join.restrictList, "Join Clauses", es);
+				if (plan->qual) {
+					show_scan_parsed_qual(plan->rte_reference, plan->qual, "PFilter", es);
+
+				}
+			}
+			break;
+		case T_Agg:
+			show_agg_keys((AggState *) planstate, ancestors, es);
+			show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
+			if (plan->qual)
+				show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
+			break;
+		case T_Group:
+			show_group_keys((GroupState *) planstate, ancestors, es);
+			show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
+			if (plan->qual)
+				show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
+			break;
+		case T_Sort:
+			show_sort_keys((SortState *) planstate, ancestors, es);
+			show_sort_info((SortState *) planstate, es);
+			break;
+		case T_MergeAppend:
+			show_merge_append_keys((MergeAppendState *) planstate, ancestors, es);
+			break;
+		case T_Result:
+			show_upper_qual((List *) ((Result *) plan)->resconstantqual, "One-Time Filter", planstate, ancestors, es);
+			show_upper_qual(plan->qual, "Filter", planstate, ancestors, es);
+			if (plan->qual)
+				show_instrumentation_count("Rows Removed by Filter", 1, planstate, es);
+			break;
+		case T_ModifyTable:
+			show_modifytable_info((ModifyTableState *) planstate, es);
+			break;
+		case T_Hash:
+			show_hash_info((HashState *) planstate, es);
+			break;
+		default:
+			break;
 	}
 
 	/* Show buffer usage */
@@ -1444,28 +1445,30 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 
 	/* special child plans */
 	switch (nodeTag(plan)) {
-	case T_ModifyTable:
-		ExplainMemberNodes(((ModifyTable *) plan)->plans, ((ModifyTableState *) planstate)->mt_plans, ancestors, es);
-		break;
-	case T_Append:
-		ExplainMemberNodes(((Append *) plan)->appendplans, ((AppendState *) planstate)->appendplans, ancestors, es);
-		break;
-	case T_MergeAppend:
-		ExplainMemberNodes(((MergeAppend *) plan)->mergeplans, ((MergeAppendState *) planstate)->mergeplans, ancestors,
-				es);
-		break;
-	case T_BitmapAnd:
-		ExplainMemberNodes(((BitmapAnd *) plan)->bitmapplans, ((BitmapAndState *) planstate)->bitmapplans, ancestors,
-				es);
-		break;
-	case T_BitmapOr:
-		ExplainMemberNodes(((BitmapOr *) plan)->bitmapplans, ((BitmapOrState *) planstate)->bitmapplans, ancestors, es);
-		break;
-	case T_SubqueryScan:
-		ExplainNode(((SubqueryScanState *) planstate)->subplan, ancestors, "Subquery", NULL, es);
-		break;
-	default:
-		break;
+		case T_ModifyTable:
+			ExplainMemberNodes(((ModifyTable *) plan)->plans, ((ModifyTableState *) planstate)->mt_plans, ancestors,
+					es);
+			break;
+		case T_Append:
+			ExplainMemberNodes(((Append *) plan)->appendplans, ((AppendState *) planstate)->appendplans, ancestors, es);
+			break;
+		case T_MergeAppend:
+			ExplainMemberNodes(((MergeAppend *) plan)->mergeplans, ((MergeAppendState *) planstate)->mergeplans,
+					ancestors, es);
+			break;
+		case T_BitmapAnd:
+			ExplainMemberNodes(((BitmapAnd *) plan)->bitmapplans, ((BitmapAndState *) planstate)->bitmapplans,
+					ancestors, es);
+			break;
+		case T_BitmapOr:
+			ExplainMemberNodes(((BitmapOr *) plan)->bitmapplans, ((BitmapOrState *) planstate)->bitmapplans, ancestors,
+					es);
+			break;
+		case T_SubqueryScan:
+			ExplainNode(((SubqueryScanState *) planstate)->subplan, ancestors, "Subquery", NULL, es);
+			break;
+		default:
+			break;
 	}
 
 	/* subPlan-s */
@@ -1803,18 +1806,18 @@ static void ExplainIndexScanDetails(Oid indexid, ScanDirection indexorderdir, Ex
 		const char *scandir;
 
 		switch (indexorderdir) {
-		case BackwardScanDirection:
-			scandir = "Backward";
-			break;
-		case NoMovementScanDirection:
-			scandir = "NoMovement";
-			break;
-		case ForwardScanDirection:
-			scandir = "Forward";
-			break;
-		default:
-			scandir = "???";
-			break;
+			case BackwardScanDirection:
+				scandir = "Backward";
+				break;
+			case NoMovementScanDirection:
+				scandir = "NoMovement";
+				break;
+			case ForwardScanDirection:
+				scandir = "Forward";
+				break;
+			default:
+				scandir = "???";
+				break;
 		}
 		ExplainPropertyText("Scan Direction", scandir, es);
 		ExplainPropertyText("Index Name", indexname, es);
@@ -1860,67 +1863,67 @@ static void ExplainTargetRel(Plan *plan, Index rti, ExplainState *es) {
 		refname = rte->eref->aliasname;
 
 	switch (nodeTag(plan)) {
-	case T_SeqScan:
-	case T_IndexScan:
-	case T_IndexOnlyScan:
-	case T_BitmapHeapScan:
-	case T_BitmapIndexScan:
-	case T_TidScan:
-	case T_ForeignScan:
-	case T_ModifyTable:
-		/* Assert it's on a real relation */
-		Assert(rte->rtekind == RTE_RELATION);
-		objectname = get_rel_name(rte->relid);
-		if (es->verbose)
-			namespace = get_namespace_name(get_rel_namespace(rte->relid));
-		objecttag = "Relation Name";
-		break;
-	case T_FunctionScan: {
-		FunctionScan *fscan = (FunctionScan *) plan;
+		case T_SeqScan:
+		case T_IndexScan:
+		case T_IndexOnlyScan:
+		case T_BitmapHeapScan:
+		case T_BitmapIndexScan:
+		case T_TidScan:
+		case T_ForeignScan:
+		case T_ModifyTable:
+			/* Assert it's on a real relation */
+			Assert(rte->rtekind == RTE_RELATION);
+			objectname = get_rel_name(rte->relid);
+			if (es->verbose)
+				namespace = get_namespace_name(get_rel_namespace(rte->relid));
+			objecttag = "Relation Name";
+			break;
+		case T_FunctionScan: {
+			FunctionScan *fscan = (FunctionScan *) plan;
 
-		/* Assert it's on a RangeFunction */
-		Assert(rte->rtekind == RTE_FUNCTION);
+			/* Assert it's on a RangeFunction */
+			Assert(rte->rtekind == RTE_FUNCTION);
 
-		/*
-		 * If the expression is still a function call of a single
-		 * function, we can get the real name of the function.
-		 * Otherwise, punt.  (Even if it was a single function call
-		 * originally, the optimizer could have simplified it away.)
-		 */
-		if (list_length(fscan->functions) == 1) {
-			RangeTblFunction *rtfunc = (RangeTblFunction *) linitial(fscan->functions);
+			/*
+			 * If the expression is still a function call of a single
+			 * function, we can get the real name of the function.
+			 * Otherwise, punt.  (Even if it was a single function call
+			 * originally, the optimizer could have simplified it away.)
+			 */
+			if (list_length(fscan->functions) == 1) {
+				RangeTblFunction *rtfunc = (RangeTblFunction *) linitial(fscan->functions);
 
-			if (IsA(rtfunc->funcexpr, FuncExpr)) {
-				FuncExpr *funcexpr = (FuncExpr *) rtfunc->funcexpr;
-				Oid funcid = funcexpr->funcid;
+				if (IsA(rtfunc->funcexpr, FuncExpr)) {
+					FuncExpr *funcexpr = (FuncExpr *) rtfunc->funcexpr;
+					Oid funcid = funcexpr->funcid;
 
-				objectname = get_func_name(funcid);
-				if (es->verbose)
-					namespace = get_namespace_name(get_func_namespace(funcid));
+					objectname = get_func_name(funcid);
+					if (es->verbose)
+						namespace = get_namespace_name(get_func_namespace(funcid));
+				}
 			}
+			objecttag = "Function Name";
 		}
-		objecttag = "Function Name";
-	}
-		break;
-	case T_ValuesScan:
-		Assert(rte->rtekind == RTE_VALUES);
-		break;
-	case T_CteScan:
-		/* Assert it's on a non-self-reference CTE */
-		Assert(rte->rtekind == RTE_CTE);
-		Assert(!rte->self_reference);
-		objectname = rte->ctename;
-		objecttag = "CTE Name";
-		break;
-	case T_WorkTableScan:
-		/* Assert it's on a self-reference CTE */
-		Assert(rte->rtekind == RTE_CTE);
-		Assert(rte->self_reference);
-		objectname = rte->ctename;
-		objecttag = "CTE Name";
-		break;
-	default:
-		break;
+			break;
+		case T_ValuesScan:
+			Assert(rte->rtekind == RTE_VALUES);
+			break;
+		case T_CteScan:
+			/* Assert it's on a non-self-reference CTE */
+			Assert(rte->rtekind == RTE_CTE);
+			Assert(!rte->self_reference);
+			objectname = rte->ctename;
+			objecttag = "CTE Name";
+			break;
+		case T_WorkTableScan:
+			/* Assert it's on a self-reference CTE */
+			Assert(rte->rtekind == RTE_CTE);
+			Assert(rte->self_reference);
+			objectname = rte->ctename;
+			objecttag = "CTE Name";
+			break;
+		default:
+			break;
 	}
 
 	if (es->format == EXPLAIN_FORMAT_TEXT) {
@@ -2004,57 +2007,57 @@ void ExplainPropertyList(const char *qlabel, List *data, ExplainState *es) {
 	bool first = true;
 
 	switch (es->format) {
-	case EXPLAIN_FORMAT_TEXT:
-		appendStringInfoSpaces(es->str, es->indent * 2);
-		appendStringInfo(es->str, "%s: ", qlabel);
-		foreach(lc, data) {
-			if (!first)
-				appendStringInfoString(es->str, ", ");
-			appendStringInfoString(es->str, (const char *) lfirst(lc));
-			first = false;
-		}
-		appendStringInfoChar(es->str, '\n');
-		break;
-
-	case EXPLAIN_FORMAT_XML:
-		ExplainXMLTag(qlabel, X_OPENING, es);
-		foreach(lc, data) {
-			char *str;
-
-			appendStringInfoSpaces(es->str, es->indent * 2 + 2);
-			appendStringInfoString(es->str, "<Item>");
-			str = escape_xml((const char *) lfirst(lc));
-			appendStringInfoString(es->str, str);
-			pfree(str);
-			appendStringInfoString(es->str, "</Item>\n");
-		}
-		ExplainXMLTag(qlabel, X_CLOSING, es);
-		break;
-
-	case EXPLAIN_FORMAT_JSON:
-		ExplainJSONLineEnding(es);
-		appendStringInfoSpaces(es->str, es->indent * 2);
-		escape_json(es->str, qlabel);
-		appendStringInfoString(es->str, ": [");
-		foreach(lc, data) {
-			if (!first)
-				appendStringInfoString(es->str, ", ");
-			escape_json(es->str, (const char *) lfirst(lc));
-			first = false;
-		}
-		appendStringInfoChar(es->str, ']');
-		break;
-
-	case EXPLAIN_FORMAT_YAML:
-		ExplainYAMLLineStarting(es);
-		appendStringInfo(es->str, "%s: ", qlabel);
-		foreach(lc, data) {
+		case EXPLAIN_FORMAT_TEXT:
+			appendStringInfoSpaces(es->str, es->indent * 2);
+			appendStringInfo(es->str, "%s: ", qlabel);
+			foreach(lc, data) {
+				if (!first)
+					appendStringInfoString(es->str, ", ");
+				appendStringInfoString(es->str, (const char *) lfirst(lc));
+				first = false;
+			}
 			appendStringInfoChar(es->str, '\n');
-			appendStringInfoSpaces(es->str, es->indent * 2 + 2);
-			appendStringInfoString(es->str, "- ");
-			escape_yaml(es->str, (const char *) lfirst(lc));
-		}
-		break;
+			break;
+
+		case EXPLAIN_FORMAT_XML:
+			ExplainXMLTag(qlabel, X_OPENING, es);
+			foreach(lc, data) {
+				char *str;
+
+				appendStringInfoSpaces(es->str, es->indent * 2 + 2);
+				appendStringInfoString(es->str, "<Item>");
+				str = escape_xml((const char *) lfirst(lc));
+				appendStringInfoString(es->str, str);
+				pfree(str);
+				appendStringInfoString(es->str, "</Item>\n");
+			}
+			ExplainXMLTag(qlabel, X_CLOSING, es);
+			break;
+
+		case EXPLAIN_FORMAT_JSON:
+			ExplainJSONLineEnding(es);
+			appendStringInfoSpaces(es->str, es->indent * 2);
+			escape_json(es->str, qlabel);
+			appendStringInfoString(es->str, ": [");
+			foreach(lc, data) {
+				if (!first)
+					appendStringInfoString(es->str, ", ");
+				escape_json(es->str, (const char *) lfirst(lc));
+				first = false;
+			}
+			appendStringInfoChar(es->str, ']');
+			break;
+
+		case EXPLAIN_FORMAT_YAML:
+			ExplainYAMLLineStarting(es);
+			appendStringInfo(es->str, "%s: ", qlabel);
+			foreach(lc, data) {
+				appendStringInfoChar(es->str, '\n');
+				appendStringInfoSpaces(es->str, es->indent * 2 + 2);
+				appendStringInfoString(es->str, "- ");
+				escape_yaml(es->str, (const char *) lfirst(lc));
+			}
+			break;
 	}
 }
 
@@ -2069,43 +2072,43 @@ void ExplainPropertyList(const char *qlabel, List *data, ExplainState *es) {
  */
 static void ExplainProperty(const char *qlabel, const char *value, bool numeric, ExplainState *es) {
 	switch (es->format) {
-	case EXPLAIN_FORMAT_TEXT:
-		appendStringInfoSpaces(es->str, es->indent * 2);
-		appendStringInfo(es->str, "%s: %s\n", qlabel, value);
-		break;
+		case EXPLAIN_FORMAT_TEXT:
+			appendStringInfoSpaces(es->str, es->indent * 2);
+			appendStringInfo(es->str, "%s: %s\n", qlabel, value);
+			break;
 
-	case EXPLAIN_FORMAT_XML: {
-		char *str;
+		case EXPLAIN_FORMAT_XML: {
+			char *str;
 
-		appendStringInfoSpaces(es->str, es->indent * 2);
-		ExplainXMLTag(qlabel, X_OPENING | X_NOWHITESPACE, es);
-		str = escape_xml(value);
-		appendStringInfoString(es->str, str);
-		pfree(str);
-		ExplainXMLTag(qlabel, X_CLOSING | X_NOWHITESPACE, es);
-		appendStringInfoChar(es->str, '\n');
-	}
-		break;
+			appendStringInfoSpaces(es->str, es->indent * 2);
+			ExplainXMLTag(qlabel, X_OPENING | X_NOWHITESPACE, es);
+			str = escape_xml(value);
+			appendStringInfoString(es->str, str);
+			pfree(str);
+			ExplainXMLTag(qlabel, X_CLOSING | X_NOWHITESPACE, es);
+			appendStringInfoChar(es->str, '\n');
+		}
+			break;
 
-	case EXPLAIN_FORMAT_JSON:
-		ExplainJSONLineEnding(es);
-		appendStringInfoSpaces(es->str, es->indent * 2);
-		escape_json(es->str, qlabel);
-		appendStringInfoString(es->str, ": ");
-		if (numeric)
-			appendStringInfoString(es->str, value);
-		else
-			escape_json(es->str, value);
-		break;
+		case EXPLAIN_FORMAT_JSON:
+			ExplainJSONLineEnding(es);
+			appendStringInfoSpaces(es->str, es->indent * 2);
+			escape_json(es->str, qlabel);
+			appendStringInfoString(es->str, ": ");
+			if (numeric)
+				appendStringInfoString(es->str, value);
+			else
+				escape_json(es->str, value);
+			break;
 
-	case EXPLAIN_FORMAT_YAML:
-		ExplainYAMLLineStarting(es);
-		appendStringInfo(es->str, "%s: ", qlabel);
-		if (numeric)
-			appendStringInfoString(es->str, value);
-		else
-			escape_yaml(es->str, value);
-		break;
+		case EXPLAIN_FORMAT_YAML:
+			ExplainYAMLLineStarting(es);
+			appendStringInfo(es->str, "%s: ", qlabel);
+			if (numeric)
+				appendStringInfoString(es->str, value);
+			else
+				escape_yaml(es->str, value);
+			break;
 	}
 }
 
@@ -2158,52 +2161,52 @@ void ExplainPropertyFloat(const char *qlabel, double value, int ndigits, Explain
  */
 static void ExplainOpenGroup(const char *objtype, const char *labelname, bool labeled, ExplainState *es) {
 	switch (es->format) {
-	case EXPLAIN_FORMAT_TEXT:
-		/* nothing to do */
-		break;
+		case EXPLAIN_FORMAT_TEXT:
+			/* nothing to do */
+			break;
 
-	case EXPLAIN_FORMAT_XML:
-		ExplainXMLTag(objtype, X_OPENING, es);
-		es->indent++;
-		break;
+		case EXPLAIN_FORMAT_XML:
+			ExplainXMLTag(objtype, X_OPENING, es);
+			es->indent++;
+			break;
 
-	case EXPLAIN_FORMAT_JSON:
-		ExplainJSONLineEnding(es);
-		appendStringInfoSpaces(es->str, 2 * es->indent);
-		if (labelname) {
-			escape_json(es->str, labelname);
-			appendStringInfoString(es->str, ": ");
-		}
-		appendStringInfoChar(es->str, labeled ? '{' : '[');
+		case EXPLAIN_FORMAT_JSON:
+			ExplainJSONLineEnding(es);
+			appendStringInfoSpaces(es->str, 2 * es->indent);
+			if (labelname) {
+				escape_json(es->str, labelname);
+				appendStringInfoString(es->str, ": ");
+			}
+			appendStringInfoChar(es->str, labeled ? '{' : '[');
 
-		/*
-		 * In JSON format, the grouping_stack is an integer list.  0 means
-		 * we've emitted nothing at this grouping level, 1 means we've
-		 * emitted something (and so the next item needs a comma). See
-		 * ExplainJSONLineEnding().
-		 */
-		es->grouping_stack = lcons_int(0, es->grouping_stack);
-		es->indent++;
-		break;
-
-	case EXPLAIN_FORMAT_YAML:
-
-		/*
-		 * In YAML format, the grouping stack is an integer list.  0 means
-		 * we've emitted nothing at this grouping level AND this grouping
-		 * level is unlabelled and must be marked with "- ".  See
-		 * ExplainYAMLLineStarting().
-		 */
-		ExplainYAMLLineStarting(es);
-		if (labelname) {
-			appendStringInfo(es->str, "%s: ", labelname);
-			es->grouping_stack = lcons_int(1, es->grouping_stack);
-		} else {
-			appendStringInfoString(es->str, "- ");
+			/*
+			 * In JSON format, the grouping_stack is an integer list.  0 means
+			 * we've emitted nothing at this grouping level, 1 means we've
+			 * emitted something (and so the next item needs a comma). See
+			 * ExplainJSONLineEnding().
+			 */
 			es->grouping_stack = lcons_int(0, es->grouping_stack);
-		}
-		es->indent++;
-		break;
+			es->indent++;
+			break;
+
+		case EXPLAIN_FORMAT_YAML:
+
+			/*
+			 * In YAML format, the grouping stack is an integer list.  0 means
+			 * we've emitted nothing at this grouping level AND this grouping
+			 * level is unlabelled and must be marked with "- ".  See
+			 * ExplainYAMLLineStarting().
+			 */
+			ExplainYAMLLineStarting(es);
+			if (labelname) {
+				appendStringInfo(es->str, "%s: ", labelname);
+				es->grouping_stack = lcons_int(1, es->grouping_stack);
+			} else {
+				appendStringInfoString(es->str, "- ");
+				es->grouping_stack = lcons_int(0, es->grouping_stack);
+			}
+			es->indent++;
+			break;
 	}
 }
 
@@ -2213,27 +2216,27 @@ static void ExplainOpenGroup(const char *objtype, const char *labelname, bool la
  */
 static void ExplainCloseGroup(const char *objtype, const char *labelname, bool labeled, ExplainState *es) {
 	switch (es->format) {
-	case EXPLAIN_FORMAT_TEXT:
-		/* nothing to do */
-		break;
+		case EXPLAIN_FORMAT_TEXT:
+			/* nothing to do */
+			break;
 
-	case EXPLAIN_FORMAT_XML:
-		es->indent--;
-		ExplainXMLTag(objtype, X_CLOSING, es);
-		break;
+		case EXPLAIN_FORMAT_XML:
+			es->indent--;
+			ExplainXMLTag(objtype, X_CLOSING, es);
+			break;
 
-	case EXPLAIN_FORMAT_JSON:
-		es->indent--;
-		appendStringInfoChar(es->str, '\n');
-		appendStringInfoSpaces(es->str, 2 * es->indent);
-		appendStringInfoChar(es->str, labeled ? '}' : ']');
-		es->grouping_stack = list_delete_first(es->grouping_stack);
-		break;
+		case EXPLAIN_FORMAT_JSON:
+			es->indent--;
+			appendStringInfoChar(es->str, '\n');
+			appendStringInfoSpaces(es->str, 2 * es->indent);
+			appendStringInfoChar(es->str, labeled ? '}' : ']');
+			es->grouping_stack = list_delete_first(es->grouping_stack);
+			break;
 
-	case EXPLAIN_FORMAT_YAML:
-		es->indent--;
-		es->grouping_stack = list_delete_first(es->grouping_stack);
-		break;
+		case EXPLAIN_FORMAT_YAML:
+			es->indent--;
+			es->grouping_stack = list_delete_first(es->grouping_stack);
+			break;
 	}
 }
 
@@ -2245,34 +2248,34 @@ static void ExplainCloseGroup(const char *objtype, const char *labelname, bool l
  */
 static void ExplainDummyGroup(const char *objtype, const char *labelname, ExplainState *es) {
 	switch (es->format) {
-	case EXPLAIN_FORMAT_TEXT:
-		/* nothing to do */
-		break;
+		case EXPLAIN_FORMAT_TEXT:
+			/* nothing to do */
+			break;
 
-	case EXPLAIN_FORMAT_XML:
-		ExplainXMLTag(objtype, X_CLOSE_IMMEDIATE, es);
-		break;
+		case EXPLAIN_FORMAT_XML:
+			ExplainXMLTag(objtype, X_CLOSE_IMMEDIATE, es);
+			break;
 
-	case EXPLAIN_FORMAT_JSON:
-		ExplainJSONLineEnding(es);
-		appendStringInfoSpaces(es->str, 2 * es->indent);
-		if (labelname) {
-			escape_json(es->str, labelname);
-			appendStringInfoString(es->str, ": ");
-		}
-		escape_json(es->str, objtype);
-		break;
+		case EXPLAIN_FORMAT_JSON:
+			ExplainJSONLineEnding(es);
+			appendStringInfoSpaces(es->str, 2 * es->indent);
+			if (labelname) {
+				escape_json(es->str, labelname);
+				appendStringInfoString(es->str, ": ");
+			}
+			escape_json(es->str, objtype);
+			break;
 
-	case EXPLAIN_FORMAT_YAML:
-		ExplainYAMLLineStarting(es);
-		if (labelname) {
-			escape_yaml(es->str, labelname);
-			appendStringInfoString(es->str, ": ");
-		} else {
-			appendStringInfoString(es->str, "- ");
-		}
-		escape_yaml(es->str, objtype);
-		break;
+		case EXPLAIN_FORMAT_YAML:
+			ExplainYAMLLineStarting(es);
+			if (labelname) {
+				escape_yaml(es->str, labelname);
+				appendStringInfoString(es->str, ": ");
+			} else {
+				appendStringInfoString(es->str, "- ");
+			}
+			escape_yaml(es->str, objtype);
+			break;
 	}
 }
 
@@ -2284,25 +2287,25 @@ static void ExplainDummyGroup(const char *objtype, const char *labelname, Explai
  */
 void ExplainBeginOutput(ExplainState *es) {
 	switch (es->format) {
-	case EXPLAIN_FORMAT_TEXT:
-		/* nothing to do */
-		break;
+		case EXPLAIN_FORMAT_TEXT:
+			/* nothing to do */
+			break;
 
-	case EXPLAIN_FORMAT_XML:
-		appendStringInfoString(es->str, "<explain xmlns=\"http://www.postgresql.org/2009/explain\">\n");
-		es->indent++;
-		break;
+		case EXPLAIN_FORMAT_XML:
+			appendStringInfoString(es->str, "<explain xmlns=\"http://www.postgresql.org/2009/explain\">\n");
+			es->indent++;
+			break;
 
-	case EXPLAIN_FORMAT_JSON:
-		/* top-level structure is an array of plans */
-		appendStringInfoChar(es->str, '[');
-		es->grouping_stack = lcons_int(0, es->grouping_stack);
-		es->indent++;
-		break;
+		case EXPLAIN_FORMAT_JSON:
+			/* top-level structure is an array of plans */
+			appendStringInfoChar(es->str, '[');
+			es->grouping_stack = lcons_int(0, es->grouping_stack);
+			es->indent++;
+			break;
 
-	case EXPLAIN_FORMAT_YAML:
-		es->grouping_stack = lcons_int(0, es->grouping_stack);
-		break;
+		case EXPLAIN_FORMAT_YAML:
+			es->grouping_stack = lcons_int(0, es->grouping_stack);
+			break;
 	}
 }
 
@@ -2311,24 +2314,24 @@ void ExplainBeginOutput(ExplainState *es) {
  */
 void ExplainEndOutput(ExplainState *es) {
 	switch (es->format) {
-	case EXPLAIN_FORMAT_TEXT:
-		/* nothing to do */
-		break;
+		case EXPLAIN_FORMAT_TEXT:
+			/* nothing to do */
+			break;
 
-	case EXPLAIN_FORMAT_XML:
-		es->indent--;
-		appendStringInfoString(es->str, "</explain>");
-		break;
+		case EXPLAIN_FORMAT_XML:
+			es->indent--;
+			appendStringInfoString(es->str, "</explain>");
+			break;
 
-	case EXPLAIN_FORMAT_JSON:
-		es->indent--;
-		appendStringInfoString(es->str, "\n]");
-		es->grouping_stack = list_delete_first(es->grouping_stack);
-		break;
+		case EXPLAIN_FORMAT_JSON:
+			es->indent--;
+			appendStringInfoString(es->str, "\n]");
+			es->grouping_stack = list_delete_first(es->grouping_stack);
+			break;
 
-	case EXPLAIN_FORMAT_YAML:
-		es->grouping_stack = list_delete_first(es->grouping_stack);
-		break;
+		case EXPLAIN_FORMAT_YAML:
+			es->grouping_stack = list_delete_first(es->grouping_stack);
+			break;
 	}
 }
 
@@ -2337,16 +2340,16 @@ void ExplainEndOutput(ExplainState *es) {
  */
 void ExplainSeparatePlans(ExplainState *es) {
 	switch (es->format) {
-	case EXPLAIN_FORMAT_TEXT:
-		/* add a blank line */
-		appendStringInfoChar(es->str, '\n');
-		break;
+		case EXPLAIN_FORMAT_TEXT:
+			/* add a blank line */
+			appendStringInfoChar(es->str, '\n');
+			break;
 
-	case EXPLAIN_FORMAT_XML:
-	case EXPLAIN_FORMAT_JSON:
-	case EXPLAIN_FORMAT_YAML:
-		/* nothing to do */
-		break;
+		case EXPLAIN_FORMAT_XML:
+		case EXPLAIN_FORMAT_JSON:
+		case EXPLAIN_FORMAT_YAML:
+			/* nothing to do */
+			break;
 	}
 }
 
@@ -2425,11 +2428,11 @@ static void ExplainYAMLLineStarting(ExplainState *es) {
 static void escape_yaml(StringInfo buf, const char *str) {
 	escape_json(buf, str);
 }
-static void show_scan_parsed_qual(void *rte_ref,List *quals, const char *qlabel, ExplainState *es) {
+static void show_scan_parsed_qual(void *rte_ref, List *quals, const char *qlabel, ExplainState *es) {
 	StringInfoData str;
 	initStringInfo(&str);
 
-	explicitNode(rte_ref,quals, &str);
+	explicitNode(rte_ref, quals, &str);
 
 	ExplainPropertyText(qlabel, str.data, es);
 

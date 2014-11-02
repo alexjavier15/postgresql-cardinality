@@ -671,7 +671,7 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 		}
 		case MATCHED_RIGHT: {
 			if (!sjinfo) {
-				//	printf(" MATCHED_RIGHT  relation! :\n");
+				printf(" MATCHED_RIGHT  relation! :\n");
 
 				final_clauses = NIL;
 				result->rows = rel->tuples * clauselist_selectivity(root, quals, 0, JOIN_INNER, NULL);
@@ -680,7 +680,7 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 			break;
 		}
 		default: {
-			//printf(" UNMATCHED  relation! :\n");
+			printf(" UNMATCHED  relation! :\n");
 			if (!sjinfo) {
 				final_clauses = quals;
 				//printMemo(final_clauses);
@@ -694,7 +694,7 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 	if (!sjinfo || result->found == FULL_MATCHED
 			|| (sjinfo && result->found == MATCHED_LEFT && sjinfo->jointype == JOIN_INNER)) {
 		result->rows = result->rows * clauselist_selectivity(root, final_clauses, 0, JOIN_INNER, NULL);
-		result->rows = clamp_row_est(result->rows);
+
 
 	} else {
 		result->rows = -1;
@@ -1579,45 +1579,65 @@ void update_and_recost(PlannerInfo *root, RelOptInfo *joinrel) {
 }
 
 static void recost_join_children(PlannerInfo *root, JoinPath * jpath) {
-/*
-	if (jpath->innerjoinpath->type == T_UniquePath && jpath->innerjoinpath->parent == RTE_JOIN ) {
-		printf("Recosting unique child");
-		recost_path_recurse(root, jpath->innerjoinpath);
-	}
-	if (jpath->outerjoinpath->type == T_UniquePath  && jpath->outerjoinpath->parent == RTE_JOIN) {
-		printf("Recosting unique child");
+	/*
+	 if (jpath->innerjoinpath->type == T_UniquePath && jpath->innerjoinpath->parent == RTE_JOIN ) {
+	 printf("Recosting unique child");
+	 recost_path_recurse(root, jpath->innerjoinpath);
+	 }
+	 if (jpath->outerjoinpath->type == T_UniquePath  && jpath->outerjoinpath->parent == RTE_JOIN) {
+	 printf("Recosting unique child");
 
-		recost_path_recurse(root, jpath->outerjoinpath);
-	}
-*/
+	 recost_path_recurse(root, jpath->outerjoinpath);
+	 }
+	 */
 
 }
 static void recost_path_recurse(PlannerInfo *root, Path * path) {
 	JoinCostWorkspace *workspace = NULL;
 	switch (path->type) {
+
+		case T_Path:
+			set_plain_rel_sizes_from_memo(root, path->parent, path, NULL, false);
+
+			cost_seqscan(path, root, path->parent, path->param_info);
+			break;
+		case T_IndexPath:
+			set_plain_rel_sizes_from_memo(root, path->parent, &((IndexPath *) path)->path, NULL, false);
+
+			cost_index((IndexPath *) path, root, ((IndexPath *) path)->indexinfo->loop_count);
+			break;
+		case T_BitmapHeapPath:
+			set_plain_rel_sizes_from_memo(root, path->parent, &((BitmapHeapPath *) path)->path, NULL, false);
+
+			recost_path_recurse(root, ((BitmapHeapPath *) path)->bitmapqual);
+
+			cost_bitmap_heap_scan(&((BitmapHeapPath *) path)->path, root, path->parent,
+					((BitmapHeapPath *) path)->path.param_info, ((BitmapHeapPath *) path)->bitmapqual,
+					((BitmapHeapPath *) path)->loop);
+
+			break;
 		case T_MergePath:
 			recost_join_children(root, (JoinPath *) path);
 			workspace = ((MergePath *) path)->jpath.workspace;
-		/*	printMemo(path->parent->rel_name);
-			printf("Old HashJoin cost : %lf",((MergePath *) path)->jpath.path.total_cost );*/
+			/*	printMemo(path->parent->rel_name);
+			 printf("Old HashJoin cost : %lf",((MergePath *) path)->jpath.path.total_cost );*/
 
 			initial_cost_mergejoin(root, workspace, ((MergePath *) path)->jpath.jointype,
 					((MergePath *) path)->path_mergeclauses, ((MergePath *) path)->jpath.outerjoinpath,
 					((MergePath *) path)->jpath.innerjoinpath, ((MergePath *) path)->outersortkeys,
 					((MergePath *) path)->innersortkeys, NULL);
 			final_cost_mergejoin(root, (MergePath *) path, workspace, NULL);
-		/*	printf("New HashJoin cost : %lf",((MergePath *) path)->jpath.path.total_cost );
-			fflush(stdout);*/
+			/*	printf("New HashJoin cost : %lf",((MergePath *) path)->jpath.path.total_cost );
+			 fflush(stdout);*/
 
 			break;
 		case T_HashPath: {
 			HashPath *hpath = (HashPath *) path;
 
 			SemiAntiJoinFactors semifactors;
-			printMemo(path->parent->rel_name);
 
 			recost_join_children(root, (JoinPath *) path);
-/*			printf("Old HashJoin cost : %lf",hpath->jpath.path.total_cost );*/
+			/*			printf("Old HashJoin cost : %lf",hpath->jpath.path.total_cost );*/
 
 			workspace = ((HashPath *) path)->jpath.workspace;
 			semifactors.match_count = workspace->match_count;
@@ -1626,8 +1646,8 @@ static void recost_path_recurse(PlannerInfo *root, Path * path) {
 			initial_cost_hashjoin(root, workspace, hpath->jpath.jointype, hpath->path_hashclauses,
 					hpath->jpath.outerjoinpath, hpath->jpath.innerjoinpath, NULL, &semifactors);
 			final_cost_hashjoin(root, hpath, workspace, NULL, &semifactors);
-		/*	printf("New HashJoin cost : %lf",hpath->jpath.path.total_cost );
-			fflush(stdout);*/
+			/*	printf("New HashJoin cost : %lf",hpath->jpath.path.total_cost );
+			 fflush(stdout);*/
 			break;
 		}
 		case T_NestPath: {
@@ -1654,12 +1674,11 @@ static void recost_path_recurse(PlannerInfo *root, Path * path) {
 			switch (upath->umethod) {
 
 				case UNIQUE_PATH_SORT:
-					printf("Old Sort cost : %lf",upath->path.total_cost );
+					printf("Old Sort cost : %lf", upath->path.total_cost);
 					cost_sort(&upath->path, root, NIL, upath->subpath->total_cost, upath->path.parent->rows,
 							upath->path.parent->width, 0.0, work_mem, -1.0);
-					printf("New Sort cost : %lf",upath->path.total_cost );
+					printf("New Sort cost : %lf", upath->path.total_cost);
 					fflush(stdout);
-
 
 					break;
 
@@ -1681,6 +1700,22 @@ static void recost_path_recurse(PlannerInfo *root, Path * path) {
 		default:
 			elog(ERROR, "1 unrecognized node type: %d", (int) path->type);
 			break;
+	}
+
+}
+
+void recost_plain_rel_path(PlannerInfo *root, RelOptInfo *baserel) {
+
+	ListCell *lc;
+
+	foreach(lc,baserel->pathlist) {
+
+		Path *basepath = (Path *) lfirst(lc);
+
+		if (basepath->rows == baserel->last_rows) {
+			recost_path_recurse(root, basepath);
+
+		}
 	}
 
 }
@@ -1794,3 +1829,4 @@ void add_recosted_paths(RelOptInfo *joinrel) {
 	}
 
 }
+

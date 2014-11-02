@@ -126,10 +126,8 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptKind reloptkind) {
 	rel->joininfo = NIL;
 	rel->has_eclass_joins = false;
 	rel->rel_name = NIL;
-	rel->last_index_type = 0;
-	rel->last_level = 0;
-	rel->last_memorel = NULL;
-	rel->last_restrictList = NIL;
+	rel->base_rel_checked = false;
+	rel->last_rows = 0;
 	rel->paramloops = 0;
 	rel->rmemo_checked = false;
 	rel->lmemo_checked = false;
@@ -340,16 +338,15 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 			if (restrictlist_ptr) {
 				*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
 
-				if (enable_memo &&  !(joinrel->rmemo_checked && joinrel->lmemo_checked)   && outer_rel->rmemo_checked ) {
-
+				if (enable_memo && !(joinrel->rmemo_checked && joinrel->lmemo_checked) && outer_rel->rmemo_checked) {
 
 					int nrows = joinrel->rows;
 					printf("Additional estimate pass\n");
 					set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo,
 							list_copy(*restrictlist_ptr));
 					/*if (joinrel->rows != nrows) {
-						//	recost_paths(root, joinrel);
-					}*/
+					 //	recost_paths(root, joinrel);
+					 }*/
 
 				}
 			}
@@ -410,11 +407,6 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 	joinrel->rel_name = list_concat(joinrel->rel_name, list_copy(outer_rel->rel_name));
 	joinrel->rmemo_checked = false;
 	joinrel->lmemo_checked = false;
-
-	joinrel->last_index_type = 0;
-	joinrel->last_level = 0;
-	joinrel->last_memorel = NULL;
-	joinrel->last_restrictList = NIL;
 	joinrel->paramloops = 0;
 	joinrel->all_restrictList = NIL;
 	//}

@@ -113,7 +113,6 @@
 #include "executor/nodeWorktablescan.h"
 #include "miscadmin.h"
 
-
 /* ------------------------------------------------------------------------
  *		ExecInitNode
  *
@@ -129,11 +128,10 @@
  * ------------------------------------------------------------------------
  */
 PlanState *
-ExecInitNode(Plan *node, EState *estate, int eflags)
-{
-	PlanState  *result;
-	List	   *subps;
-	ListCell   *l;
+ExecInitNode(Plan *node, EState *estate, int eflags) {
+	PlanState *result;
+	List *subps;
+	ListCell *l;
 
 	/*
 	 * do nothing when we get to the end of a leaf on tree.
@@ -141,183 +139,150 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 	if (node == NULL)
 		return NULL;
 
-	switch (nodeTag(node))
-	{
-			/*
-			 * control nodes
-			 */
+	switch (nodeTag(node)) {
+		/*
+		 * control nodes
+		 */
 		case T_Result:
-			result = (PlanState *) ExecInitResult((Result *) node,
-												  estate, eflags);
+			result = (PlanState *) ExecInitResult((Result *) node, estate, eflags);
 			break;
 
 		case T_ModifyTable:
-			result = (PlanState *) ExecInitModifyTable((ModifyTable *) node,
-													   estate, eflags);
+			result = (PlanState *) ExecInitModifyTable((ModifyTable *) node, estate, eflags);
 			break;
 
 		case T_Append:
-			result = (PlanState *) ExecInitAppend((Append *) node,
-												  estate, eflags);
+			result = (PlanState *) ExecInitAppend((Append *) node, estate, eflags);
 			break;
 
 		case T_MergeAppend:
-			result = (PlanState *) ExecInitMergeAppend((MergeAppend *) node,
-													   estate, eflags);
+			result = (PlanState *) ExecInitMergeAppend((MergeAppend *) node, estate, eflags);
 			break;
 
 		case T_RecursiveUnion:
-			result = (PlanState *) ExecInitRecursiveUnion((RecursiveUnion *) node,
-														  estate, eflags);
+			result = (PlanState *) ExecInitRecursiveUnion((RecursiveUnion *) node, estate, eflags);
 			break;
 
 		case T_BitmapAnd:
-			result = (PlanState *) ExecInitBitmapAnd((BitmapAnd *) node,
-													 estate, eflags);
+			result = (PlanState *) ExecInitBitmapAnd((BitmapAnd *) node, estate, eflags);
 			break;
 
 		case T_BitmapOr:
-			result = (PlanState *) ExecInitBitmapOr((BitmapOr *) node,
-													estate, eflags);
+			result = (PlanState *) ExecInitBitmapOr((BitmapOr *) node, estate, eflags);
 			break;
 
 			/*
 			 * scan nodes
 			 */
 		case T_SeqScan:
-			result = (PlanState *) ExecInitSeqScan((SeqScan *) node,
-												   estate, eflags);
+			result = (PlanState *) ExecInitSeqScan((SeqScan *) node, estate, eflags);
 			break;
 
 		case T_IndexScan:
-			result = (PlanState *) ExecInitIndexScan((IndexScan *) node,
-													 estate, eflags);
+			result = (PlanState *) ExecInitIndexScan((IndexScan *) node, estate, eflags);
 			break;
 
 		case T_IndexOnlyScan:
-			result = (PlanState *) ExecInitIndexOnlyScan((IndexOnlyScan *) node,
-														 estate, eflags);
+			result = (PlanState *) ExecInitIndexOnlyScan((IndexOnlyScan *) node, estate, eflags);
 			break;
 
 		case T_BitmapIndexScan:
-			result = (PlanState *) ExecInitBitmapIndexScan((BitmapIndexScan *) node,
-														   estate, eflags);
+			result = (PlanState *) ExecInitBitmapIndexScan((BitmapIndexScan *) node, estate, eflags);
 			break;
 
 		case T_BitmapHeapScan:
-			result = (PlanState *) ExecInitBitmapHeapScan((BitmapHeapScan *) node,
-														  estate, eflags);
+			result = (PlanState *) ExecInitBitmapHeapScan((BitmapHeapScan *) node, estate, eflags);
 			break;
 
 		case T_TidScan:
-			result = (PlanState *) ExecInitTidScan((TidScan *) node,
-												   estate, eflags);
+			result = (PlanState *) ExecInitTidScan((TidScan *) node, estate, eflags);
 			break;
 
 		case T_SubqueryScan:
-			result = (PlanState *) ExecInitSubqueryScan((SubqueryScan *) node,
-														estate, eflags);
+			result = (PlanState *) ExecInitSubqueryScan((SubqueryScan *) node, estate, eflags);
 			break;
 
 		case T_FunctionScan:
-			result = (PlanState *) ExecInitFunctionScan((FunctionScan *) node,
-														estate, eflags);
+			result = (PlanState *) ExecInitFunctionScan((FunctionScan *) node, estate, eflags);
 			break;
 
 		case T_ValuesScan:
-			result = (PlanState *) ExecInitValuesScan((ValuesScan *) node,
-													  estate, eflags);
+			result = (PlanState *) ExecInitValuesScan((ValuesScan *) node, estate, eflags);
 			break;
 
 		case T_CteScan:
-			result = (PlanState *) ExecInitCteScan((CteScan *) node,
-												   estate, eflags);
+			result = (PlanState *) ExecInitCteScan((CteScan *) node, estate, eflags);
 			break;
 
 		case T_WorkTableScan:
-			result = (PlanState *) ExecInitWorkTableScan((WorkTableScan *) node,
-														 estate, eflags);
+			result = (PlanState *) ExecInitWorkTableScan((WorkTableScan *) node, estate, eflags);
 			break;
 
 		case T_ForeignScan:
-			result = (PlanState *) ExecInitForeignScan((ForeignScan *) node,
-													   estate, eflags);
+			result = (PlanState *) ExecInitForeignScan((ForeignScan *) node, estate, eflags);
 			break;
 
 			/*
 			 * join nodes
 			 */
 		case T_NestLoop:
-			result = (PlanState *) ExecInitNestLoop((NestLoop *) node,
-													estate, eflags);
+			result = (PlanState *) ExecInitNestLoop((NestLoop *) node, estate, eflags);
 			break;
 
 		case T_MergeJoin:
-			result = (PlanState *) ExecInitMergeJoin((MergeJoin *) node,
-													 estate, eflags);
+			result = (PlanState *) ExecInitMergeJoin((MergeJoin *) node, estate, eflags);
 			break;
 
 		case T_HashJoin:
-			result = (PlanState *) ExecInitHashJoin((HashJoin *) node,
-													estate, eflags);
+			result = (PlanState *) ExecInitHashJoin((HashJoin *) node, estate, eflags);
 			break;
 
 			/*
 			 * materialization nodes
 			 */
 		case T_Material:
-			result = (PlanState *) ExecInitMaterial((Material *) node,
-													estate, eflags);
+			result = (PlanState *) ExecInitMaterial((Material *) node, estate, eflags);
 			break;
 
 		case T_Sort:
-			result = (PlanState *) ExecInitSort((Sort *) node,
-												estate, eflags);
+			result = (PlanState *) ExecInitSort((Sort *) node, estate, eflags);
 			break;
 
 		case T_Group:
-			result = (PlanState *) ExecInitGroup((Group *) node,
-												 estate, eflags);
+			result = (PlanState *) ExecInitGroup((Group *) node, estate, eflags);
 			break;
 
 		case T_Agg:
-			result = (PlanState *) ExecInitAgg((Agg *) node,
-											   estate, eflags);
+			result = (PlanState *) ExecInitAgg((Agg *) node, estate, eflags);
 			break;
 
 		case T_WindowAgg:
-			result = (PlanState *) ExecInitWindowAgg((WindowAgg *) node,
-													 estate, eflags);
+			result = (PlanState *) ExecInitWindowAgg((WindowAgg *) node, estate, eflags);
 			break;
 
 		case T_Unique:
-			result = (PlanState *) ExecInitUnique((Unique *) node,
-												  estate, eflags);
+			result = (PlanState *) ExecInitUnique((Unique *) node, estate, eflags);
 			break;
 
 		case T_Hash:
-			result = (PlanState *) ExecInitHash((Hash *) node,
-												estate, eflags);
+			result = (PlanState *) ExecInitHash((Hash *) node, estate, eflags);
 			break;
 
 		case T_SetOp:
-			result = (PlanState *) ExecInitSetOp((SetOp *) node,
-												 estate, eflags);
+			result = (PlanState *) ExecInitSetOp((SetOp *) node, estate, eflags);
 			break;
 
 		case T_LockRows:
-			result = (PlanState *) ExecInitLockRows((LockRows *) node,
-													estate, eflags);
+			result = (PlanState *) ExecInitLockRows((LockRows *) node, estate, eflags);
 			break;
 
 		case T_Limit:
-			result = (PlanState *) ExecInitLimit((Limit *) node,
-												 estate, eflags);
+			result = (PlanState *) ExecInitLimit((Limit *) node, estate, eflags);
 			break;
 
 		default:
 			elog(ERROR, "unrecognized node type: %d", (int) nodeTag(node));
-			result = NULL;		/* keep compiler quiet */
+			result = NULL; /* keep compiler quiet */
 			break;
 	}
 
@@ -326,9 +291,8 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 	 * a separate list for us.
 	 */
 	subps = NIL;
-	foreach(l, node->initPlan)
-	{
-		SubPlan    *subplan = (SubPlan *) lfirst(l);
+	foreach(l, node->initPlan) {
+		SubPlan *subplan = (SubPlan *) lfirst(l);
 		SubPlanState *sstate;
 
 		Assert(IsA(subplan, SubPlan));
@@ -338,12 +302,13 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 	result->initPlan = subps;
 
 	/* Set up instrumentation for this node if requested */
-	if (estate->es_instrument)
+	if (estate->es_instrument) {
 		result->instrument = InstrAlloc(1, estate->es_instrument);
+
+	}
 
 	return result;
 }
-
 
 /* ----------------------------------------------------------------
  *		ExecProcNode
@@ -352,23 +317,21 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
  * ----------------------------------------------------------------
  */
 TupleTableSlot *
-ExecProcNode(PlanState *node)
-{
+ExecProcNode(PlanState *node) {
 	TupleTableSlot *result;
 
 	CHECK_FOR_INTERRUPTS();
 
 	if (node->chgParam != NULL) /* something changed */
-		ExecReScan(node);		/* let ReScan handle this */
+		ExecReScan(node); /* let ReScan handle this */
 
 	if (node->instrument)
 		InstrStartNode(node->instrument);
 
-	switch (nodeTag(node))
-	{
-			/*
-			 * control nodes
-			 */
+	switch (nodeTag(node)) {
+		/*
+		 * control nodes
+		 */
 		case T_ResultState:
 			result = ExecResult((ResultState *) node);
 			break;
@@ -512,7 +475,6 @@ ExecProcNode(PlanState *node)
 	return result;
 }
 
-
 /* ----------------------------------------------------------------
  *		MultiExecProcNode
  *
@@ -527,20 +489,18 @@ ExecProcNode(PlanState *node)
  * ----------------------------------------------------------------
  */
 Node *
-MultiExecProcNode(PlanState *node)
-{
-	Node	   *result;
+MultiExecProcNode(PlanState *node) {
+	Node *result;
 
 	CHECK_FOR_INTERRUPTS();
 
 	if (node->chgParam != NULL) /* something changed */
-		ExecReScan(node);		/* let ReScan handle this */
+		ExecReScan(node); /* let ReScan handle this */
 
-	switch (nodeTag(node))
-	{
-			/*
-			 * Only node types that actually support multiexec will be listed
-			 */
+	switch (nodeTag(node)) {
+		/*
+		 * Only node types that actually support multiexec will be listed
+		 */
 
 		case T_HashState:
 			result = MultiExecHash((HashState *) node);
@@ -567,7 +527,6 @@ MultiExecProcNode(PlanState *node)
 	return result;
 }
 
-
 /* ----------------------------------------------------------------
  *		ExecEndNode
  *
@@ -579,26 +538,22 @@ MultiExecProcNode(PlanState *node)
  *		the query plan has been fully executed.
  * ----------------------------------------------------------------
  */
-void
-ExecEndNode(PlanState *node)
-{
+void ExecEndNode(PlanState *node) {
 	/*
 	 * do nothing when we get to the end of a leaf on tree.
 	 */
 	if (node == NULL)
 		return;
 
-	if (node->chgParam != NULL)
-	{
+	if (node->chgParam != NULL) {
 		bms_free(node->chgParam);
 		node->chgParam = NULL;
 	}
 
-	switch (nodeTag(node))
-	{
-			/*
-			 * control nodes
-			 */
+	switch (nodeTag(node)) {
+		/*
+		 * control nodes
+		 */
 		case T_ResultState:
 			ExecEndResult((ResultState *) node);
 			break;

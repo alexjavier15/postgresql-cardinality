@@ -1927,7 +1927,7 @@ void final_cost_mergejoin(PlannerInfo *root, MergePath *path, JoinCostWorkspace 
 	 * here because we need an estimate done with JOIN_INNER semantics.
 	 */
 
-		mergejointuples = approx_tuple_count(root, &path->jpath, mergeclauses);
+	mergejointuples = approx_tuple_count(root, &path->jpath, mergeclauses);
 
 	/*
 	 * When there are equal merge keys in the outer relation, the mergejoin
@@ -3087,6 +3087,9 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 		//printMemo(rel->baserestrictinfo);
 		get_relation_size(&result, root, rel, rel->baserestrictinfo, false, NULL);
 		nrows = result.rows;
+		rel->base_rel_checked = true;
+		if (nrows == -1 || result.found == MATCHED_RIGHT || result.found == UNMATCHED)
+			rel->base_rel_checked = false;
 	}
 
 	if (!enable_memo || nrows == -1) {
@@ -3145,6 +3148,23 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 		get_relation_size(&result, root, rel, allclauses, true, NULL);
 		nrows = result.rows;
 		rel->paramloops = result.loops >= 1 ? result.loops : 0;
+
+		if (enable_memo_recosting && !rel->base_rel_checked && nrows != -1 && list_length(rel->baserestrictinfo)) {
+
+			// try to bound the base restict info with the reuslt got here and the estimated
+			// selectivity
+
+			double base_rel_rows = nrows
+					/ clauselist_selectivity(root, list_copy(param_clauses), rel->relid, JOIN_INNER, NULL);
+
+			rel->last_rows = rel->rows;
+			rel->rows = clamp_row_est(base_rel_rows);
+
+			printf("Base rel recalculated\n");
+			rel->base_rel_checked = true;
+			recost_plain_rel_path(root, rel);
+
+		}
 
 	}
 	if (!enable_memo || nrows == -1) {
@@ -3214,7 +3234,6 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 		nrows = calc_joinrel_size_estimate(root, outer_rel->rows, inner_rel->rows, sjinfo, restrictlist);
 		nrows = clamp_row_est(nrows);
 
-
 		/*if (enable_memo) {
 		 MemoRelation *newRelation = NULL;
 
@@ -3230,7 +3249,6 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 		rel->rmemo_checked = outer_rel->rmemo_checked || nrows == outer_rel->rows;
 		rel->lmemo_checked = inner_rel->rmemo_checked || nrows == outer_rel->rows;
 
-
 		update_cached_joins(rel->rel_name, root->query_level, rel->rows);
 		check_NoMemo_queries();
 
@@ -3240,7 +3258,8 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 	printf("level: %d , id: %s", root->query_level, _outuBitmapset(rel->relids));
 	printMemo(rel->rel_name);
 
-	printf("final  base join rows are : %f. outer rows: %f, inner rows: %f. \n", rel->rows, outer_rel->rows, inner_rel->rows);
+	printf("final  base join rows are : %f. outer rows: %f, inner rows: %f. \n", rel->rows, outer_rel->rows,
+			inner_rel->rows);
 
 }
 

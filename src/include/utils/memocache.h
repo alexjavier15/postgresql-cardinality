@@ -23,6 +23,8 @@
 #define FULL_MATCHED 0
 #define MATCHED_RIGHT 1
 #define MATCHED_LEFT 2
+#define BITMAPSET_TREE_SIZE 256
+
 extern void InitCachesForMemo(void);
 extern void printMemoCache(void);
 
@@ -69,6 +71,8 @@ typedef struct RteReferences {
 	Value **rte_table;
 	int size;
 } RteReferences;
+
+extern void recost_plain_rel_path(PlannerInfo *root, RelOptInfo *baserel);
 extern void recost_paths(PlannerInfo *root, RelOptInfo *joinrel);
 extern bool lcontains(RelOptInfo *rel, List *clauses);
 extern List * restictInfoToMemoClauses(List *clauses);
