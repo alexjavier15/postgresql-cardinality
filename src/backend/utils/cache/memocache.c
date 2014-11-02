@@ -1269,7 +1269,7 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 				return;
 			}
 
-			if ((isParam < 2 && memorelation->isParameterized == isParam)) {
+			if ((isParam < 2)) {
 				//	print_relation(memorelation);
 				if (result != NULL || (!clauses && isParam == 2)) {
 
