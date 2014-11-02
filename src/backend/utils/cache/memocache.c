@@ -649,8 +649,12 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 
 		case FULL_MATCHED:
 			printf(" FULL Matched  relation! :\n");
+			if (list_length(quals)) {
 
-			result->rows = mrows;
+				result->rows = mrows;
+				RestrictInfo * rt = lfirst(list_head(quals));
+				rt->norm_selec = mrows / rel->tuples;
+			}
 			final_clauses = NIL;
 			break;
 
@@ -694,7 +698,6 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 	if (!sjinfo || result->found == FULL_MATCHED
 			|| (sjinfo && result->found == MATCHED_LEFT && sjinfo->jointype == JOIN_INNER)) {
 		result->rows = result->rows * clauselist_selectivity(root, final_clauses, 0, JOIN_INNER, NULL);
-
 
 	} else {
 		result->rows = -1;
@@ -1580,19 +1583,24 @@ void update_and_recost(PlannerInfo *root, RelOptInfo *joinrel) {
 	recost_paths(root, joinrel);
 	add_recosted_paths(joinrel);
 }
+static void recost_plain_rel_path(PlannerInfo *root, RelOptInfo *baserel) {
 
+	ListCell *lc;
+
+	foreach(lc,baserel->pathlist) {
+
+		Path *basepath = (Path *) lfirst(lc);
+
+		recost_path_recurse(root, basepath);
+
+	}
+
+}
 static void recost_join_children(PlannerInfo *root, JoinPath * jpath) {
-	/*
-	 if (jpath->innerjoinpath->type == T_UniquePath && jpath->innerjoinpath->parent == RTE_JOIN ) {
-	 printf("Recosting unique child");
-	 recost_path_recurse(root, jpath->innerjoinpath);
-	 }
-	 if (jpath->outerjoinpath->type == T_UniquePath  && jpath->outerjoinpath->parent == RTE_JOIN) {
-	 printf("Recosting unique child");
 
-	 recost_path_recurse(root, jpath->outerjoinpath);
-	 }
-	 */
+	recost_path_recurse(root, jpath->innerjoinpath);
+
+	recost_path_recurse(root, jpath->outerjoinpath);
 
 }
 static void recost_path_recurse(PlannerInfo *root, Path * path) {
