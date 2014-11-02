@@ -93,7 +93,7 @@
  *	Stuff from primnodes.h
  */
 
-bool equalSet(const List *a, const List *b);
+bool equalSet(List *a, List *b);
 bool equalSetRestrictList(const List *a, const List *b);
 
 static bool _equalAlias(const Alias *a, const Alias *b) {
@@ -2021,12 +2021,12 @@ static bool _equalXmlSerialize(const XmlSerialize *a, const XmlSerialize *b) {
 	return true;
 }
 
-bool equalSet(const List *a, const List *b) {
+bool equalSet(List *a, List *b) {
 	ListCell *item_a;
 	if (list_length(a) != list_length(b))
 		return false;
 	foreach(item_a, a) {
-		if (!list_member_remove(b, lfirst(item_a))) {
+		if (!list_member_remove(&b, lfirst(item_a))) {
 			//printMemo( lfirst(item_a));
 
 			return false;
@@ -2056,7 +2056,7 @@ static bool equalMemoClause(const MemoClause *a, const MemoClause *b) {
 
 	}
 	foreach(lc, a1) {
-		if (!list_member_remove(b1, lfirst(lc)))
+		if (!list_member_remove(&b1, lfirst(lc)))
 			return false;
 	}
 	return true;

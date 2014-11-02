@@ -370,8 +370,8 @@ static MemoClause * equival_clause(MemoClause *cl1, MemoClause *cl2) {
 				List *lunion = NIL;
 
 				foreach(item_b, b) {
-					if (list_member_remove(a, lfirst(item_b))) {
-						list_member_remove(b, lfirst(item_b));
+					if (list_member_remove(&a, lfirst(item_b))) {
+						list_member_remove(&b, lfirst(item_b));
 						break;
 					}
 
@@ -994,23 +994,23 @@ void cmp_lists(MemoInfoData1 * result, List *lleft, List *lright) {
 	List *a = list_copy(lleft);
 	List *b = list_copy(lright);
 	const ListCell *item_b;
-//	printMemo(lleft);
 	result->unmatches = NIL;
 	result->matches = NIL;
 
 	foreach(item_b, b) {
-		if (!list_member_remove(a, lfirst(item_b))) {
+		if (!list_member_remove(&a, lfirst(item_b))) {
 
 			//printf("member not found\n");
 			//printMemo(lfirst(item_b));
 			result->unmatches = lappend(result->unmatches, lfirst(item_b));
-			//printMemo(result->unmatches);
 		} else {
+
 			result->matches = lappend(result->matches, lfirst(item_b));
 
 		}
 
 	}
+
 	result->found = UNMATCHED;
 
 	if ((list_length(lright) == list_length(lleft)) && (list_length(lleft) == list_length(result->matches))
@@ -1019,13 +1019,14 @@ void cmp_lists(MemoInfoData1 * result, List *lleft, List *lright) {
 		return;
 
 	}
-
 	if (list_length(lleft) <= list_length(lright)) {
 
-		if (result->unmatches != NIL)
-			result->found = UNMATCHED;
-		else
+		if (result->unmatches != NIL && !list_length(a))
 			result->found = MATCHED_LEFT;
+		else
+			result->found = UNMATCHED;
+
+		return;
 
 	}
 	if (list_length(lleft) >= list_length(lright)) {
@@ -1035,6 +1036,7 @@ void cmp_lists(MemoInfoData1 * result, List *lleft, List *lright) {
 			else if (result->unmatches != NIL)
 				result->found = MATCHED_RIGHT;
 		}
+		return;
 
 	}
 }
@@ -1290,6 +1292,7 @@ void contains(MemoInfoData1 *result, MemoRelation ** relation, CacheM* cache, Li
 
 					}
 					if (result->found == MATCHED_LEFT) {
+						printf("founf left mathed\n");
 						leftmatched = memorelation;
 
 					}

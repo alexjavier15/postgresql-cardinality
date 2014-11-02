@@ -502,7 +502,7 @@ void add_path_final(RelOptInfo *parent_rel, Path *new_path) {
 
 				parent_rel->pathlist = list_delete_cell(parent_rel->pathlist, p1, p1_prev);
 			} else
-				parent_rel->pathlist = list_remove_cell(parent_rel->pathlist, p1, p1_prev);
+				parent_rel->pathlist = list_remove_cell(&parent_rel->pathlist, p1, p1_prev);
 			/*
 			 * Delete the data pointed-to by the deleted cell, if possible
 			 */

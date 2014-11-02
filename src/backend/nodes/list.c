@@ -434,14 +434,14 @@ bool list_member(const List *list, const void *datum) {
  * Additionally this method remove the matched member by calling list_remove_cell to
  * ensure not freeing members.
  */
-bool list_member_remove(const List *list, const void *datum) {
-	const ListCell *cell;
+bool list_member_remove(List **list, const void *datum) {
+	ListCell *cell;
 	ListCell *prev;
 
-	Assert(IsPointerList(list));
-	check_list_invariants(list);
+	Assert(IsPointerList((*list)));
+	check_list_invariants((*list));
 	prev = NULL;
-	foreach(cell, list) {
+	foreach(cell, (*list)) {
 		if (equal(lfirst(cell), datum)) {
 			list_remove_cell(list, cell, prev);
 			return true;
@@ -550,16 +550,17 @@ list_delete_cell(List *list, ListCell *cell, ListCell *prev) {
  * The cell is not pfree'd, as is the List header if this was the last member.
  */
 List *
-list_remove_cell(List *list, ListCell *cell, ListCell *prev) {
-	check_list_invariants(list);
-	Assert(prev != NULL ? lnext(prev) == cell : list_head(list) == cell);
+list_remove_cell(List **list, ListCell *cell, ListCell *prev) {
+	check_list_invariants((*list));
+	Assert(prev != NULL ? lnext(prev) == cell : list_head((*list)) == cell);
 
 	/*
 	 * If we're about to delete the last node from the list, free the whole
 	 * list instead and return NIL, which is the only valid representation of
 	 * a zero-length list.
 	 */
-	if (list->length == 1) {
+	if ((*list)->length == 1) {
+		*list =NIL;
 		return NIL;
 	}
 
@@ -567,17 +568,17 @@ list_remove_cell(List *list, ListCell *cell, ListCell *prev) {
 	 * Otherwise, adjust the necessary list links, deallocate the particular
 	 * node we have just removed, and return the list we were given.
 	 */
-	list->length--;
+	(*list)->length--;
 
 	if (prev)
 		prev->next = cell->next;
 	else
-		list->head = cell->next;
+		(*list)->head = cell->next;
 
-	if (list->tail == cell)
-		list->tail = prev;
+	if ((*list)->tail == cell)
+		(*list)->tail = prev;
 
-	return list;
+	return (*list);
 }
 
 /*
@@ -618,7 +619,7 @@ list_remove(List *list, void *datum) {
 	prev = NULL;
 	foreach(cell, list) {
 		if (equal(lfirst(cell), datum))
-			return list_remove_cell(list, cell, prev);
+			return list_remove_cell(&list, cell, prev);
 
 		prev = cell;
 	}
