@@ -649,10 +649,9 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 
 		case FULL_MATCHED:
 			printf(" FULL Matched  relation! :\n");
-			if (list_length(quals)) {
-
+			if (list_length(quals) == 1 && isParam != 1 && enable_memo_recosting) {
+				RestrictInfo * rt = (RestrictInfo *) linitial(quals);
 				result->rows = mrows;
-				RestrictInfo * rt = lfirst(list_head(quals));
 				rt->norm_selec = mrows / rel->tuples;
 			}
 			final_clauses = NIL;
@@ -1541,10 +1540,18 @@ int equals(MemoRelation *rel1, MemoRelation *rel2) {
 void set_plain_rel_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop_count, bool isIndex) {
 
 	if (path->param_info) {
+		if (!path->param_info->memo_checked && enable_memo_recosting) {
+			path->param_info->ppi_rows = get_parameterized_baserel_size(root, rel, path->param_info->ppi_clauses);
+			path->param_info->memo_checked = true;
+		}
 		path->restrictList = list_copy(path->param_info->restrictList);
 		path->rows = path->param_info->ppi_rows;
 
 	} else {
+		if (!rel->base_rel_checked && enable_memo_recosting) {
+			set_baserel_size_estimates(root, rel);
+			rel->base_rel_checked=true;
+		}
 		path->restrictList = list_copy(path->parent->restrictList);
 		path->rows = path->parent->rows;
 
@@ -1583,10 +1590,11 @@ void update_and_recost(PlannerInfo *root, RelOptInfo *joinrel) {
 	recost_paths(root, joinrel);
 	add_recosted_paths(joinrel);
 }
-static void recost_plain_rel_path(PlannerInfo *root, RelOptInfo *baserel) {
+void recost_rel_path(PlannerInfo *root, RelOptInfo *baserel) {
 
 	ListCell *lc;
-
+	printf("Theres %d path for : ", list_length(baserel->pathlist));
+	printMemo(baserel->rel_name);
 	foreach(lc,baserel->pathlist) {
 
 		Path *basepath = (Path *) lfirst(lc);
@@ -1594,6 +1602,7 @@ static void recost_plain_rel_path(PlannerInfo *root, RelOptInfo *baserel) {
 		recost_path_recurse(root, basepath);
 
 	}
+	set_cheapest(baserel);
 
 }
 static void recost_join_children(PlannerInfo *root, JoinPath * jpath) {

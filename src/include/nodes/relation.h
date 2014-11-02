@@ -538,6 +538,7 @@ typedef struct RelOptInfo
 	double		paramloops;
 	List	    *all_restrictList;
 	List 		*tmp_pathlist;
+	bool 		ppi_memo_checked;
 
 
 } RelOptInfo;
@@ -768,6 +769,7 @@ typedef struct ParamPathInfo
 	/* used for memo calculations */
 	List	   *restrictList;
 	double		paramloops;
+	bool		memo_checked;
 } ParamPathInfo;
 
 

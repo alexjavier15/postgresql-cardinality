@@ -72,6 +72,7 @@ typedef struct RteReferences {
 	int size;
 } RteReferences;
 
+extern void recost_rel_path(PlannerInfo *root, RelOptInfo *baserel);
 extern void recost_plain_rel_path(PlannerInfo *root, RelOptInfo *baserel);
 extern void recost_paths(PlannerInfo *root, RelOptInfo *joinrel);
 extern bool lcontains(RelOptInfo *rel, List *clauses);

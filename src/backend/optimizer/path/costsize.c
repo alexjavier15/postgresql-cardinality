@@ -3091,13 +3091,14 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 		if (nrows == -1 || result.found == MATCHED_RIGHT || result.found == UNMATCHED)
 			rel->base_rel_checked = false;
 	}
-
 	if (!enable_memo || nrows == -1) {
 
 		nrows = rel->tuples * clauselist_selectivity(root, rel->baserestrictinfo, 0, JOIN_INNER, NULL);
 
 	}
-
+	if (!list_length(rel->baserestrictinfo)) {
+		rel->base_rel_checked = true;
+	}
 	rel->rows = clamp_row_est(nrows);
 	printMemo(rel->rel_name);
 
@@ -3164,6 +3165,9 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 			rel->base_rel_checked = true;
 			recost_plain_rel_path(root, rel);
 
+		}
+		if(result.found == FULL_MATCHED){
+			rel->ppi_memo_checked = true;
 		}
 
 	}

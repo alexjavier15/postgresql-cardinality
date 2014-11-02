@@ -336,6 +336,7 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 			 * pair of component relations.
 			 */
 			if (restrictlist_ptr) {
+
 				*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
 
 				if (enable_memo && !(joinrel->rmemo_checked && joinrel->lmemo_checked) && outer_rel->rmemo_checked) {
@@ -349,6 +350,23 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 					 }*/
 
 				}
+			} else {
+				if (enable_memo && joinrel->rmemo_checked && joinrel->lmemo_checked) {
+					// calculate selectivity
+
+					if (list_length((*restrictlist_ptr)) == 1) {
+						RestrictInfo * rt = (RestrictInfo *) linitial((*restrictlist_ptr));
+						Selectivity s1 = joinrel->rows / (outer_rel->rows * inner_rel->rows);
+
+						if (!rt->norm_selec) {
+
+							rt->norm_selec = s1;
+						}
+
+					}
+
+				}
+
 			}
 
 			return joinrel;
@@ -771,11 +789,16 @@ get_baserel_parampathinfo(PlannerInfo *root, RelOptInfo *baserel, Relids require
 
 	rows = get_parameterized_baserel_size(root, baserel, pclauses);
 
-	/* And now we can build the ParamPathInfo */
-	ppi = makeNode(ParamPathInfo);
+		/* And now we can build the ParamPathInfo */
+		ppi = makeNode(ParamPathInfo);
 	ppi->ppi_req_outer = required_outer;
 
 	ppi->ppi_rows = rows;
+	ppi->memo_checked =baserel->ppi_memo_checked;
+
+	//reset
+	baserel->ppi_memo_checked=false;
+
 	//don't forget to clean paramoops after affectation
 	if (baserel->paramloops)
 		ppi->paramloops = baserel->paramloops;
