@@ -1561,7 +1561,7 @@ void set_plain_rel_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, Path *pat
 }
 static void update_inner_indexpath(PlannerInfo *root, JoinPath * jpath) {
 	if (jpath->innerjoinpath->type == T_IndexPath) {
-		if (!jpath->joinrestrictinfo) {
+		if (!jpath->joinrestrictinfo && jpath->path.parent->rmemo_checked &&  jpath->path.parent->lmemo_checked) {
 
 			IndexPath * index = (IndexPath *) jpath->innerjoinpath;
 			if (index->path.param_info) {
