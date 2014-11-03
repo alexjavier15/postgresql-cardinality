@@ -1564,7 +1564,6 @@ void set_plain_rel_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, Path *pat
 static void update_inner_indexpath(PlannerInfo *root, JoinPath * jpath) {
 	if (jpath->innerjoinpath->type == T_IndexPath) {
 		if (!jpath->joinrestrictinfo && jpath->path.parent->rmemo_checked && jpath->path.parent->lmemo_checked) {
-
 			IndexPath * index = (IndexPath *) jpath->innerjoinpath;
 			if (index->path.param_info) {
 
@@ -1614,6 +1613,7 @@ void update_and_recost(PlannerInfo *root, RelOptInfo *joinrel) {
 }
 void recost_rel_path(PlannerInfo *root, RelOptInfo *baserel) {
 
+/*
 	ListCell *lc;
 	printf("Theres %d path for : ", list_length(baserel->pathlist));
 	printMemo(baserel->rel_name);
@@ -1625,6 +1625,7 @@ void recost_rel_path(PlannerInfo *root, RelOptInfo *baserel) {
 
 	}
 	set_cheapest(baserel);
+*/
 
 }
 
