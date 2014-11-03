@@ -1567,6 +1567,7 @@ static void update_inner_indexpath(PlannerInfo *root, JoinPath * jpath) {
 			IndexPath * index = (IndexPath *) jpath->innerjoinpath;
 			if (index->path.param_info) {
 				index->path.rows = clamp_row_est(jpath->path.parent->rows / jpath->outerjoinpath->rows);
+				index->path.param_info->ppi_rows=index->path.rows;
 				index->path.param_info->memo_checked = true;
 				index->indexinfo->loop_count = jpath->outerjoinpath->rows;
 				printf("new Index rows  are :  %.0f\n ", index->path.rows);
