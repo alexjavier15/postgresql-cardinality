@@ -354,7 +354,7 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 				if (enable_memo && joinrel->rmemo_checked && joinrel->lmemo_checked) {
 					// calculate selectivity
 
-					if (list_length((*restrictlist_ptr)) == 1) {
+					if (list_length((*restrictlist_ptr)) == 1 && sjinfo->jointype == JOIN_INNER) {
 						RestrictInfo * rt = (RestrictInfo *) linitial((*restrictlist_ptr));
 						Selectivity s1 = joinrel->rows / (outer_rel->rows * inner_rel->rows);
 

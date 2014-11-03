@@ -649,11 +649,12 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 
 		case FULL_MATCHED:
 			printf(" FULL Matched  relation! :\n");
-			if (list_length(quals) == 1 && isParam != 1 && enable_memo_recosting) {
+			if (list_length(quals) == 1 && isParam != 1 && enable_memo_recosting && sjinfo->jointype == JOIN_INNER) {
 				RestrictInfo * rt = (RestrictInfo *) linitial(quals);
-				result->rows = mrows;
+
 				rt->norm_selec = mrows / rel->tuples;
 			}
+			result->rows = mrows;
 			final_clauses = NIL;
 			break;
 
@@ -1550,7 +1551,7 @@ void set_plain_rel_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, Path *pat
 	} else {
 		if (!rel->base_rel_checked && enable_memo_recosting) {
 			set_baserel_size_estimates(root, rel);
-			rel->base_rel_checked=true;
+			rel->base_rel_checked = true;
 		}
 		path->restrictList = list_copy(path->parent->restrictList);
 		path->rows = path->parent->rows;
@@ -1558,9 +1559,28 @@ void set_plain_rel_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, Path *pat
 	}
 	path->isParameterized = path->param_info != NULL;
 }
+static void update_inner_indexpath(PlannerInfo *root, JoinPath * jpath) {
+	if (jpath->innerjoinpath->type == T_IndexPath) {
+		if (!jpath->joinrestrictinfo) {
+
+			IndexPath * index = (IndexPath *) jpath->innerjoinpath;
+			if (index->path.param_info) {
+
+				index->path.rows = jpath->path.rows;
+				index->path.param_info->memo_checked = true;
+			}
+
+		}
+
+	}
+
+}
 void set_join_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, JoinPath *pathnode) {
 
 	pathnode->path.isParameterized = pathnode->path.param_info != NULL;
+
+	if (pathnode->path.type == T_NestPath)
+		update_inner_indexpath(root, pathnode);
 
 }
 
@@ -1605,6 +1625,7 @@ void recost_rel_path(PlannerInfo *root, RelOptInfo *baserel) {
 	set_cheapest(baserel);
 
 }
+
 static void recost_join_children(PlannerInfo *root, JoinPath * jpath) {
 
 	recost_path_recurse(root, jpath->innerjoinpath);
