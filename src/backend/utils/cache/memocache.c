@@ -629,12 +629,12 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 	double mrows = 1;
 	List *final_clauses = NIL;
 	int level = rel->rtekind > RTE_SUBQUERY ? root->query_level : root->query_level + rel->rtekind;
-
+	List* final_quals = rel->rtekind == RTE_JOIN ? NIL : quals;
 	result->loops = 1;
 	result->found = -1;
 	result->rows = -1;
 
-	memo_rel = get_Memorelation(result, list_copy(rel->rel_name), level, quals, isParam);
+	memo_rel = get_Memorelation(result, list_copy(rel->rel_name), level, final_quals, isParam);
 	//printf("Result %d\n", result->found);
 
 	//print_relation(memo_rel);
@@ -653,8 +653,9 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 			if (list_length(quals) == 1 && isParam != 1 && enable_memo_recosting && enable_memo_propagation) {
 				if (!sjinfo || (sjinfo && sjinfo->jointype == JOIN_INNER)) {
 					RestrictInfo * rt = (RestrictInfo *) linitial(quals);
-
+					result->last = rt->norm_selec;
 					rt->norm_selec = mrows / rel->tuples;
+
 				}
 			}
 			result->rows = mrows;
@@ -1571,7 +1572,6 @@ static void update_inner_indexpath(PlannerInfo *root, JoinPath * jpath) {
 				index->path.param_info->ppi_rows = index->path.rows;
 				index->path.param_info->memo_checked = true;
 				index->indexinfo->loop_count = jpath->outerjoinpath->rows;
-				printf("new Index rows  are :  %.0f\n ", index->path.rows);
 
 			}
 

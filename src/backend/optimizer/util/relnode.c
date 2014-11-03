@@ -341,7 +341,7 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 
 				if (enable_memo && !(joinrel->rmemo_checked && joinrel->lmemo_checked) && outer_rel->rmemo_checked) {
 
-					int nrows = joinrel->rows;
+				//	int nrows = joinrel->rows;
 					printf("Additional estimate pass\n");
 					set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo,
 							list_copy(*restrictlist_ptr));
@@ -350,23 +350,6 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 					 }*/
 
 				}
-			} else {
-				if (enable_memo_recosting && joinrel->rmemo_checked && joinrel->lmemo_checked && enable_memo_propagation) {
-					// calculate selectivity
-
-					if (list_length((*restrictlist_ptr)) == 1 && sjinfo->jointype == JOIN_INNER) {
-						RestrictInfo * rt = (RestrictInfo *) linitial((*restrictlist_ptr));
-						Selectivity s1 = joinrel->rows / (outer_rel->rows * inner_rel->rows);
-
-						if (!rt->norm_selec) {
-
-							rt->norm_selec = s1;
-						}
-
-					}
-
-				}
-
 			}
 
 			return joinrel;

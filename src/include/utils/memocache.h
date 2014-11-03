@@ -44,6 +44,7 @@ typedef struct MemoInfoData1 {
 	List *matches;
 	double loops;
 	double removed_rows;
+	Selectivity last;
 
 } MemoInfoData1;
 

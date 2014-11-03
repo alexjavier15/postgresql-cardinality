@@ -3087,9 +3087,11 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 		//printMemo(rel->baserestrictinfo);
 		get_relation_size(&result, root, rel, rel->baserestrictinfo, false, NULL);
 		nrows = result.rows;
-		rel->base_rel_checked = true;
+
 		if (nrows == -1 || result.found == MATCHED_RIGHT || result.found == UNMATCHED)
 			rel->base_rel_checked = false;
+		else
+			rel->base_rel_checked = true;
 	}
 	if (!enable_memo || nrows == -1) {
 
@@ -3102,7 +3104,7 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 	rel->rows = clamp_row_est(nrows);
 	printMemo(rel->rel_name);
 
-	printf("final  base rows are : %f \n", rel->rows);
+	printf("final  base rows are : %f check %d \n", rel->rows,rel->base_rel_checked);
 
 	cost_qual_eval(&rel->baserestrictcost, rel->baserestrictinfo, root);
 
@@ -3166,7 +3168,7 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 			recost_plain_rel_path(root, rel);
 
 		}
-		if(result.found == FULL_MATCHED){
+		if (result.found == FULL_MATCHED) {
 			rel->ppi_memo_checked = true;
 		}
 
@@ -3223,14 +3225,17 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 
 		/*printf("checking join relation  ");*/
 
-		get_relation_size(&result, root, rel, NIL, 2, sjinfo);
+		get_relation_size(&result, root, rel, list_copy(restrictlist), 2, sjinfo);
 		nrows = result.rows;
 
 		if (nrows > 0) {
 
 			rel->rmemo_checked = true;
 			rel->lmemo_checked = true;
-
+			if(nrows == outer_rel->rows ){
+				RestrictInfo * rt = (RestrictInfo *) linitial(restrictlist);
+				rt->norm_selec = result.last;
+			}
 		}
 	}
 	if (!enable_memo || nrows == -1) {
