@@ -3249,7 +3249,7 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 	}
 	rel->rows = nrows;
 
-	if (enable_memo && !(rel->rmemo_checked && rel->lmemo_checked)) {
+	if (enable_memo_propagation && !(rel->rmemo_checked && rel->lmemo_checked)) {
 		rel->rmemo_checked = outer_rel->rmemo_checked || nrows == outer_rel->rows;
 		rel->lmemo_checked = inner_rel->rmemo_checked || nrows == outer_rel->rows;
 

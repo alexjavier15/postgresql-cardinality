@@ -398,22 +398,23 @@ static MemoClause * equival_clause(MemoClause *cl1, MemoClause *cl2) {
 
 }
 void update_cached_joins(List *joinname, int level, double rows) {
+	if (enable_memo_propagation) {
+		dlist_mutable_iter iter;
+		int index = list_length(joinname) - 1;
+		//printContentRelations((CacheM *) join_cache_ptr);
 
-	dlist_mutable_iter iter;
-	int index = list_length(joinname) - 1;
-	//printContentRelations((CacheM *) join_cache_ptr);
+		dlist_foreach_modify (iter, &join_cache_ptr->content[index]) {
 
-	dlist_foreach_modify (iter, &join_cache_ptr->content[index]) {
+			MemoRelation *cachedjoin = dlist_container(MemoRelation,list_node, iter.cur);
+			if (equalSet(list_copy(cachedjoin->relationname), list_copy(joinname)) && cachedjoin->level == level) {
 
-		MemoRelation *cachedjoin = dlist_container(MemoRelation,list_node, iter.cur);
-		if (equalSet(list_copy(cachedjoin->relationname), list_copy(joinname)) && cachedjoin->level == level) {
+				dlist_delete(&(cachedjoin->list_node));
+				cachedjoin->rows = rows;
+				add_node(memo_query_ptr, cachedjoin, list_length(joinname));
 
-			dlist_delete(&(cachedjoin->list_node));
-			cachedjoin->rows = rows;
-			add_node(memo_query_ptr, cachedjoin, list_length(joinname));
+			}
 
 		}
-
 	}
 }
 void discard_existing_joins(void) {
@@ -649,7 +650,7 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 
 		case FULL_MATCHED:
 			printf(" FULL Matched  relation! :\n");
-			if (list_length(quals) == 1 && isParam != 1 && enable_memo_recosting) {
+			if (list_length(quals) == 1 && isParam != 1 && enable_memo_recosting && enable_memo_propagation) {
 				if (!sjinfo || (sjinfo && sjinfo->jointype == JOIN_INNER)) {
 					RestrictInfo * rt = (RestrictInfo *) linitial(quals);
 
@@ -1543,7 +1544,7 @@ int equals(MemoRelation *rel1, MemoRelation *rel2) {
 void set_plain_rel_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop_count, bool isIndex) {
 
 	if (path->param_info) {
-		if (!path->param_info->memo_checked && enable_memo_recosting) {
+		if (!path->param_info->memo_checked && enable_memo_recosting && enable_memo_propagation) {
 			path->param_info->ppi_rows = get_parameterized_baserel_size(root, rel, path->param_info->ppi_clauses);
 			path->param_info->memo_checked = true;
 		}
@@ -1551,7 +1552,7 @@ void set_plain_rel_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, Path *pat
 		path->rows = path->param_info->ppi_rows;
 
 	} else {
-		if (!rel->base_rel_checked && enable_memo_recosting) {
+		if (!rel->base_rel_checked && enable_memo_recosting && enable_memo_propagation) {
 			set_baserel_size_estimates(root, rel);
 			rel->base_rel_checked = true;
 		}
@@ -1562,12 +1563,12 @@ void set_plain_rel_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, Path *pat
 	path->isParameterized = path->param_info != NULL;
 }
 static void update_inner_indexpath(PlannerInfo *root, JoinPath * jpath) {
-	if (jpath->innerjoinpath->type == T_IndexPath) {
+	if (jpath->innerjoinpath->type == T_IndexPath && enable_memo_propagation) {
 		if (!jpath->joinrestrictinfo && jpath->path.parent->rmemo_checked && jpath->path.parent->lmemo_checked) {
 			IndexPath * index = (IndexPath *) jpath->innerjoinpath;
 			if (index->path.param_info) {
 				index->path.rows = clamp_row_est(jpath->path.parent->rows / jpath->outerjoinpath->rows);
-				index->path.param_info->ppi_rows=index->path.rows;
+				index->path.param_info->ppi_rows = index->path.rows;
 				index->path.param_info->memo_checked = true;
 				index->indexinfo->loop_count = jpath->outerjoinpath->rows;
 				printf("new Index rows  are :  %.0f\n ", index->path.rows);

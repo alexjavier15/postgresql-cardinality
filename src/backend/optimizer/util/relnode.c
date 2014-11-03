@@ -351,7 +351,7 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 
 				}
 			} else {
-				if (enable_memo && joinrel->rmemo_checked && joinrel->lmemo_checked) {
+				if (enable_memo_recosting && joinrel->rmemo_checked && joinrel->lmemo_checked && enable_memo_propagation) {
 					// calculate selectivity
 
 					if (list_length((*restrictlist_ptr)) == 1 && sjinfo->jointype == JOIN_INNER) {
