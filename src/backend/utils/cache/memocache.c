@@ -1566,10 +1566,11 @@ static void update_inner_indexpath(PlannerInfo *root, JoinPath * jpath) {
 		if (!jpath->joinrestrictinfo && jpath->path.parent->rmemo_checked && jpath->path.parent->lmemo_checked) {
 			IndexPath * index = (IndexPath *) jpath->innerjoinpath;
 			if (index->path.param_info) {
-
-				index->path.rows = jpath->path.parent->rows / jpath->outerjoinpath->rows;
+				index->path.rows = clamp_row_est(jpath->path.parent->rows / jpath->outerjoinpath->rows);
 				index->path.param_info->memo_checked = true;
 				index->indexinfo->loop_count = jpath->outerjoinpath->rows;
+				printf("new Index rows  are :  %.0f\n ", index->path.rows);
+
 			}
 
 		}
@@ -1580,8 +1581,6 @@ static void update_inner_indexpath(PlannerInfo *root, JoinPath * jpath) {
 void set_join_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, JoinPath *pathnode) {
 
 	pathnode->path.isParameterized = pathnode->path.param_info != NULL;
-
-
 
 }
 
@@ -1613,28 +1612,29 @@ void update_and_recost(PlannerInfo *root, RelOptInfo *joinrel) {
 }
 void recost_rel_path(PlannerInfo *root, RelOptInfo *baserel) {
 
-/*
-	ListCell *lc;
-	printf("Theres %d path for : ", list_length(baserel->pathlist));
-	printMemo(baserel->rel_name);
-	foreach(lc,baserel->pathlist) {
+	/*
+	 ListCell *lc;
+	 printf("Theres %d path for : ", list_length(baserel->pathlist));
+	 printMemo(baserel->rel_name);
+	 foreach(lc,baserel->pathlist) {
 
-		Path *basepath = (Path *) lfirst(lc);
+	 Path *basepath = (Path *) lfirst(lc);
 
-		recost_path_recurse(root, basepath);
+	 recost_path_recurse(root, basepath);
 
-	}
-	set_cheapest(baserel);
-*/
+	 }
+	 set_cheapest(baserel);
+	 */
 
 }
 
 static void recost_join_children(PlannerInfo *root, JoinPath * jpath) {
 	if (jpath->path.type == T_NestPath && enable_memo_recosting)
 		update_inner_indexpath(root, jpath);
-	recost_path_recurse(root, jpath->innerjoinpath);
-
-	recost_path_recurse(root, jpath->outerjoinpath);
+	if (jpath->innerjoinpath->parent->rtekind == RTE_RELATION)
+		recost_path_recurse(root, jpath->innerjoinpath);
+	if (jpath->outerjoinpath->parent->rtekind == RTE_RELATION)
+		recost_path_recurse(root, jpath->outerjoinpath);
 
 }
 static void recost_path_recurse(PlannerInfo *root, Path * path) {
