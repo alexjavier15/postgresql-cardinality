@@ -1568,8 +1568,9 @@ static void update_inner_indexpath(PlannerInfo *root, JoinPath * jpath) {
 			IndexPath * index = (IndexPath *) jpath->innerjoinpath;
 			if (index->path.param_info) {
 
-				index->path.rows = jpath->path.rows;
+				index->path.rows = jpath->path.parent->rows / jpath->outerjoinpath->rows;
 				index->path.param_info->memo_checked = true;
+				index->indexinfo->loop_count = jpath->outerjoinpath->rows;
 			}
 
 		}
@@ -1581,8 +1582,7 @@ void set_join_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, JoinPath *path
 
 	pathnode->path.isParameterized = pathnode->path.param_info != NULL;
 
-	if (pathnode->path.type == T_NestPath)
-		update_inner_indexpath(root, pathnode);
+
 
 }
 
@@ -1629,7 +1629,8 @@ void recost_rel_path(PlannerInfo *root, RelOptInfo *baserel) {
 }
 
 static void recost_join_children(PlannerInfo *root, JoinPath * jpath) {
-
+	if (jpath->path.type == T_NestPath && enable_memo_recosting)
+		update_inner_indexpath(root, jpath);
 	recost_path_recurse(root, jpath->innerjoinpath);
 
 	recost_path_recurse(root, jpath->outerjoinpath);
