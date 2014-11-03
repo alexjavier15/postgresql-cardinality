@@ -649,10 +649,12 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 
 		case FULL_MATCHED:
 			printf(" FULL Matched  relation! :\n");
-			if (list_length(quals) == 1 && isParam != 1 && enable_memo_recosting && sjinfo->jointype == JOIN_INNER) {
-				RestrictInfo * rt = (RestrictInfo *) linitial(quals);
+			if (list_length(quals) == 1 && isParam != 1 && enable_memo_recosting) {
+				if (!sjinfo || (sjinfo && sjinfo->jointype == JOIN_INNER)) {
+					RestrictInfo * rt = (RestrictInfo *) linitial(quals);
 
-				rt->norm_selec = mrows / rel->tuples;
+					rt->norm_selec = mrows / rel->tuples;
+				}
 			}
 			result->rows = mrows;
 			final_clauses = NIL;
@@ -1561,7 +1563,7 @@ void set_plain_rel_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, Path *pat
 }
 static void update_inner_indexpath(PlannerInfo *root, JoinPath * jpath) {
 	if (jpath->innerjoinpath->type == T_IndexPath) {
-		if (!jpath->joinrestrictinfo && jpath->path.parent->rmemo_checked &&  jpath->path.parent->lmemo_checked) {
+		if (!jpath->joinrestrictinfo && jpath->path.parent->rmemo_checked && jpath->path.parent->lmemo_checked) {
 
 			IndexPath * index = (IndexPath *) jpath->innerjoinpath;
 			if (index->path.param_info) {
