@@ -1146,8 +1146,7 @@ void check_NoMemo_queries(void) {
 			dlist_foreach_modify (iter, &join_cache_ptr->content[i]) {
 				MemoRelation *target = dlist_container(MemoRelation,list_node, iter.cur);
 				rellen = list_length(target->relationname);
-				printf("Checking relation\n");
-				printMemo(target->relationname);
+
 				for (k = 2; k < (memo_query_ptr->max_level); k++) {
 
 					relation1 = NULL;
