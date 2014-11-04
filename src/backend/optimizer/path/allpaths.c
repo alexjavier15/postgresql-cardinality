@@ -1412,7 +1412,7 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels) {
 		 */
 		foreach(lc, root->join_rel_level[lev]) {
 			rel = (RelOptInfo *) lfirst(lc);
-			if (enable_memo) {
+			if (enable_memo_recosting) {
 				add_recosted_paths(rel);
 			}
 			/* Find and save the cheapest paths for this rel */

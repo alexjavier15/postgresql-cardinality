@@ -506,7 +506,7 @@ void add_path_final(RelOptInfo *parent_rel, Path *new_path) {
 			/*
 			 * Delete the data pointed-to by the deleted cell, if possible
 			 */
-			if (!IsA(old_path, IndexPath) && final_pass) {
+			if (!IsA(old_path, IndexPath) && final_pass && enable_memo_recosting) {
 				invalide_removed_path(parent_rel, old_path);
 
 				pfree(old_path);
@@ -537,7 +537,7 @@ void add_path_final(RelOptInfo *parent_rel, Path *new_path) {
 			parent_rel->pathlist = lcons(new_path, parent_rel->pathlist);
 	} else {
 		/* Reject and recycle the new path */
-		if (!IsA(new_path, IndexPath) && final_pass) {
+		if (!IsA(new_path, IndexPath) && final_pass && enable_memo_recosting) {
 			invalide_removed_path(parent_rel, new_path);
 
 			pfree(new_path);
@@ -552,7 +552,7 @@ void add_path_tmp(RelOptInfo *parent_rel, Path *new_path) {
 }
 
 void add_path(RelOptInfo *parent_rel, Path *new_path) {
-	if (!enable_memo || parent_rel->rtekind != RTE_JOIN)
+	if (!enable_memo || parent_rel->rtekind != RTE_JOIN || !enable_memo_recosting)
 		add_path_final(parent_rel, new_path);
 	else
 
@@ -630,7 +630,7 @@ bool add_path_precheck_final(RelOptInfo *parent_rel, Cost startup_cost, Cost tot
  */
 bool add_path_precheck(RelOptInfo *parent_rel, Cost startup_cost, Cost total_cost, List *pathkeys,
 		Relids required_outer) {
-	if (!enable_memo)
+	if (!enable_memo || !enable_memo_recosting)
 		return add_path_precheck_final(parent_rel, startup_cost, total_cost, pathkeys, required_outer);
 	return true;
 }
