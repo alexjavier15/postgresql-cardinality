@@ -3080,7 +3080,8 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 
 	/* Should only be applied to base relations */
 	Assert(rel->relid > 0);
-
+	double s2 = clauselist_selectivity(root, rel->baserestrictinfo, 0, JOIN_INNER, NULL);
+	printf("s1 : %.10f\n",s2);
 	if (enable_memo && list_length(rel->baserestrictinfo)) {
 		Assert(rel ->rel_name != NIL);
 		/*printf("level : %d ", root->query_level + rel->rtekind);
@@ -3143,6 +3144,7 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 	/* Should only be applied to base relations */
 	Assert(rel->relid > 0);
 	Assert(rel ->rel_name != NIL);
+	rel->ppi_memo_checked = false;
 	if (enable_memo && list_length(allclauses)) {
 		/*printf("level : %d ", root->query_level + rel->rtekind);
 
@@ -3153,8 +3155,14 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 		get_relation_size(&result, root, rel, allclauses, true, NULL);
 		nrows = result.rows;
 		rel->paramloops = result.loops >= 1 ? result.loops : 0;
+		double s1 = clauselist_selectivity(root, list_copy(param_clauses), rel->relid, JOIN_INNER, NULL);
+		double s2 = clauselist_selectivity(root, rel->baserestrictinfo, rel->relid, JOIN_INNER, NULL);
+		printf("s1 : %.10f\n",s2);
+		printf("s2 : %.10f\n",s1);
 
-		if (enable_join_restimation && !rel->base_rel_checked && result.found == FULL_MATCHED  && list_length(rel->baserestrictinfo)) {
+
+		if (enable_join_restimation && !rel->base_rel_checked && result.found == FULL_MATCHED
+				&& list_length(rel->baserestrictinfo)) {
 
 			// try to bound the base restict info with the reuslt got here and the estimated
 			// selectivity
@@ -3165,9 +3173,10 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 			rel->last_rows = rel->rows;
 			rel->rows = clamp_row_est(base_rel_rows);
 
-			printf("Base rel recalculated\n");
+			printf("Base rel recalculated is: %lf\n", base_rel_rows);
 			rel->base_rel_checked = true;
-			recost_plain_rel_path(root, rel);
+
+			restimate_plain_rel_path(root, rel);
 
 		}
 		if (result.found == FULL_MATCHED) {
@@ -3249,7 +3258,7 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 	if (!enable_memo || nrows == -1) {
 
 		nrows = calc_joinrel_size_estimate(root, outer_rel->rows, inner_rel->rows, sjinfo, restrictlist);
-		nrows = clamp_row_est(nrows);
+
 
 		/*if (enable_memo) {
 		 MemoRelation *newRelation = NULL;
@@ -3260,12 +3269,13 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 		 }*/
 
 	}
+	nrows = clamp_row_est(nrows);
 	rel->rows = nrows;
 
 	if (enable_join_restimation && !(rel->rmemo_checked && rel->lmemo_checked)) {
 		rel->rmemo_checked = outer_rel->rmemo_checked;
 		rel->lmemo_checked = inner_rel->rmemo_checked;
-		if (enable_memo_propagation) {
+		if (enable_memo_recosting && enable_memo_propagation) {
 			update_cached_joins(rel->rel_name, root->query_level, rel->rows);
 			check_NoMemo_queries();
 		}

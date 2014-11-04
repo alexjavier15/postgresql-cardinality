@@ -664,6 +664,32 @@ void attach_join_to_cache(RelOptInfo *rel, int level) {
 	}
 
 }
+void score_join_cardinality(RelOptInfo *rel, List *restrictList) {
+/* We attend to build a score a system in order ti trust a given calculated cardinality
+// we have three possible cases:
+ *
+ * a) left-deep plans: joins with right hand relations as base relations and left hand relations as joins.
+ * b) right-deep plans: joins with left hand relations as base relations and right hand relations as joins.
+ * a) mixed plans: joins with right hand  left relations as joins relations.
+ *
+ * The sccore are computed based in the rinfo confidence and the nature of relations participating in the join and theirs confidence.
+ *
+ * A may score will be obtained always if:
+ * 1) rinfos were calculated by cardinality injection.
+ * 3) the right and left relations have the maximum cardinality score.
+ *
+ * The actual score weight of a relation will be proportional to its size and relatif to the second relation
+ * what means, that the cardinality of a not injected relation.
+ *
+ * we intend to propagate the error of a cardinality in upper calculations by multiplying the errors.
+ *
+ *
+ *
+*/
+
+
+
+}
 void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel, List *quals, int isParam,
 		SpecialJoinInfo * sjinfo) {
 	MemoRelation * memo_rel = NULL;
@@ -685,7 +711,7 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 		result->loops = memo_rel->loops;
 		result->rows = memo_rel->rows;
 
-		mrows = result->rows / result->loops;
+		mrows = clamp_row_est(result->rows / result->loops);
 	}
 
 	switch (result->found) {
@@ -697,13 +723,15 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 
 					RestrictInfo * rinfo = (RestrictInfo *) linitial(quals);
 					Selectivity s1 = mrows / (sjinfo->outer_rows * sjinfo->inner_rows);
-
-					if (sjinfo->jointype == JOIN_INNER) {
-						if (rinfo->norm_selec != s1)
-							rinfo->norm_selec = s1;
-					} else {
-						if (rinfo->outer_selec != s1)
-							rinfo->outer_selec = s1;
+					if (!rinfo->memo_cahed) {
+						if (sjinfo->jointype == JOIN_INNER) {
+							if (rinfo->norm_selec != s1)
+								rinfo->norm_selec = s1;
+						} else {
+							if (rinfo->outer_selec != s1)
+								rinfo->outer_selec = s1;
+						}
+						rinfo->memo_cahed = true;
 					}
 				}
 			}
@@ -753,7 +781,7 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 				}
 
 				if (enable_memo_propagation) {
-					attach_join_to_cache(rel, level);
+					//attach_join_to_cache(rel, level);
 
 				}
 
@@ -1807,7 +1835,7 @@ static void recost_path_recurse(PlannerInfo *root, Path * path) {
 
 }
 
-void recost_plain_rel_path(PlannerInfo *root, RelOptInfo *baserel) {
+void restimate_plain_rel_path(PlannerInfo *root, RelOptInfo *baserel) {
 
 	ListCell *lc;
 
@@ -1815,8 +1843,22 @@ void recost_plain_rel_path(PlannerInfo *root, RelOptInfo *baserel) {
 
 		Path *basepath = (Path *) lfirst(lc);
 
-		if (basepath->rows == baserel->last_rows) {
-			recost_path_recurse(root, basepath);
+		if (!basepath->param_info) {
+			//Resize the unparameterized paths for this relation
+
+			basepath->rows = basepath->parent->rows;
+
+		} else {
+			//if we has paraeterized path not checked by memo
+			// then restimate cardinality
+
+			if (!basepath->param_info->memo_checked) {
+
+				basepath->param_info->ppi_rows = get_parameterized_baserel_size(root, basepath->parent,
+						basepath->param_info->ppi_clauses);
+				basepath->memo_checked = true;
+
+			}
 
 		}
 	}

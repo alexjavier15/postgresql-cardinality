@@ -1351,6 +1351,7 @@ typedef struct RestrictInfo
 	/* cache space for hashclause processing; -1 if not yet set */
 	Selectivity left_bucketsize;	/* avg bucketsize of left side */
 	Selectivity right_bucketsize;		/* avg bucketsize of right side */
+	bool	memo_cahed;
 } RestrictInfo;
 
 /*
