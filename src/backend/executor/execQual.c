@@ -5184,7 +5184,7 @@ ExecQual(List *qual, ExprContext *econtext, bool resultForNull)
 				break;
 			}
 		}
-		// clause->count= clause->count + 1;
+		 clause->count= clause->count + 1;
 	}
 
 	MemoryContextSwitchTo(oldContext);

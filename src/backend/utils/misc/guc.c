@@ -855,6 +855,24 @@ static struct config_bool ConfigureNamesBool[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"enable_join_restimation", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Enables memo query optimization."),
+			NULL
+	},
+		&enable_join_restimation,
+		false,
+		NULL, NULL, NULL
+	},
+	{
+		{"enable_selectivity_injection", PGC_USERSET, QUERY_TUNING_METHOD,
+				gettext_noop("Enables memo query optimization."),
+				NULL
+		},
+		&enable_selectivity_injection,
+		false,
+		NULL, NULL, NULL
+		},
+	{
 		/* Not for general use --- used by SET SESSION AUTHORIZATION */
 		{"is_superuser", PGC_INTERNAL, UNGROUPED,
 			gettext_noop("Shows whether the current user is a superuser."),

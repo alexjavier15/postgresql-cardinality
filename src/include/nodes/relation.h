@@ -539,6 +539,7 @@ typedef struct RelOptInfo
 	List	    *all_restrictList;
 	List 		*tmp_pathlist;
 	bool 		ppi_memo_checked;
+	bool		memocachechecked;
 
 
 } RelOptInfo;
@@ -822,6 +823,7 @@ typedef struct Path
 		/* pathkeys is a List of PathKey nodes; see above */
 	/*Used for memo calculations*/
 	List	   *restrictList;
+	List		*joinquals;
 	double		total_rows;
 	double 		removed_rows;
 	List       *nodename;
@@ -1462,6 +1464,8 @@ typedef struct SpecialJoinInfo
 	bool		lhs_strict;		/* joinclause is strict for some LHS rel */
 	bool		delay_upper_joins;		/* can't commute with upper RHS */
 	List	   *join_quals;		/* join quals, in implicit-AND list format */
+	double 		outer_rows;
+	double		inner_rows;
 } SpecialJoinInfo;
 
 /*

@@ -338,10 +338,10 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 			if (restrictlist_ptr) {
 
 				*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
+				set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo,
+										list_copy(*restrictlist_ptr));
+				if (enable_join_restimation && !(joinrel->rmemo_checked && joinrel->lmemo_checked) && outer_rel->rmemo_checked) {
 
-				if (enable_memo && !(joinrel->rmemo_checked && joinrel->lmemo_checked) && outer_rel->rmemo_checked) {
-
-				//	int nrows = joinrel->rows;
 					printf("Additional estimate pass\n");
 					set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo,
 							list_copy(*restrictlist_ptr));

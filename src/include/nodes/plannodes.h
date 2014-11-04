@@ -518,6 +518,7 @@ typedef struct Join
 	List	   *joinqual;		/* JOIN quals (in addition to plan.qual) */
 	/*used for memo calculatioins*/
 	List	   *restrictList;
+	List	   *joinqualorig;
 } Join;
 
 /* ----------------

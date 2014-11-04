@@ -147,7 +147,7 @@ create_plan(PlannerInfo *root, Path *best_path) {
 	root->curOuterRels = NULL;
 	root->curOuterParams = NIL;
 
-	root->cur_rte_reference=fetch_unique_rte_reference();
+	root->cur_rte_reference = fetch_unique_rte_reference();
 	mode_cost_check = enable_cost_check;
 
 	//printMemoCache();
@@ -157,7 +157,6 @@ create_plan(PlannerInfo *root, Path *best_path) {
 
 	/* Recursively process the path tree */
 	plan = create_plan_recurse(root, best_path);
-
 
 	mode_cost_check = false; // reset cost var
 	/* Check we successfully assigned all NestLoopParams to plan nodes */
@@ -183,47 +182,47 @@ create_plan_recurse(PlannerInfo *root, Path *best_path) {
 	Plan *plan;
 
 	switch (best_path->pathtype) {
-	case T_SeqScan:
-	case T_IndexScan:
-	case T_IndexOnlyScan:
-	case T_BitmapHeapScan:
-	case T_TidScan:
-	case T_SubqueryScan:
-	case T_FunctionScan:
-	case T_ValuesScan:
-	case T_CteScan:
-	case T_WorkTableScan:
-	case T_ForeignScan:
-		plan = create_scan_plan(root, best_path);
-		break;
-	case T_HashJoin:
-	case T_MergeJoin:
-	case T_NestLoop:
-		plan = create_join_plan(root, (JoinPath *) best_path);
-		break;
-	case T_Append:
-		plan = create_append_plan(root, (AppendPath *) best_path);
-		break;
-	case T_MergeAppend:
-		plan = create_merge_append_plan(root, (MergeAppendPath *) best_path);
-		break;
-	case T_Result:
-		plan = (Plan *) create_result_plan(root, (ResultPath *) best_path);
-		break;
-	case T_Material:
-		plan = (Plan *) create_material_plan(root, (MaterialPath *) best_path);
-		break;
-	case T_Unique:
-		plan = create_unique_plan(root, (UniquePath *) best_path);
-		break;
-	default:
-		elog(ERROR, "unrecognized node type: %d", (int) best_path->pathtype);
-		plan = NULL; /* keep compiler quiet */
-		break;
+		case T_SeqScan:
+		case T_IndexScan:
+		case T_IndexOnlyScan:
+		case T_BitmapHeapScan:
+		case T_TidScan:
+		case T_SubqueryScan:
+		case T_FunctionScan:
+		case T_ValuesScan:
+		case T_CteScan:
+		case T_WorkTableScan:
+		case T_ForeignScan:
+			plan = create_scan_plan(root, best_path);
+			break;
+		case T_HashJoin:
+		case T_MergeJoin:
+		case T_NestLoop:
+			plan = create_join_plan(root, (JoinPath *) best_path);
+			break;
+		case T_Append:
+			plan = create_append_plan(root, (AppendPath *) best_path);
+			break;
+		case T_MergeAppend:
+			plan = create_merge_append_plan(root, (MergeAppendPath *) best_path);
+			break;
+		case T_Result:
+			plan = (Plan *) create_result_plan(root, (ResultPath *) best_path);
+			break;
+		case T_Material:
+			plan = (Plan *) create_material_plan(root, (MaterialPath *) best_path);
+			break;
+		case T_Unique:
+			plan = create_unique_plan(root, (UniquePath *) best_path);
+			break;
+		default:
+			elog(ERROR, "unrecognized node type: %d", (int) best_path->pathtype);
+			plan = NULL; /* keep compiler quiet */
+			break;
 	}
 
 	plan->level = root->query_level;
-	plan->rte_reference=root->cur_rte_reference;
+	plan->rte_reference = root->cur_rte_reference;
 	return plan;
 }
 
@@ -284,108 +283,108 @@ create_scan_plan(PlannerInfo *root, Path *best_path) {
 	best_path->memo_checked = best_path->mrows >= 0;
 
 	switch (best_path->pathtype) {
-	case T_SeqScan:
-		plan = (Plan *) create_seqscan_plan(root, best_path, tlist, scan_clauses);
-		if (enable_cost_check) {
-			//cost_seqscan(best_path, root, rel, best_path->param_info);
-			best_path->mtotal_cost = best_path->total_cost;
-			mcost = best_path->mtotal_cost;
+		case T_SeqScan:
+			plan = (Plan *) create_seqscan_plan(root, best_path, tlist, scan_clauses);
+			if (enable_cost_check) {
+				//cost_seqscan(best_path, root, rel, best_path->param_info);
+				best_path->mtotal_cost = best_path->total_cost;
+				mcost = best_path->mtotal_cost;
 
-		}
-		break;
+			}
+			break;
 
-	case T_IndexScan:
-		plan = (Plan *) create_indexscan_plan(root, (IndexPath *) best_path, tlist, scan_clauses, false);
-		if (enable_cost_check) {
-			nrows = rel->rows;
-			rel->rows = best_path->mrows;
-			cost_index((IndexPath *) best_path, root, best_path->mrows);
-			rel->rows = nrows;
-			mcost = ((IndexPath *) best_path)->path.mtotal_cost;
+		case T_IndexScan:
+			plan = (Plan *) create_indexscan_plan(root, (IndexPath *) best_path, tlist, scan_clauses, false);
+			if (enable_cost_check) {
+				nrows = rel->rows;
+				rel->rows = best_path->mrows;
+				cost_index((IndexPath *) best_path, root, best_path->mrows);
+				rel->rows = nrows;
+				mcost = ((IndexPath *) best_path)->path.mtotal_cost;
 
-		}
-		break;
+			}
+			break;
 
-	case T_IndexOnlyScan:
-		plan = (Plan *) create_indexscan_plan(root, (IndexPath *) best_path, tlist, scan_clauses, true);
-		if (enable_cost_check) {
-			cost_index((IndexPath *) best_path, root, best_path->mrows);
-			mcost = ((IndexPath *) best_path)->path.mtotal_cost;
-		}
-		break;
+		case T_IndexOnlyScan:
+			plan = (Plan *) create_indexscan_plan(root, (IndexPath *) best_path, tlist, scan_clauses, true);
+			if (enable_cost_check) {
+				cost_index((IndexPath *) best_path, root, best_path->mrows);
+				mcost = ((IndexPath *) best_path)->path.mtotal_cost;
+			}
+			break;
 
-	case T_BitmapHeapScan:
-		plan = (Plan *) create_bitmap_scan_plan(root, (BitmapHeapPath *) best_path, tlist, scan_clauses);
-		if (enable_cost_check) {
-			cost_bitmap_heap_scan(best_path, root, rel, ((BitmapHeapPath *) best_path)->path.param_info,
-					((BitmapHeapPath *) best_path)->bitmapqual, best_path->mrows);
-			mcost = best_path->total_cost;
-		}
+		case T_BitmapHeapScan:
+			plan = (Plan *) create_bitmap_scan_plan(root, (BitmapHeapPath *) best_path, tlist, scan_clauses);
+			if (enable_cost_check) {
+				cost_bitmap_heap_scan(best_path, root, rel, ((BitmapHeapPath *) best_path)->path.param_info,
+						((BitmapHeapPath *) best_path)->bitmapqual, best_path->mrows);
+				mcost = best_path->total_cost;
+			}
 
-		break;
+			break;
 
-	case T_TidScan:
-		plan = (Plan *) create_tidscan_plan(root, (TidPath *) best_path, tlist, scan_clauses);
-		if (enable_cost_check) {
-			/*cost_tidscan(best_path, root, rel,
-			 ((TidPath *) best_path)->tidquals,
-			 ((TidPath *) best_path)->path.param_info);*/
-			best_path->mtotal_cost = best_path->total_cost;
+		case T_TidScan:
+			plan = (Plan *) create_tidscan_plan(root, (TidPath *) best_path, tlist, scan_clauses);
+			if (enable_cost_check) {
+				/*cost_tidscan(best_path, root, rel,
+				 ((TidPath *) best_path)->tidquals,
+				 ((TidPath *) best_path)->path.param_info);*/
+				best_path->mtotal_cost = best_path->total_cost;
 
-			mcost = best_path->total_cost;
-		}
-		break;
+				mcost = best_path->total_cost;
+			}
+			break;
 
-	case T_SubqueryScan:
-		plan = (Plan *) create_subqueryscan_plan(root, best_path, tlist, scan_clauses);
-		if (enable_cost_check) {
-			//	cost_subqueryscan(best_path, root, rel, best_path->param_info);
-			mcost = best_path->total_cost;
-		}
-		break;
+		case T_SubqueryScan:
+			plan = (Plan *) create_subqueryscan_plan(root, best_path, tlist, scan_clauses);
+			if (enable_cost_check) {
+				//	cost_subqueryscan(best_path, root, rel, best_path->param_info);
+				mcost = best_path->total_cost;
+			}
+			break;
 
-	case T_FunctionScan:
-		plan = (Plan *) create_functionscan_plan(root, best_path, tlist, scan_clauses);
-		if (enable_cost_check) {
-			//cost_functionscan(best_path, root, rel, best_path->param_info);
-			mcost = best_path->total_cost;
-		}
-		break;
+		case T_FunctionScan:
+			plan = (Plan *) create_functionscan_plan(root, best_path, tlist, scan_clauses);
+			if (enable_cost_check) {
+				//cost_functionscan(best_path, root, rel, best_path->param_info);
+				mcost = best_path->total_cost;
+			}
+			break;
 
-	case T_ValuesScan:
-		plan = (Plan *) create_valuesscan_plan(root, best_path, tlist, scan_clauses);
-		if (enable_cost_check) {
-			//	cost_valuesscan(best_path, root, rel, best_path->param_info);
-			mcost = best_path->total_cost;
+		case T_ValuesScan:
+			plan = (Plan *) create_valuesscan_plan(root, best_path, tlist, scan_clauses);
+			if (enable_cost_check) {
+				//	cost_valuesscan(best_path, root, rel, best_path->param_info);
+				mcost = best_path->total_cost;
 
-		}
-		break;
+			}
+			break;
 
-	case T_CteScan:
-		plan = (Plan *) create_ctescan_plan(root, best_path, tlist, scan_clauses);
-		if (enable_cost_check) {
-			//	cost_ctescan(best_path, root, rel, best_path->param_info);
-			mcost = best_path->total_cost;
-		}
-		break;
+		case T_CteScan:
+			plan = (Plan *) create_ctescan_plan(root, best_path, tlist, scan_clauses);
+			if (enable_cost_check) {
+				//	cost_ctescan(best_path, root, rel, best_path->param_info);
+				mcost = best_path->total_cost;
+			}
+			break;
 
-	case T_WorkTableScan:
-		plan = (Plan *) create_worktablescan_plan(root, best_path, tlist, scan_clauses);
-		if (enable_cost_check) {
-			//cost_ctescan(best_path, root, rel, best_path->param_info);
-			mcost = best_path->mtotal_cost;
-		}
-		break;
+		case T_WorkTableScan:
+			plan = (Plan *) create_worktablescan_plan(root, best_path, tlist, scan_clauses);
+			if (enable_cost_check) {
+				//cost_ctescan(best_path, root, rel, best_path->param_info);
+				mcost = best_path->mtotal_cost;
+			}
+			break;
 
-	case T_ForeignScan:
-		plan = (Plan *) create_foreignscan_plan(root, (ForeignPath *) best_path, tlist, scan_clauses);
-		//costs ???
-		break;
+		case T_ForeignScan:
+			plan = (Plan *) create_foreignscan_plan(root, (ForeignPath *) best_path, tlist, scan_clauses);
+			//costs ???
+			break;
 
-	default:
-		elog(ERROR, "unrecognized node type: %d", (int) best_path->pathtype);
-		plan = NULL; /* keep compiler quiet */
-		break;
+		default:
+			elog(ERROR, "unrecognized node type: %d", (int) best_path->pathtype);
+			plan = NULL; /* keep compiler quiet */
+			break;
 
 	}
 
@@ -493,21 +492,21 @@ static bool use_physical_tlist(PlannerInfo *root, RelOptInfo *rel) {
 static void disuse_physical_tlist(PlannerInfo *root, Plan *plan, Path *path) {
 	/* Only need to undo it for path types handled by create_scan_plan() */
 	switch (path->pathtype) {
-	case T_SeqScan:
-	case T_IndexScan:
-	case T_IndexOnlyScan:
-	case T_BitmapHeapScan:
-	case T_TidScan:
-	case T_SubqueryScan:
-	case T_FunctionScan:
-	case T_ValuesScan:
-	case T_CteScan:
-	case T_WorkTableScan:
-	case T_ForeignScan:
-		plan->targetlist = build_path_tlist(root, path);
-		break;
-	default:
-		break;
+		case T_SeqScan:
+		case T_IndexScan:
+		case T_IndexOnlyScan:
+		case T_BitmapHeapScan:
+		case T_TidScan:
+		case T_SubqueryScan:
+		case T_FunctionScan:
+		case T_ValuesScan:
+		case T_CteScan:
+		case T_WorkTableScan:
+		case T_ForeignScan:
+			plan->targetlist = build_path_tlist(root, path);
+			break;
+		default:
+			break;
 	}
 }
 
@@ -578,72 +577,72 @@ create_join_plan(PlannerInfo *root, JoinPath *best_path) {
 	}
 	best_path->path.memo_checked = checked;
 	switch (best_path->path.pathtype) {
-	case T_MergeJoin:
+		case T_MergeJoin:
 
-		if (enable_cost_check && best_path->path.memo_checked) {
+			if (enable_cost_check && best_path->path.memo_checked) {
 
-			((MergePath *) best_path)->jpath.outerjoinpath->mrows = outer_plan->mrows;
-			((MergePath *) best_path)->jpath.innerjoinpath->mrows = inner_plan->mrows;
-			((MergePath *) best_path)->jpath.outerjoinpath->mtotal_cost = outer_plan->mtotal_cost;
-			((MergePath *) best_path)->jpath.innerjoinpath->mtotal_cost = inner_plan->mtotal_cost;
+				((MergePath *) best_path)->jpath.outerjoinpath->mrows = outer_plan->mrows;
+				((MergePath *) best_path)->jpath.innerjoinpath->mrows = inner_plan->mrows;
+				((MergePath *) best_path)->jpath.outerjoinpath->mtotal_cost = outer_plan->mtotal_cost;
+				((MergePath *) best_path)->jpath.innerjoinpath->mtotal_cost = inner_plan->mtotal_cost;
 
-			initial_cost_mergejoin(root, rel->workspace, ((MergePath *) best_path)->jpath.jointype,
-					((MergePath *) best_path)->path_mergeclauses, ((MergePath *) best_path)->jpath.outerjoinpath,
-					((MergePath *) best_path)->jpath.innerjoinpath, ((MergePath *) best_path)->outersortkeys,
-					((MergePath *) best_path)->innersortkeys, NULL);
-			final_cost_mergejoin(root, (MergePath *) best_path, rel->workspace, NULL);
-			mcost = ((MergePath *) best_path)->jpath.path.mtotal_cost;
+				initial_cost_mergejoin(root, rel->workspace, ((MergePath *) best_path)->jpath.jointype,
+						((MergePath *) best_path)->path_mergeclauses, ((MergePath *) best_path)->jpath.outerjoinpath,
+						((MergePath *) best_path)->jpath.innerjoinpath, ((MergePath *) best_path)->outersortkeys,
+						((MergePath *) best_path)->innersortkeys, NULL);
+				final_cost_mergejoin(root, (MergePath *) best_path, rel->workspace, NULL);
+				mcost = ((MergePath *) best_path)->jpath.path.mtotal_cost;
 
-		}
-		plan = (Plan *) create_mergejoin_plan(root, (MergePath *) best_path, outer_plan, inner_plan);
+			}
+			plan = (Plan *) create_mergejoin_plan(root, (MergePath *) best_path, outer_plan, inner_plan);
 
-		((MergeJoin *) plan)->join.restrictList = ((MergePath *) best_path)->jpath.path.restrictList;
+			((MergeJoin *) plan)->join.restrictList = ((MergePath *) best_path)->jpath.path.restrictList;
 
-		break;
-	case T_HashJoin:
+			break;
+		case T_HashJoin:
 
-		if (enable_cost_check && best_path->path.memo_checked) {
-			((HashPath *) best_path)->jpath.outerjoinpath->mrows = outer_plan->mrows;
-			((MergePath *) best_path)->jpath.innerjoinpath->mrows = inner_plan->mrows;
-			((HashPath *) best_path)->jpath.outerjoinpath->mtotal_cost = outer_plan->mtotal_cost;
-			((HashPath *) best_path)->jpath.innerjoinpath->mtotal_cost = inner_plan->mtotal_cost;
-/*
-			initial_cost_hashjoin(root, rel->workspace, ((HashPath *) best_path)->jpath.jointype,
-					((HashPath *) best_path)->path_hashclauses, ((HashPath *) best_path)->jpath.outerjoinpath,
-					((HashPath *) best_path)->jpath.innerjoinpath, NULL, rel->workspace->semifactors);
-			final_cost_hashjoin(root, (HashPath *) best_path, rel->workspace, NULL, rel->workspace->semifactors);*/
+			if (enable_cost_check && best_path->path.memo_checked) {
+				((HashPath *) best_path)->jpath.outerjoinpath->mrows = outer_plan->mrows;
+				((MergePath *) best_path)->jpath.innerjoinpath->mrows = inner_plan->mrows;
+				((HashPath *) best_path)->jpath.outerjoinpath->mtotal_cost = outer_plan->mtotal_cost;
+				((HashPath *) best_path)->jpath.innerjoinpath->mtotal_cost = inner_plan->mtotal_cost;
+				/*
+				 initial_cost_hashjoin(root, rel->workspace, ((HashPath *) best_path)->jpath.jointype,
+				 ((HashPath *) best_path)->path_hashclauses, ((HashPath *) best_path)->jpath.outerjoinpath,
+				 ((HashPath *) best_path)->jpath.innerjoinpath, NULL, rel->workspace->semifactors);
+				 final_cost_hashjoin(root, (HashPath *) best_path, rel->workspace, NULL, rel->workspace->semifactors);*/
 
-			mcost = ((HashPath *) best_path)->jpath.path.mtotal_cost;
-		}
-		plan = (Plan *) create_hashjoin_plan(root, (HashPath *) best_path, outer_plan, inner_plan);
-		((HashJoin *) plan)->join.restrictList = ((HashPath *) best_path)->jpath.path.restrictList;
+				mcost = ((HashPath *) best_path)->jpath.path.mtotal_cost;
+			}
+			plan = (Plan *) create_hashjoin_plan(root, (HashPath *) best_path, outer_plan, inner_plan);
+			((HashJoin *) plan)->join.restrictList = ((HashPath *) best_path)->jpath.path.restrictList;
 
-		break;
-	case T_NestLoop:
-		/* Restore curOuterRels */
-		bms_free(root->curOuterRels);
-		root->curOuterRels = saveOuterRels;
-/*
-		if (enable_cost_check && best_path->path.memo_checked) {
-			initial_cost_nestloop(root, rel->workspace, best_path->jointype, best_path->outerjoinpath,
-					best_path->innerjoinpath, NULL, rel->workspace->semifactors);
-			final_cost_nestloop(root, best_path, rel->workspace, NULL, rel->workspace->semifactors);
+			break;
+		case T_NestLoop:
+			/* Restore curOuterRels */
+			bms_free(root->curOuterRels);
+			root->curOuterRels = saveOuterRels;
+			/*
+			 if (enable_cost_check && best_path->path.memo_checked) {
+			 initial_cost_nestloop(root, rel->workspace, best_path->jointype, best_path->outerjoinpath,
+			 best_path->innerjoinpath, NULL, rel->workspace->semifactors);
+			 final_cost_nestloop(root, best_path, rel->workspace, NULL, rel->workspace->semifactors);
 
-			mcost = best_path->path.mtotal_cost;
-		}*/
+			 mcost = best_path->path.mtotal_cost;
+			 }*/
 
-		plan = (Plan *) create_nestloop_plan(root, (NestPath *) best_path, outer_plan, inner_plan);
-		((NestLoop *) plan)->join.restrictList = ((NestPath *) best_path)->path.restrictList;
+			plan = (Plan *) create_nestloop_plan(root, (NestPath *) best_path, outer_plan, inner_plan);
+			((NestLoop *) plan)->join.restrictList = ((NestPath *) best_path)->path.restrictList;
 
-		best_path->outerjoinpath->mrows = outer_plan->mrows;
-		best_path->innerjoinpath->mrows = inner_plan->mrows;
-		best_path->outerjoinpath->mtotal_cost = outer_plan->mtotal_cost;
-		best_path->innerjoinpath->mtotal_cost = inner_plan->mtotal_cost;
-		break;
-	default:
-		elog(ERROR, "unrecognized node type: %d", (int) best_path->path.pathtype);
-		plan = NULL; /* keep compiler quiet */
-		break;
+			best_path->outerjoinpath->mrows = outer_plan->mrows;
+			best_path->innerjoinpath->mrows = inner_plan->mrows;
+			best_path->outerjoinpath->mtotal_cost = outer_plan->mtotal_cost;
+			best_path->innerjoinpath->mtotal_cost = inner_plan->mtotal_cost;
+			break;
+		default:
+			elog(ERROR, "unrecognized node type: %d", (int) best_path->path.pathtype);
+			plan = NULL; /* keep compiler quiet */
+			break;
 	}
 
 	/*
@@ -1470,7 +1469,7 @@ create_bitmap_subplan(PlannerInfo *root, Path *bitmapqual, List **qual, List **i
 		plan = NULL; /* keep compiler quiet */
 	}
 	plan->scanclauses = list_copy(bitmapqual->restrictList);
-	plan->rte_reference= root->cur_rte_reference;
+	plan->rte_reference = root->cur_rte_reference;
 	return plan;
 }
 
@@ -1844,6 +1843,7 @@ create_nestloop_plan(PlannerInfo *root, NestPath *best_path, Plan *outer_plan, P
 	List *tlist = build_path_tlist(root, &best_path->path);
 	List *joinrestrictclauses = best_path->joinrestrictinfo;
 	List *joinclauses;
+	List *joinclauses1;
 	List *otherclauses;
 	Relids outerrelids;
 	List *nestParams;
@@ -1863,6 +1863,7 @@ create_nestloop_plan(PlannerInfo *root, NestPath *best_path, Plan *outer_plan, P
 		joinclauses = extract_actual_clauses(joinrestrictclauses, false);
 		otherclauses = NIL;
 	}
+
 
 	/* Replace any outer-relation variables with nestloop params */
 	if (best_path->path.param_info) {
@@ -1898,6 +1899,7 @@ create_nestloop_plan(PlannerInfo *root, NestPath *best_path, Plan *outer_plan, P
 			best_path->jointype);
 
 	copy_path_costsize(&join_plan->join.plan, &best_path->path);
+	((Join *) join_plan)->joinqualorig = best_path->path.joinquals;
 
 	return join_plan;
 }
@@ -1937,6 +1939,7 @@ create_mergejoin_plan(PlannerInfo *root, MergePath *best_path, Plan *outer_plan,
 		joinclauses = extract_actual_clauses(joinclauses, false);
 		otherclauses = NIL;
 	}
+
 
 	/*
 	 * Remove the mergeclauses from the list of join qual clauses, leaving the
@@ -2151,6 +2154,7 @@ create_mergejoin_plan(PlannerInfo *root, MergePath *best_path, Plan *outer_plan,
 
 	/* Costs of sort and material steps are included in path cost already */
 	copy_path_costsize(&join_plan->join.plan, &best_path->jpath.path);
+	((Join *) join_plan)->joinqualorig = best_path->jpath.path.joinquals;
 
 	return join_plan;
 }
@@ -2160,6 +2164,7 @@ create_hashjoin_plan(PlannerInfo *root, HashPath *best_path, Plan *outer_plan, P
 	List *tlist = build_path_tlist(root, &best_path->jpath.path);
 	List *joinclauses;
 	List *otherclauses;
+
 	List *hashclauses;
 	Oid skewTable = InvalidOid;
 	AttrNumber skewColumn = InvalidAttrNumber;
@@ -2249,6 +2254,7 @@ create_hashjoin_plan(PlannerInfo *root, HashPath *best_path, Plan *outer_plan, P
 	hash_plan = make_hash(inner_plan, skewTable, skewColumn, skewInherit, skewColType, skewColTypmod);
 	join_plan = make_hashjoin(tlist, joinclauses, otherclauses, hashclauses, outer_plan, (Plan *) hash_plan,
 			best_path->jpath.jointype);
+	((Join *) join_plan)->joinqualorig = best_path->jpath.path.joinquals;
 
 	copy_path_costsize(&join_plan->join.plan, &best_path->jpath.path);
 
@@ -2807,7 +2813,7 @@ static void copy_path_costsize(Plan *dest, Path *src) {
 		dest->mrows = src->mrows;
 		dest->mtotal_cost = src->mtotal_cost;
 		dest->mstartup_cost = src->mstartup_cost;
-		if(src->restrictList){
+		if (src->restrictList) {
 			dest->scanclauses = list_copy(src->restrictList);
 
 		}
@@ -4265,20 +4271,20 @@ make_modifytable(PlannerInfo *root, CmdType operation, bool canSetTag, List *res
 bool is_projection_capable_plan(Plan *plan) {
 	/* Most plan types can project, so just list the ones that can't */
 	switch (nodeTag(plan)) {
-	case T_Hash:
-	case T_Material:
-	case T_Sort:
-	case T_Unique:
-	case T_SetOp:
-	case T_LockRows:
-	case T_Limit:
-	case T_ModifyTable:
-	case T_Append:
-	case T_MergeAppend:
-	case T_RecursiveUnion:
-		return false;
-	default:
-		break;
+		case T_Hash:
+		case T_Material:
+		case T_Sort:
+		case T_Unique:
+		case T_SetOp:
+		case T_LockRows:
+		case T_Limit:
+		case T_ModifyTable:
+		case T_Append:
+		case T_MergeAppend:
+		case T_RecursiveUnion:
+			return false;
+		default:
+			break;
 	}
 	return true;
 }

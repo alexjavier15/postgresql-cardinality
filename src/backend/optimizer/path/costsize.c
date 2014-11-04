@@ -114,6 +114,8 @@ bool enable_memo = false;
 bool enable_memo_recosting = false;
 bool enable_memo_convergent = false;
 bool enable_memo_propagation = false;
+bool enable_selectivity_injection = false;
+bool enable_join_restimation = false;
 bool mode_cost_check = false;
 bool enable_seqscan = true;
 bool enable_indexscan = true;
@@ -3104,7 +3106,7 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 	rel->rows = clamp_row_est(nrows);
 	printMemo(rel->rel_name);
 
-	printf("final  base rows are : %f check %d \n", rel->rows,rel->base_rel_checked);
+	printf("final  base rows are : %f check %d \n", rel->rows, rel->base_rel_checked);
 
 	cost_qual_eval(&rel->baserestrictcost, rel->baserestrictinfo, root);
 
@@ -3152,7 +3154,7 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 		nrows = result.rows;
 		rel->paramloops = result.loops >= 1 ? result.loops : 0;
 
-		if (enable_memo_recosting && !rel->base_rel_checked && nrows != -1 && list_length(rel->baserestrictinfo)) {
+		if (enable_join_restimation && !rel->base_rel_checked && nrows != -1 && list_length(rel->baserestrictinfo)) {
 
 			// try to bound the base restict info with the reuslt got here and the estimated
 			// selectivity
@@ -3220,23 +3222,29 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 		SpecialJoinInfo *sjinfo, List *restrictlist) {
 	double nrows = -1;
 	MemoInfoData1 result;
+
 	printMemo(restrictlist);
 	if (enable_memo) {
 
 		/*printf("checking join relation  ");*/
+		//fill the sjinfo for selecivity caching
+		if (enable_selectivity_injection) {
+			sjinfo->inner_rows = inner_rel->rows;
+			sjinfo->outer_rows = outer_rel->rows;
 
+		}
 		get_relation_size(&result, root, rel, list_copy(restrictlist), 2, sjinfo);
 		nrows = result.rows;
 
-		if (nrows > 0) {
+		if (nrows > 0 && enable_join_restimation) {
 
 			rel->rmemo_checked = true;
 			rel->lmemo_checked = true;
-			if(nrows == outer_rel->rows ){
-				RestrictInfo * rt = (RestrictInfo *) linitial(restrictlist);
-				rt->norm_selec = result.last;
-			}
+
 		}
+		sjinfo->inner_rows = 0;
+		sjinfo->outer_rows = 0;
+
 	}
 	if (!enable_memo || nrows == -1) {
 
@@ -3254,20 +3262,22 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 	}
 	rel->rows = nrows;
 
-	if (enable_memo_propagation && !(rel->rmemo_checked && rel->lmemo_checked)) {
-		rel->rmemo_checked = outer_rel->rmemo_checked || nrows == outer_rel->rows;
-		rel->lmemo_checked = inner_rel->rmemo_checked || nrows == outer_rel->rows;
-
-		update_cached_joins(rel->rel_name, root->query_level, rel->rows);
-		check_NoMemo_queries();
+	if (enable_join_restimation && !(rel->rmemo_checked && rel->lmemo_checked)) {
+		rel->rmemo_checked = outer_rel->rmemo_checked;
+		rel->lmemo_checked = inner_rel->rmemo_checked;
+		if (enable_memo_propagation) {
+			update_cached_joins(rel->rel_name, root->query_level, rel->rows);
+			check_NoMemo_queries();
+		}
 
 	}
+
 	/*	printf("selectivity was  parameterized : %f \n", calc_joinrel_size_estimate(root, outer_rel->rows, inner_rel->rows, sjinfo, restrictlist));*/
 //	printf("outer : %lf, inner %lf, rows: %lf\n", outer_rel->rows, inner_rel->rows, nrows);
-	printf("level: %d , id: %s", root->query_level, _outuBitmapset(rel->relids));
+	printf("level: %d , id: %s, jointype = %d", root->query_level, _outuBitmapset(rel->relids), sjinfo->jointype);
 	printMemo(rel->rel_name);
 
-	printf("final  base join rows are : %f. outer rows: %f, inner rows: %f. \n", rel->rows, outer_rel->rows,
+	printf("final  base join rows are : %f. outer rows: %f, inner rows: %f. \n\n", rel->rows, outer_rel->rows,
 			inner_rel->rows);
 
 }
@@ -3403,6 +3413,7 @@ static double calc_joinrel_size_estimate(PlannerInfo *root, double outer_rows, d
 	switch (jointype) {
 		case JOIN_INNER:
 			nrows = outer_rows * inner_rows * jselec;
+			printf("Selectivity is: %lf", jselec);
 			break;
 		case JOIN_LEFT:
 			nrows = outer_rows * inner_rows * jselec;

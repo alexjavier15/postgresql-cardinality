@@ -1104,7 +1104,6 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 	switch (nodeTag(plan)) {
 		case T_IndexScan:
 			show_scan_qual(((IndexScan *) plan)->indexqualorig, "Index Cond", planstate, ancestors, es);
-
 			if (((IndexScan *) plan)->indexqualorig)
 				show_instrumentation_count("Rows Removed by Index Recheck", 2, planstate, es);
 			show_scan_qual(((IndexScan *) plan)->indexorderbyorig, "Order By", planstate, ancestors, es);
@@ -1267,8 +1266,9 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 				show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
 			if (enable_explain_memo) {
 				show_scan_parsed_qual(plan->rte_reference, ((NestLoop *) plan)->join.restrictList, "Join Clauses", es);
-				if (plan->qual) {
-					show_scan_parsed_qual(plan->rte_reference, plan->qual, "PFilter", es);
+				if (((NestLoop *) plan)->join.joinqualorig){
+
+				show_scan_parsed_qual(plan->rte_reference,((NestLoop *) plan)->join.joinqualorig, "PJoin Filter", es);
 
 				}
 
@@ -1284,11 +1284,12 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 				show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
 			if (enable_explain_memo) {
 				show_scan_parsed_qual(plan->rte_reference, ((MergeJoin *) plan)->join.restrictList, "Join Clauses", es);
-				if (plan->qual) {
-					show_scan_parsed_qual(plan->rte_reference, plan->qual, "PFilter", es);
+
+				if (((MergeJoin *) plan)->join.joinqualorig){
+
+					show_scan_parsed_qual(plan->rte_reference,((MergeJoin *) plan)->join.joinqualorig, "PJoin Filter", es);
 
 				}
-
 			}
 			break;
 		case T_HashJoin:
@@ -1301,8 +1302,10 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 				show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
 			if (enable_explain_memo) {
 				show_scan_parsed_qual(plan->rte_reference, ((HashJoin *) plan)->join.restrictList, "Join Clauses", es);
-				if (plan->qual) {
-					show_scan_parsed_qual(plan->rte_reference, plan->qual, "PFilter", es);
+
+				if (((HashJoin *) plan)->join.joinqualorig){
+
+					show_scan_parsed_qual(plan->rte_reference, ((HashJoin *) plan)->join.joinqualorig, "PJoin Filter", es);
 
 				}
 			}

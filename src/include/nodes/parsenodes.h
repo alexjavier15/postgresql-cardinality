@@ -2785,5 +2785,6 @@ typedef struct MemoRelation {
 	int loops;
 	bool test;
 	int isParameterized;
+	struct RelOptInfo *rel;
 } MemoRelation;
 #endif   /* PARSENODES_H */

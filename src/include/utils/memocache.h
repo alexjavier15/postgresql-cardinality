@@ -65,6 +65,8 @@ typedef struct CacheM {
 	int length;
 	dlist_head *content;
 	int size;
+	int max_level;
+
 } CacheM;
 
 typedef struct RteReferences {
@@ -92,7 +94,7 @@ extern MemoRelation* create_memo_realation(int level, bool isParam, List *relnam
 extern void update_cached_joins(List *joinname, int level, double rows);
 
 extern List * restictInfoToMemoClauses(List *clauses);
-extern void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel, List *quals, bool isParam,
+extern void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel, List *quals, int isParam,
 		SpecialJoinInfo * sjinfo);
 extern void store_join(List *lrelName, int level, List *clauses, double rows, bool isParam);
 extern void export_join(FILE *file);

@@ -63,6 +63,8 @@ extern bool enable_memo;
 extern bool enable_memo_recosting;
 extern bool enable_memo_convergent;
 extern bool enable_memo_propagation;
+extern bool enable_selectivity_injection;
+extern bool enable_join_restimation;
 extern bool enable_cost_check;
 extern bool mode_cost_check;
 extern int	constraint_exclusion;

@@ -1648,6 +1648,7 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 		List *restrict_clauses, List *pathkeys, Relids required_outer) {
 	NestPath *pathnode = makeNode(NestPath);
 	Relids inner_req_outer = PATH_REQ_OUTER(inner_path);
+	List *jclauses = NIL;
 	/*
 	 * If the inner path is parameterized by the outer, we must drop any
 	 * restrict_clauses that are due to be moved into the inner path.  We have
@@ -1658,9 +1659,10 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 	pathnode->required_outer = required_outer;
 	pathnode->path.restrictList = NIL;
 	pathnode->path.restrictList = list_concat(pathnode->path.restrictList, list_copy(restrict_clauses));
+
 	if (bms_overlap(inner_req_outer, outer_path->parent->relids)) {
 		Relids inner_and_outer = bms_union(inner_path->parent->relids, inner_req_outer);
-		List *jclauses = NIL;
+
 		ListCell *lc;
 
 		foreach(lc, restrict_clauses) {
@@ -1669,7 +1671,7 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 			if (!join_clause_is_movable_into(rinfo, inner_path->parent->relids, inner_and_outer))
 				jclauses = lappend(jclauses, rinfo);
 		}
-		restrict_clauses = jclauses;
+		restrict_clauses = list_copy(jclauses);
 	}
 
 	pathnode->path.pathtype = T_NestLoop;
@@ -1702,6 +1704,12 @@ create_nestloop_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 
 	final_cost_nestloop(root, pathnode, workspace, sjinfo, semifactors);
 	pathnode->workspace = workspace;
+	if (jclauses) {
+		pathnode->path.joinquals = list_difference(pathnode->path.restrictList, jclauses);
+		list_free(jclauses);
+
+	}
+
 	//We mark children wth this path
 	attach_child_joinpath((Path*) pathnode, inner_path);
 	attach_child_joinpath((Path*) pathnode, outer_path);
@@ -1765,7 +1773,10 @@ create_mergejoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
 		joinrel->all_restrictList = lappend(joinrel->all_restrictList, list_copy(pathnode->jpath.path.restrictList));
 
 	}
-
+	if (list_difference(mergeclauses, restrict_clauses) != NIL) {
+		pathnode->jpath.path.joinquals = list_difference(pathnode->jpath.path.restrictList,
+				pathnode->path_mergeclauses);
+	}
 	set_join_sizes_from_memo(root, joinrel, &pathnode->jpath);
 
 	/* pathnode->materialize_inner will be set by final_cost_mergejoin */
@@ -1849,7 +1860,9 @@ create_hashjoin_path(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype, 
 
 	final_cost_hashjoin(root, pathnode, workspace, sjinfo, semifactors);
 	pathnode->jpath.workspace = workspace;
-
+	if (list_difference(hashclauses, restrict_clauses) != NIL) {
+	pathnode->jpath.path.joinquals = list_difference(pathnode->jpath.path.restrictList, pathnode->path_hashclauses);
+	}
 	//We mark children wth this path
 	attach_child_joinpath((Path*) pathnode, inner_path);
 	attach_child_joinpath((Path*) pathnode, outer_path);

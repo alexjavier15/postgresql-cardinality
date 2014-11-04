@@ -161,7 +161,14 @@ ExecEndBitmapIndexScan(BitmapIndexScanState *node)
 {
 	Relation	indexRelationDesc;
 	IndexScanDesc indexScanDesc;
+/*	ListCell *lc;
+	int i = 0;
+	foreach(lc,node->ss.ps.qual){
+		ExprState  *clause = (ExprState *) lfirst(lc);
+		printf("qual %d for bitmapindex %d\n",i,clause->count );
 
+		i++;
+	}*/
 	/*
 	 * extract information from the node
 	 */
