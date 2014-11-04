@@ -3154,7 +3154,7 @@ double get_parameterized_baserel_size(PlannerInfo *root, RelOptInfo *rel, List *
 		nrows = result.rows;
 		rel->paramloops = result.loops >= 1 ? result.loops : 0;
 
-		if (enable_join_restimation && !rel->base_rel_checked && nrows != -1 && list_length(rel->baserestrictinfo)) {
+		if (enable_join_restimation && !rel->base_rel_checked && result.found == FULL_MATCHED  && list_length(rel->baserestrictinfo)) {
 
 			// try to bound the base restict info with the reuslt got here and the estimated
 			// selectivity

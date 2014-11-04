@@ -692,18 +692,18 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 
 		case FULL_MATCHED:
 			printf(" FULL Matched  relation! :\n");
-			if (list_length(quals) == 1 && isParam != 1 && enable_selectivity_injection) {
+			if (list_length(quals) == 1 && varid == 0 && enable_selectivity_injection) {
 				if (sjinfo) {
 
 					RestrictInfo * rinfo = (RestrictInfo *) linitial(quals);
 					Selectivity s1 = mrows / (sjinfo->outer_rows * sjinfo->inner_rows);
 
 					if (sjinfo->jointype == JOIN_INNER) {
-
-						rinfo->norm_selec = s1;
+						if (rinfo->norm_selec != s1)
+							rinfo->norm_selec = s1;
 					} else {
-
-						rinfo->outer_selec = s1;
+						if (rinfo->outer_selec != s1)
+							rinfo->outer_selec = s1;
 					}
 				}
 			}
@@ -745,6 +745,13 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 				//printf("result->rows : %lf\n", result->rows);
 
 			} else {
+				if (enable_selectivity_injection) {
+					if (list_length(quals) == 1 && varid == 0 && enable_selectivity_injection) {
+
+					}
+
+				}
+
 				if (enable_memo_propagation) {
 					attach_join_to_cache(rel, level);
 
