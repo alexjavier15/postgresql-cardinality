@@ -1467,6 +1467,9 @@ typedef struct SpecialJoinInfo
 	List	   *join_quals;		/* join quals, in implicit-AND list format */
 	double 		outer_rows;
 	double		inner_rows;
+	bool		outer_checked;
+	bool		inner_checked;
+
 } SpecialJoinInfo;
 
 /*

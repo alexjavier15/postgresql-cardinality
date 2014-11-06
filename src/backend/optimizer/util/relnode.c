@@ -338,8 +338,19 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 			if (restrictlist_ptr) {
 
 				*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
+				if (enable_memo_recosting && enable_memo_recosting) {
+					MemoInfoData1 result;
 
-				if (enable_join_restimation && !(joinrel->rmemo_checked && joinrel->lmemo_checked) && outer_rel->rmemo_checked) {
+					sjinfo->inner_rows = inner_rel->rows;
+					sjinfo->outer_rows = outer_rel->rows;
+					sjinfo->outer_checked = outer_rel->rmemo_checked && outer_rel->rmemo_checked;
+					sjinfo->inner_checked = inner_rel->rmemo_checked && inner_rel->rmemo_checked;
+					get_relation_size(&result, root, joinrel, list_copy(*restrictlist_ptr), 2, sjinfo);
+
+				}
+
+				if (enable_join_restimation && !(joinrel->rmemo_checked && joinrel->lmemo_checked)
+						&& outer_rel->rmemo_checked) {
 
 					printf("Additional estimate pass\n");
 					set_joinrel_size_estimates(root, joinrel, outer_rel, inner_rel, sjinfo,
@@ -771,15 +782,15 @@ get_baserel_parampathinfo(PlannerInfo *root, RelOptInfo *baserel, Relids require
 
 	rows = get_parameterized_baserel_size(root, baserel, pclauses);
 
-		/* And now we can build the ParamPathInfo */
-		ppi = makeNode(ParamPathInfo);
+	/* And now we can build the ParamPathInfo */
+	ppi = makeNode(ParamPathInfo);
 	ppi->ppi_req_outer = required_outer;
 
 	ppi->ppi_rows = rows;
-	ppi->memo_checked =baserel->ppi_memo_checked;
+	ppi->memo_checked = baserel->ppi_memo_checked;
 
 	//reset
-	baserel->ppi_memo_checked=false;
+	baserel->ppi_memo_checked = false;
 
 	//don't forget to clean paramoops after affectation
 	if (baserel->paramloops)

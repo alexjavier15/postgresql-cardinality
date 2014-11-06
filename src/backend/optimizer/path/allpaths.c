@@ -1402,7 +1402,7 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels) {
 		 * level, and build paths for making each one from every available
 		 * pair of lower-level relations.
 		 */
-		if (!enable_memo_recosting)
+		//if (!enable_memo_recosting)
 			final_pass = true;
 
 		join_search_one_level(root, lev);
@@ -1412,9 +1412,8 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels) {
 		 */
 		foreach(lc, root->join_rel_level[lev]) {
 			rel = (RelOptInfo *) lfirst(lc);
-			if (enable_memo_recosting) {
-				add_recosted_paths(rel);
-			}
+			update_and_recost(root, rel);
+
 			/* Find and save the cheapest paths for this rel */
 			set_cheapest(rel);
 
@@ -1439,7 +1438,7 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels) {
 
 				}
 			}
-			printf("Recosting\n-----------------------\n");
+			printf("Recosting 2\n-----------------------\n");
 
 			final_pass = true;
 			for (lev = 2; lev <= levels_needed; lev++) {
@@ -1447,10 +1446,9 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels) {
 
 				foreach(lc, root->join_rel_level[lev]) {
 					rel = (RelOptInfo *) lfirst(lc);
-					rel->pathlist = NIL;
-					update_and_recost(root, rel);
-					/* Find and save the cheapest paths for this rel */
-					set_cheapest(rel);
+					rel->tmp_pathlist = rel->pathlist;
+					recost_paths(root, rel);
+
 				}
 			}
 		}

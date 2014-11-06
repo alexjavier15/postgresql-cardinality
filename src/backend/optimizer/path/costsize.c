@@ -3240,6 +3240,8 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 		if (enable_selectivity_injection) {
 			sjinfo->inner_rows = inner_rel->rows;
 			sjinfo->outer_rows = outer_rel->rows;
+			sjinfo->outer_checked= outer_rel->rmemo_checked  && outer_rel->rmemo_checked;
+			sjinfo->inner_checked= inner_rel->rmemo_checked  && inner_rel->rmemo_checked;
 
 		}
 		get_relation_size(&result, root, rel, list_copy(restrictlist), 2, sjinfo);
