@@ -3080,7 +3080,7 @@ void set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel) {
 
 	/* Should only be applied to base relations */
 	Assert(rel->relid > 0);
-	double s2 = clauselist_selectivity(root, rel->baserestrictinfo, 0, JOIN_INNER, NULL);
+	//double s2 = clauselist_selectivity(root, rel->baserestrictinfo, 0, JOIN_INNER, NULL);
 	printf("s1 : %.10f\n",s2);
 	if (enable_memo && list_length(rel->baserestrictinfo)) {
 		Assert(rel ->rel_name != NIL);

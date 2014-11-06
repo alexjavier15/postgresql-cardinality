@@ -1754,7 +1754,7 @@ static void show_instrumentation_count(const char *qlabel, int which, PlanState 
 	/* In text mode, suppress zero counts; they're not interesting enough */
 	if (nfiltered > 0 || es->format != EXPLAIN_FORMAT_TEXT) {
 		if (nloops > 0)
-			ExplainPropertyFloat(qlabel, nfiltered / nloops, 0, es);
+			ExplainPropertyFloat(qlabel, nfiltered, 0, es);
 		else
 			ExplainPropertyFloat(qlabel, 0.0, 0, es);
 	}

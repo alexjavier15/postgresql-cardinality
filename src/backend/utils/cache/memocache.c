@@ -756,10 +756,24 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 		}
 		case MATCHED_RIGHT: {
 			if (!sjinfo) {
+				// if We parameterized baserel in memo and we look for
+				// an unparameterized path try to clamp the rows as the
+				// the fraction removed by the filter.
+
+				// First we verify that we are in such case.
+				/*if(isParam == 0){
+					//we are in the unparameterized case so get the fraction
+					// of tupless passing the index filter:
+
+					double removedrowsfrac = memo_rel->rows/(memo_rel->rows +  memo_rel->removed_rows);
+
+
+				}*/
+
 				printf(" MATCHED_RIGHT  relation! :\n");
 
 				final_clauses = NIL;
-				result->rows = rel->tuples * clauselist_selectivity(root, quals, 0, JOIN_INNER, NULL);
+				result->rows = rel->tuples * clauselist_selectivity(root, quals,varid, JOIN_INNER, NULL);
 				result->rows = result->rows >= mrows ? result->rows : mrows;
 			}
 			break;
@@ -1130,7 +1144,7 @@ void cmp_lists(MemoInfoData1 * result, List *lleft, List *lright) {
 		{
 			if (list_length(result->matches) != list_length(lright))
 				result->found = UNMATCHED;
-			else if (result->unmatches != NIL)
+			else if (result->unmatches == NIL)
 				result->found = MATCHED_RIGHT;
 		}
 		return;
