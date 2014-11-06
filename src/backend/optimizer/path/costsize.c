@@ -3047,7 +3047,6 @@ static double approx_tuple_count(PlannerInfo *root, JoinPath *path, List *quals)
 
 	/* Get the approximate selectivity */foreach(l, quals) {
 		Node *qual = (Node *) lfirst(l);
-
 		/* Note that clause_selectivity will be able to cache its result */
 		selec *= clause_selectivity(root, qual, 0, JOIN_INNER, &sjinfo);
 	}
@@ -3240,8 +3239,8 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 		if (enable_selectivity_injection) {
 			sjinfo->inner_rows = inner_rel->rows;
 			sjinfo->outer_rows = outer_rel->rows;
-			sjinfo->outer_checked= outer_rel->rmemo_checked  && outer_rel->rmemo_checked;
-			sjinfo->inner_checked= inner_rel->rmemo_checked  && inner_rel->rmemo_checked;
+			sjinfo->outer_checked= outer_rel->rmemo_checked  && outer_rel->lmemo_checked;
+			sjinfo->inner_checked= inner_rel->rmemo_checked  && inner_rel->lmemo_checked;
 
 		}
 		get_relation_size(&result, root, rel, list_copy(restrictlist), 2, sjinfo);

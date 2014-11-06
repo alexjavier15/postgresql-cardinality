@@ -343,10 +343,12 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 
 					sjinfo->inner_rows = inner_rel->rows;
 					sjinfo->outer_rows = outer_rel->rows;
-					sjinfo->outer_checked = outer_rel->rmemo_checked && outer_rel->rmemo_checked;
-					sjinfo->inner_checked = inner_rel->rmemo_checked && inner_rel->rmemo_checked;
-					get_relation_size(&result, root, joinrel, list_copy(*restrictlist_ptr), 2, sjinfo);
+					if (joinrel->rmemo_checked && joinrel->lmemo_checked) {
+						sjinfo->outer_checked = outer_rel->rmemo_checked && outer_rel->lmemo_checked;
+						sjinfo->inner_checked = inner_rel->rmemo_checked && inner_rel->lmemo_checked;
 
+						get_relation_size(&result, root, joinrel, list_copy(*restrictlist_ptr), 2, sjinfo);
+					}
 				}
 
 				if (enable_join_restimation && !(joinrel->rmemo_checked && joinrel->lmemo_checked)
