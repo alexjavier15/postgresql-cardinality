@@ -1847,7 +1847,7 @@ static void recost_path_recurse(PlannerInfo *root, Path * path) {
 			break;
 		}
 		case T_MaterialPath:
-
+			recost_join_child(root,((MaterialPath *) path)->subpath);
 			cost_material(&((MaterialPath *) path)->path, ((MaterialPath *) path)->subpath->startup_cost,
 					((MaterialPath *) path)->subpath->total_cost, ((MaterialPath *) path)->subpath->rows,
 					((MaterialPath *) path)->subpath->parent->width);
@@ -1856,6 +1856,8 @@ static void recost_path_recurse(PlannerInfo *root, Path * path) {
 		case T_UniquePath: {
 
 			UniquePath *upath = (UniquePath *) path;
+			recost_join_child(root,upath->subpath);
+
 			switch (upath->umethod) {
 
 				case UNIQUE_PATH_SORT:
