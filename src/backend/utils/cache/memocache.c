@@ -1658,10 +1658,10 @@ void set_plain_rel_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, Path *pat
 		path->rows = path->param_info->ppi_rows;
 
 	} else {
-		if (!rel->base_rel_checked && enable_memo_recosting && enable_memo_propagation) {
+		/*if (!rel->base_rel_checked && enable_memo_recosting && enable_memo_propagation) {
 			set_baserel_size_estimates(root, rel);
 			rel->base_rel_checked = true;
-		}
+		}*/
 		path->restrictList = list_copy(path->parent->restrictList);
 		path->rows = path->parent->rows;
 
@@ -1746,17 +1746,17 @@ static void recost_path_recurse(PlannerInfo *root, Path * path) {
 	switch (path->type) {
 
 		case T_Path:
-			set_plain_rel_sizes_from_memo(root, path->parent, path, NULL, false);
+		//	set_plain_rel_sizes_from_memo(root, path->parent, path, NULL, false);
 
 			cost_seqscan(path, root, path->parent, path->param_info);
 			break;
 		case T_IndexPath:
-			set_plain_rel_sizes_from_memo(root, path->parent, &((IndexPath *) path)->path, NULL, false);
+			//set_plain_rel_sizes_from_memo(root, path->parent, &((IndexPath *) path)->path, NULL, false);
 
 			cost_index((IndexPath *) path, root, ((IndexPath *) path)->indexinfo->loop_count);
 			break;
 		case T_BitmapHeapPath:
-			set_plain_rel_sizes_from_memo(root, path->parent, &((BitmapHeapPath *) path)->path, NULL, false);
+			//set_plain_rel_sizes_from_memo(root, path->parent, &((BitmapHeapPath *) path)->path, NULL, false);
 
 			recost_path_recurse(root, ((BitmapHeapPath *) path)->bitmapqual);
 
