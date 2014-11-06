@@ -338,7 +338,7 @@ build_join_rel(PlannerInfo *root, Relids joinrelids, RelOptInfo *outer_rel, RelO
 			if (restrictlist_ptr) {
 
 				*restrictlist_ptr = build_joinrel_restrictlist(root, joinrel, outer_rel, inner_rel);
-				if (enable_memo_recosting && enable_memo_recosting) {
+				if (enable_selectivity_injection && enable_memo_recosting) {
 					MemoInfoData1 result;
 
 					sjinfo->inner_rows = inner_rel->rows;

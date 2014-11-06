@@ -789,8 +789,8 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 			break;
 		}
 		default: {
-			printMemo(rel->rel_name);
-			printf(" UNMATCHED  relation! :\n");
+			/*printMemo(rel->rel_name);
+			printf(" UNMATCHED  relation! :\n");*/
 			if (!sjinfo) {
 				final_clauses = quals;
 				//printMemo(final_clauses);
@@ -798,7 +798,7 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 				//printf("result->rows : %lf\n", result->rows);
 
 			} else {
-				if (enable_selectivity_injection) {
+				/*if (enable_selectivity_injection) {
 					if (list_length(quals) == 1 && varid == 0 && enable_selectivity_injection) {
 
 					}
@@ -808,7 +808,7 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 				if (enable_memo_propagation) {
 					//attach_join_to_cache(rel, level);
 
-				}
+				}*/
 
 			}
 			break;
