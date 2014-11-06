@@ -1430,12 +1430,14 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels) {
 		printMemoCache();
 		printf("End\n-----------------------\n");
 		if (enable_memo_recosting) {
-			Index rti;
+			if (enable_join_restimation) {
+				Index rti;
 
-			for (rti = 1; rti < root->simple_rel_array_size; rti++) {
-				RelOptInfo *rel = root->simple_rel_array[rti];
-				recost_rel_path(root, rel);
+				for (rti = 1; rti < root->simple_rel_array_size; rti++) {
+					RelOptInfo *rel = root->simple_rel_array[rti];
+					recost_rel_path(root, rel);
 
+				}
 			}
 			printf("Recosting\n-----------------------\n");
 
