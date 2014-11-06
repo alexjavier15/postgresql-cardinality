@@ -1751,13 +1751,30 @@ void recost_rel_path(PlannerInfo *root, RelOptInfo *baserel) {
 
 }
 
+static void recost_join_child(PlannerInfo *root, Path * childpath) {
+	switch (childpath->type) {
+
+		case T_Path:
+		case T_IndexPath:
+		case T_BitmapHeapPath:
+		case T_MaterialPath:
+		case T_UniquePath:
+			recost_path_recurse(root, childpath);
+			break;
+		default:
+			break;
+
+	}
+
+}
+
 static void recost_join_children(PlannerInfo *root, JoinPath * jpath) {
 	if (jpath->path.type == T_NestPath && enable_memo_recosting)
 		update_inner_indexpath(root, jpath, jpath->innerjoinpath);
-	if (jpath->innerjoinpath->parent->rtekind == RTE_RELATION)
-		recost_path_recurse(root, jpath->innerjoinpath);
-	if (jpath->outerjoinpath->parent->rtekind == RTE_RELATION)
-		recost_path_recurse(root, jpath->outerjoinpath);
+
+	//Base relation cases
+		recost_join_child(root, jpath->innerjoinpath);
+		recost_join_child(root, jpath->outerjoinpath);
 
 }
 static void recost_path_recurse(PlannerInfo *root, Path * path) {
