@@ -761,14 +761,16 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 				// the fraction removed by the filter.
 
 				// First we verify that we are in such case.
-				/*if(isParam == 0){
+				if(isParam == 0){
 					//we are in the unparameterized case so get the fraction
 					// of tupless passing the index filter:
 
 					double removedrowsfrac = memo_rel->rows/(memo_rel->rows +  memo_rel->removed_rows);
 
 
-				}*/
+
+					mrows = rel->tuples * removedrowsfrac;
+				}
 
 				printf(" MATCHED_RIGHT  relation! :\n");
 
