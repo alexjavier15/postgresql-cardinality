@@ -1267,9 +1267,9 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 				// Check if we had the expected number of matches in join
 
 				//If *relation is null we are in out first loop
-
+/*
 				printf("Matches: ");
-				printMemo(resultName.matches);
+				printMemo(resultName.matches);*/
 				if (list_length(resultName.matches) == list_length(memorelation->relationname))
 					continue;
 
@@ -1291,10 +1291,12 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 					*commonrelation = commonrel;
 
 					tmp1 = list_union(targetName, memorelation->relationname);
+/*
 
 					printf("Found relation1 relations : \n");
 					printMemo(tmp1);
 					printMemo(clauses);
+*/
 
 					contains(NULL, relation2, (CacheM*) memo_query_ptr, tmp1, clauses, level, 5);
 					if (relation2)
