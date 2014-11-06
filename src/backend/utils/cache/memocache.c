@@ -764,8 +764,10 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 					// of tupless passing the index filter:
 
 					double removedrowsfrac = memo_rel->rows / (memo_rel->rows + memo_rel->removed_rows);
-
-					mrows = rel->tuples * removedrowsfrac;
+					if (removedrowsfrac < 1)
+						mrows = rel->tuples * removedrowsfrac;
+					else
+						mrows = 1;
 				}
 
 				printf(" MATCHED_RIGHT  relation! :\n");
