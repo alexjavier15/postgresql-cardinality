@@ -3245,7 +3245,7 @@ void set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel, RelOptInfo *
 		get_relation_size(&result, root, rel, list_copy(restrictlist), 2, sjinfo);
 		nrows = result.rows;
 
-		if (nrows > 0 && enable_join_restimation) {
+		if (nrows > 0) {
 
 			rel->rmemo_checked = true;
 			rel->lmemo_checked = true;

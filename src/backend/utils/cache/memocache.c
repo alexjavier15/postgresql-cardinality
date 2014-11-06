@@ -665,29 +665,27 @@ void attach_join_to_cache(RelOptInfo *rel, int level) {
 
 }
 void score_join_cardinality(RelOptInfo *rel, List *restrictList) {
-/* We attend to build a score a system in order ti trust a given calculated cardinality
-// we have three possible cases:
- *
- * a) left-deep plans: joins with right hand relations as base relations and left hand relations as joins.
- * b) right-deep plans: joins with left hand relations as base relations and right hand relations as joins.
- * a) mixed plans: joins with right hand  left relations as joins relations.
- *
- * The sccore are computed based in the rinfo confidence and the nature of relations participating in the join and theirs confidence.
- *
- * A may score will be obtained always if:
- * 1) rinfos were calculated by cardinality injection.
- * 3) the right and left relations have the maximum cardinality score.
- *
- * The actual score weight of a relation will be proportional to its size and relatif to the second relation
- * what means, that the cardinality of a not injected relation.
- *
- * we intend to propagate the error of a cardinality in upper calculations by multiplying the errors.
- *
- *
- *
-*/
-
-
+	/* We attend to build a score a system in order ti trust a given calculated cardinality
+	 // we have three possible cases:
+	 *
+	 * a) left-deep plans: joins with right hand relations as base relations and left hand relations as joins.
+	 * b) right-deep plans: joins with left hand relations as base relations and right hand relations as joins.
+	 * a) mixed plans: joins with right hand  left relations as joins relations.
+	 *
+	 * The sccore are computed based in the rinfo confidence and the nature of relations participating in the join and theirs confidence.
+	 *
+	 * A may score will be obtained always if:
+	 * 1) rinfos were calculated by cardinality injection.
+	 * 3) the right and left relations have the maximum cardinality score.
+	 *
+	 * The actual score weight of a relation will be proportional to its size and relatif to the second relation
+	 * what means, that the cardinality of a not injected relation.
+	 *
+	 * we intend to propagate the error of a cardinality in upper calculations by multiplying the errors.
+	 *
+	 *
+	 *
+	 */
 
 }
 void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel, List *quals, int isParam,
@@ -761,13 +759,11 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 				// the fraction removed by the filter.
 
 				// First we verify that we are in such case.
-				if(isParam == 0){
+				if (isParam == 0) {
 					//we are in the unparameterized case so get the fraction
 					// of tupless passing the index filter:
 
-					double removedrowsfrac = memo_rel->rows/(memo_rel->rows +  memo_rel->removed_rows);
-
-
+					double removedrowsfrac = memo_rel->rows / (memo_rel->rows + memo_rel->removed_rows);
 
 					mrows = rel->tuples * removedrowsfrac;
 				}
@@ -775,7 +771,7 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 				printf(" MATCHED_RIGHT  relation! :\n");
 
 				final_clauses = NIL;
-				result->rows = rel->tuples * clauselist_selectivity(root, quals,varid, JOIN_INNER, NULL);
+				result->rows = rel->tuples * clauselist_selectivity(root, quals, varid, JOIN_INNER, NULL);
 				result->rows = result->rows >= mrows ? result->rows : mrows;
 			}
 			break;
@@ -1269,9 +1265,9 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 				// Check if we had the expected number of matches in join
 
 				//If *relation is null we are in out first loop
-/*
-				printf("Matches: ");
-				printMemo(resultName.matches);*/
+				/*
+				 printf("Matches: ");
+				 printMemo(resultName.matches);*/
 				if (list_length(resultName.matches) == list_length(memorelation->relationname))
 					continue;
 
@@ -1293,12 +1289,12 @@ static MemoQuery * find_seeder_relations(MemoRelation **relation1, MemoRelation 
 					*commonrelation = commonrel;
 
 					tmp1 = list_union(targetName, memorelation->relationname);
-/*
+					/*
 
-					printf("Found relation1 relations : \n");
-					printMemo(tmp1);
-					printMemo(clauses);
-*/
+					 printf("Found relation1 relations : \n");
+					 printMemo(tmp1);
+					 printMemo(clauses);
+					 */
 
 					contains(NULL, relation2, (CacheM*) memo_query_ptr, tmp1, clauses, level, 5);
 					if (relation2)
@@ -1650,34 +1646,55 @@ int equals(MemoRelation *rel1, MemoRelation *rel2) {
 void set_plain_rel_sizes_from_memo(PlannerInfo *root, RelOptInfo *rel, Path *path, double *loop_count, bool isIndex) {
 
 	if (path->param_info) {
-		if (!path->param_info->memo_checked && enable_memo_recosting && enable_memo_propagation) {
-			path->param_info->ppi_rows = get_parameterized_baserel_size(root, rel, path->param_info->ppi_clauses);
-			path->param_info->memo_checked = true;
-		}
+		/*if (!path->param_info->memo_checked && enable_memo_recosting && enable_memo_propagation) {
+		 path->param_info->ppi_rows = get_parameterized_baserel_size(root, rel, path->param_info->ppi_clauses);
+		 path->param_info->memo_checked = true;
+		 }*/
 		path->restrictList = list_copy(path->param_info->restrictList);
 		path->rows = path->param_info->ppi_rows;
 
 	} else {
 		/*if (!rel->base_rel_checked && enable_memo_recosting && enable_memo_propagation) {
-			set_baserel_size_estimates(root, rel);
-			rel->base_rel_checked = true;
-		}*/
+		 set_baserel_size_estimates(root, rel);
+		 rel->base_rel_checked = true;
+		 }*/
 		path->restrictList = list_copy(path->parent->restrictList);
 		path->rows = path->parent->rows;
 
 	}
 	path->isParameterized = path->param_info != NULL;
 }
-static void update_inner_indexpath(PlannerInfo *root, JoinPath * jpath) {
-	if (jpath->innerjoinpath->type == T_IndexPath && enable_memo_propagation) {
-		if (!jpath->joinrestrictinfo && jpath->path.parent->rmemo_checked && jpath->path.parent->lmemo_checked) {
-			IndexPath * index = (IndexPath *) jpath->innerjoinpath;
-			if (index->path.param_info) {
-				index->path.rows = clamp_row_est(jpath->path.parent->rows / jpath->outerjoinpath->rows);
-				index->path.param_info->ppi_rows = index->path.rows;
-				index->path.param_info->memo_checked = true;
-				index->indexinfo->loop_count = jpath->outerjoinpath->rows;
+static void update_inner_indexpath(PlannerInfo *root, JoinPath * jpath, Path *innerpath) {
+	if (enable_memo_propagation) {
 
+		if (!jpath->joinrestrictinfo) {
+			switch (innerpath->type) {
+
+				case T_IndexPath: {
+					IndexPath * index = (IndexPath *) innerpath;
+					if (index->path.param_info) {
+						index->path.rows = clamp_row_est(jpath->path.parent->rows / jpath->outerjoinpath->rows);
+						index->path.param_info->ppi_rows = index->path.rows;
+						index->path.param_info->memo_checked = true;
+						index->indexinfo->loop_count = jpath->outerjoinpath->rows;
+
+					}
+					break;
+				}
+				case T_BitmapHeapPath: {
+					BitmapHeapPath * bitmappath = (BitmapHeapPath *) innerpath;
+					update_inner_indexpath(root, jpath, bitmappath->bitmapqual);
+					if (bitmappath->path.param_info) {
+						bitmappath->path.rows = clamp_row_est(jpath->path.parent->rows / jpath->outerjoinpath->rows);
+						bitmappath->path.param_info->ppi_rows = bitmappath->path.rows;
+						bitmappath->path.param_info->memo_checked = true;
+						bitmappath->loop = jpath->outerjoinpath->rows;
+
+					}
+					break;
+				}
+				default:
+					break;
 			}
 
 		}
@@ -1734,7 +1751,7 @@ void recost_rel_path(PlannerInfo *root, RelOptInfo *baserel) {
 
 static void recost_join_children(PlannerInfo *root, JoinPath * jpath) {
 	if (jpath->path.type == T_NestPath && enable_memo_recosting)
-		update_inner_indexpath(root, jpath);
+		update_inner_indexpath(root, jpath, jpath->innerjoinpath);
 	if (jpath->innerjoinpath->parent->rtekind == RTE_RELATION)
 		recost_path_recurse(root, jpath->innerjoinpath);
 	if (jpath->outerjoinpath->parent->rtekind == RTE_RELATION)
@@ -1746,7 +1763,7 @@ static void recost_path_recurse(PlannerInfo *root, Path * path) {
 	switch (path->type) {
 
 		case T_Path:
-		//	set_plain_rel_sizes_from_memo(root, path->parent, path, NULL, false);
+			//set_plain_rel_sizes_from_memo(root, path->parent, path, NULL, false);
 
 			cost_seqscan(path, root, path->parent, path->param_info);
 			break;
@@ -1756,7 +1773,7 @@ static void recost_path_recurse(PlannerInfo *root, Path * path) {
 			cost_index((IndexPath *) path, root, ((IndexPath *) path)->indexinfo->loop_count);
 			break;
 		case T_BitmapHeapPath:
-			//set_plain_rel_sizes_from_memo(root, path->parent, &((BitmapHeapPath *) path)->path, NULL, false);
+			///set_plain_rel_sizes_from_memo(root, path->parent, &((BitmapHeapPath *) path)->path, NULL, false);
 
 			recost_path_recurse(root, ((BitmapHeapPath *) path)->bitmapqual);
 
