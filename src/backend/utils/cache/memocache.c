@@ -10,7 +10,6 @@
 #include "utils/memocache.h"
 #include "storage/fd.h"
 #include "optimizer/pathnode.h"
-#include "lib/stringinfo.h"
 #include "nodes/print.h"
 #include "nodes/readfuncs.h"
 #include "optimizer/cost.h"
@@ -67,12 +66,25 @@ typedef struct MemoCache {
 	dlist_head content;
 
 } MemoCache;
+typedef struct NameDataIdx {
+
+	Value *name;
+	List* indexes;
+
+} NameDataIdx;
+typedef struct RteReferencesIndex {
+
+	List *NameData;
+} RteReferencesIndex;
 
 FILE *file;
 FILE *joincache;
 FILE *selcache;
 static struct RteReferences rte_ref;
+static struct RteReferencesIndex rte_ref_idx;
+
 RteReferences *rte_ref_ptr = &rte_ref;
+RteReferencesIndex *rte_ref_idx_ptr = &rte_ref_idx;
 
 static struct MemoCache memo_cache;
 static struct SelectivityCache sel_cache;
@@ -88,11 +100,10 @@ SelectivityCache *sel_cache_ptr = &sel_cache;
 bool initialized = false;
 
 static int read_line(StringInfo str, FILE *file);
-static void InitJoinCache(void);
+
 static void InitMemoCache(void);
 static void InitSelectivityCache(void);
 static List * build_string_list(char * stringList, ListType type);
-static void buildSimpleStringList(StringInfo str, List *list);
 //static void fill_memo_cache(struct MemoCache *static void compt_lists(MemoInfoData *result, List *str1, const List *str2);
 static void recost_join_children(PlannerInfo *root, JoinPath * jpath);
 static void recost_path_recurse(PlannerInfo *root, Path * path);
@@ -214,6 +225,9 @@ void * fetch_unique_rte_reference(void) {
 	return newrte;
 }
 void push_reference(Index index, Value * name) {
+//	NameDataIdx namedata;
+//	ListCell *lc;
+//	bool found = false;
 	if (index >= rte_ref_ptr->size) {
 
 		Value ** newtable = (Value **) palloc0((index + 1) * sizeof(Value *));
@@ -222,18 +236,56 @@ void push_reference(Index index, Value * name) {
 		rte_ref_ptr->size = index + 1;
 	}
 	rte_ref_ptr->rte_table[index] = name;
+	/*	foreach(lc, rte_ref_idx_ptr->NameData) {
+	 NameDataIdx *nd = (NameDataIdx *) lfirst(lc);
+	 if (equal(name, nd->name)) {
+	 nd->indexes = lappend_int(nd->indexes, index);
+	 found = true;
+	 break;
+	 }
+
+	 }
+	 if (!found) {
+	 namedata.name = name;
+	 namedata.indexes = lappend_int(namedata.indexes, index);
+	 printMemo(namedata.name);
+	 printMemo(namedata.indexes);
+	 rte_ref_idx_ptr->NameData = lappend(rte_ref_idx_ptr->NameData, &namedata);
+
+	 }
+
+	 foreach(lc, rte_ref_idx_ptr->NameData) {
+	 NameDataIdx *nd = (NameDataIdx *) lfirst(lc);
+	 printMemo(nd->name);
+	 printMemo(nd->indexes);
+	 printf("..................");
+
+	 }*/
 	printf("%u | ", index);
 	printMemo(rte_ref_ptr->rte_table[index]);
 
 }
 //int md5(FILE *inFile);
 void InitCachesForMemo(void) {
-	clock_t t;
-	t = clock();
+	int i = 0;
 
 	rte_ref_ptr->rte_table = (Value **) palloc0((DEFAULT_MAX_JOIN_SIZE) * sizeof(Value *));
 	rte_ref_ptr->size = DEFAULT_MAX_JOIN_SIZE;
 	joincache = AllocateFile("joins.txt", "rb");
+	if (join_cache_ptr->type != M_JoinCache) {
+
+		//printf("elapsed time:  %lf ms \n", (1000 * ((float) t) / CLOCKS_PER_SEC));
+		printf("Initializing join cache\n------------------------\n");
+		join_cache_ptr->type = M_JoinCache;
+		join_cache_ptr->length = DEFAULT_MAX_JOIN_SIZE;
+		join_cache_ptr->content = (dlist_head *) palloc0((DEFAULT_MAX_JOIN_SIZE) * sizeof(dlist_head));
+		join_cache_ptr->max_level = 0;
+		MemSetAligned(join_cache_ptr->content, 0, (DEFAULT_MAX_JOIN_SIZE) * sizeof(dlist_head));
+
+		for (i = 0; i < DEFAULT_MAX_JOIN_SIZE; i++) {
+			dlist_init(&join_cache_ptr->content[i]);
+		}
+	}
 	if (enable_memo && !initialized) {
 		dlist_init(&memo_cache_ptr->content);
 
@@ -243,60 +295,14 @@ void InitCachesForMemo(void) {
 		initialized = true;
 
 	}
-	printf("calling init cache");
-	if (join_cache_ptr->type != M_JoinCache)
-		InitJoinCache();
 
-	printf("elapsed time:  %lf ms \n", (1000 * ((float) t) / CLOCKS_PER_SEC));
 }
-static void InitSelectivityCache(void) {
-	char *cquals = NULL;
-	StringInfoData str;
-	int clauseLen;
-	MemoSelectivity *msel = (MemoSelectivity *) palloc(sizeof(MemoSelectivity));
-	int ARG_NUM = 2;
 
-	if (selcache != NULL) {
-		sel_cache_ptr->type = M_SelCache;
-		sel_cache_ptr->length = DEFAULT_MAX_JOIN_SIZE;
-		sel_cache_ptr->content = (dlist_head *) palloc0((DEFAULT_MAX_JOIN_SIZE) * sizeof(dlist_head));
-		// walk the memo cache from the top most join to the botton most one
-		dlist_iter iter;
-		MemoRelation *last_memorelation = NULL;
-		bool last_isfiltered = false;
-		int loops = 1;
-
-		/*	int i;
-		 for (i = 0; i < memo_query_ptr->length; ++i) {
-
-
-		 dlist_foreach (iter, &memo_query_ptr->content[i]) {
-		 MemoRelation *memorelation = dlist_container(MemoRelation,list_node, iter.cur);
-		 // We have 2 relations at the same join level it must become from filter
-		 //So try to remember them. the nodetag 999 has the rows without the filter predicate
-		 if(loops == 2){
-
-		 if(last_isfiltered && memorelation->nodeType==99 && equal(memorelation->relationname, me))
-
-		 }
-
-		 last_memorelation = memorelation;
-		 loops++;
-
-
-
-		 }
-
-		 }
-		 */
-
-	}
-}
 void InitMemoCache(void) {
 
 	MemoQuery *memo;
 	int i = 0;
-
+	rte_ref_idx_ptr->NameData = NIL;
 	memo = (MemoQuery *) palloc0(sizeof(MemoQuery));
 	memo->type = M_MemoQuery;
 	memo->length = DEFAULT_MAX_JOIN_SIZE;
@@ -319,17 +325,7 @@ void InitMemoCache(void) {
 }
 void InitJoinCache(void) {
 	int i = 0;
-
-	printf("Initializing join cache\n------------------------\n");
-	join_cache_ptr->type = M_JoinCache;
-	join_cache_ptr->length = DEFAULT_MAX_JOIN_SIZE;
-	join_cache_ptr->content = (dlist_head *) palloc0((DEFAULT_MAX_JOIN_SIZE) * sizeof(dlist_head));
-	join_cache_ptr->max_level = 0;
-	MemSetAligned(join_cache_ptr->content, 0, (DEFAULT_MAX_JOIN_SIZE) * sizeof(dlist_head));
-
-	for (i = 0; i < DEFAULT_MAX_JOIN_SIZE; i++) {
-		dlist_init(&join_cache_ptr->content[i]);
-	}
+	printf("calling init cache");
 
 	if (joincache != NULL && enable_memo_propagation)
 		readAndFillFromFile(joincache, join_cache_ptr);
@@ -361,59 +357,6 @@ void InitJoinCache(void) {
 
 }
 
-static void append_equalities_clauses(List *clauses) {
-	ListCell * lc;
-
-	foreach(lc, clauses) {
-	}
-
-}
-static MemoClause * equival_clause(MemoClause *cl1, MemoClause *cl2) {
-	if (cl1 == NIL || cl2 == NIL || cl1->args == NIL || cl2->args == NIL) {
-
-		return NULL;
-	}
-
-	if (cl1->opno == cl2->opno) {
-
-		if (equalSet(list_copy(cl1->args), list_copy(cl1->args))) {
-
-			return cl1;
-		} else {
-			if (cl1->args->length == 2 && cl2->args->length == 2) {
-				const ListCell *item_b;
-				List *a = list_copy(cl1->args);
-				List *b = list_copy(cl2->args);
-				List *lunion = NIL;
-
-				foreach(item_b, b) {
-					if (list_member_remove(&a, lfirst(item_b))) {
-						list_member_remove(&b, lfirst(item_b));
-						break;
-					}
-
-				}
-				lunion = list_union(a, b);
-				if (list_length(lunion) == 2) {
-					MemoClause *clause_ptr = (MemoClause *) palloc(sizeof(MemoClause));
-
-					clause_ptr->type = T_MemoClause;
-					clause_ptr->opno = cl1->opno;
-					clause_ptr->args = lunion;
-					clause_ptr->parent = NULL;
-					return clause_ptr;
-
-				}
-
-			}
-
-		}
-
-	}
-
-	return NULL;
-
-}
 void update_cached_joins(List *joinname, int level, double rows) {
 
 	dlist_mutable_iter iter;
@@ -733,7 +676,7 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 							if (rinfo->outer_selec != s1) {
 								printMemo(rinfo);
 
-								printf("sel updated %.10f!\n",s1);
+								printf("sel updated %.10f!\n", s1);
 
 								rinfo->outer_selec = s1;
 								rinfo->memo_cahed = true;
@@ -790,7 +733,7 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 		}
 		default: {
 			/*printMemo(rel->rel_name);
-			printf(" UNMATCHED  relation! :\n");*/
+			 printf(" UNMATCHED  relation! :\n");*/
 			if (!sjinfo) {
 				final_clauses = quals;
 				//printMemo(final_clauses);
@@ -799,16 +742,16 @@ void get_relation_size(MemoInfoData1 *result, PlannerInfo *root, RelOptInfo *rel
 
 			} else {
 				/*if (enable_selectivity_injection) {
-					if (list_length(quals) == 1 && varid == 0 && enable_selectivity_injection) {
+				 if (list_length(quals) == 1 && varid == 0 && enable_selectivity_injection) {
 
-					}
+				 }
 
-				}
+				 }
 
-				if (enable_memo_propagation) {
-					//attach_join_to_cache(rel, level);
+				 if (enable_memo_propagation) {
+				 //attach_join_to_cache(rel, level);
 
-				}*/
+				 }*/
 
 			}
 			break;

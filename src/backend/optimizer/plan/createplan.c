@@ -44,6 +44,8 @@
 #include "utils/lsyscache.h"
 #include "storage/fd.h"
 #include "utils/memocache.h"
+#include "lib/stringinfo.h"
+
 
 bool enable_cost_check = false;
 static Plan *create_plan_recurse(PlannerInfo *root, Path *best_path);
@@ -560,7 +562,9 @@ create_join_plan(PlannerInfo *root, JoinPath *best_path) {
 	int nrows = -1;
 	bool checked = false;
 	double mcost = -1;
+	StringInfoData str;
 
+	initStringInfo(&str);
 	outer_plan = create_plan_recurse(root, best_path->outerjoinpath);
 	checked = (best_path->outerjoinpath)->memo_checked;
 
@@ -652,7 +656,10 @@ create_join_plan(PlannerInfo *root, JoinPath *best_path) {
 	 */
 	if (root->hasPseudoConstantQuals)
 		plan = create_gating_plan(root, plan, best_path->joinrestrictinfo);
-
+	if (best_path->path.parent->rel_name) {
+				buildSimpleStringList(&str, best_path->path.parent->rel_name);
+				plan->plan_name = str.data;
+		}
 #ifdef NOT_USED
 
 	/*

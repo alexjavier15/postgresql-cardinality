@@ -1378,7 +1378,8 @@ standard_join_search(PlannerInfo *root, int levels_needed, List *initial_rels) {
 	 * problem, so join_rel_level[] can't be in use already.
 	 */
 	Assert(root->join_rel_level == NULL);
-
+	if(enable_memo_propagation)
+			InitJoinCache();
 	/*
 	 * We employ a simple "dynamic programming" algorithm: we first find all
 	 * ways to build joins of two jointree items, then all ways to build joins

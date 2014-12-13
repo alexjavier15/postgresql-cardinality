@@ -10,6 +10,8 @@
 
 #include "lib/ilist.h"
 #include "nodes/relation.h"
+#include "lib/stringinfo.h"
+
 #define print_list(str1,list) \
 		str1 = nodeToString(list);	\
 		printf("%s\n",debackslash(str1, strlen(str1)));\
@@ -25,7 +27,7 @@
 #define MATCHED_LEFT 2
 #define BITMAPSET_TREE_SIZE 256
 
-
+extern void InitJoinCache(void);
 extern void InitCachesForMemo(void);
 extern void printMemoCache(void);
 
@@ -87,6 +89,7 @@ extern void * get_cur_rte_reference(void);
 extern void add_recosted_paths(RelOptInfo *joinrel);
 extern void update_and_recost(PlannerInfo *root, RelOptInfo *joinrel);
 extern void invalide_removed_path(RelOptInfo *rel, Path* path);
+extern void buildSimpleStringList(StringInfo str, List *list);
 
 extern void attach_child_joinpath(Path *parent_path, Path *child_path);
 extern void add_relation(MemoRelation * relation, int rellen);

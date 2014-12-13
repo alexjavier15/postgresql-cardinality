@@ -132,6 +132,7 @@ typedef struct Plan
 	List * 		scanclauses;
 	bool	    isParameterized;
 	void	   *rte_reference;
+	char	   *plan_name;
 } Plan;
 
 /* ----------------

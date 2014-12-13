@@ -1265,6 +1265,7 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 			if (plan->qual)
 				show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
 			if (enable_explain_memo) {
+				ExplainPropertyText("Relation Name", plan->plan_name, es);
 				show_scan_parsed_qual(plan->rte_reference, ((NestLoop *) plan)->join.restrictList, "Join Clauses", es);
 				if (((NestLoop *) plan)->join.joinqualorig){
 
@@ -1283,6 +1284,7 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 			if (plan->qual)
 				show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
 			if (enable_explain_memo) {
+				ExplainPropertyText("Relation Name", plan->plan_name, es);
 				show_scan_parsed_qual(plan->rte_reference, ((MergeJoin *) plan)->join.restrictList, "Join Clauses", es);
 
 				if (((MergeJoin *) plan)->join.joinqualorig){
@@ -1301,6 +1303,7 @@ static void ExplainNode(PlanState *planstate, List *ancestors, const char *relat
 			if (plan->qual)
 				show_instrumentation_count("Rows Removed by Filter", 2, planstate, es);
 			if (enable_explain_memo) {
+				ExplainPropertyText("Relation Name", plan->plan_name, es);
 				show_scan_parsed_qual(plan->rte_reference, ((HashJoin *) plan)->join.restrictList, "Join Clauses", es);
 
 				if (((HashJoin *) plan)->join.joinqualorig){
