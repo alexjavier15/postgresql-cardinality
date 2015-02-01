@@ -15,4 +15,4 @@ touch pgsql/data/durations.txt
 rm pgsql/data/durations.txt
 touch pgsql/data/durations.txt
 #./script10conv.sh -i
-./script10.sh "-c enable_memo_recosting=off" -i
+./script10conv.sh "-c enable_memo_recosting=off" -i
