@@ -275,7 +275,10 @@ static void explain_ExecutorEnd(QueryDesc *queryDesc) {
 				fclose(file);
 				fclose(file_d);
 				if (auto_explain_log_memo) {
-					system("java -jar explain.jar memoTxt.xml memoTxt");
+					if(enable_memo_convergent)
+					system("java -jar explain.jar memoTxt.xml memoTxt -a");
+					else
+					system("java -jar explain.jar memoTxt.xml memoTxt -n");
 
 				}
 

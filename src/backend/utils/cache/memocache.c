@@ -1995,4 +1995,3 @@ void add_recosted_paths(RelOptInfo *joinrel) {
 	}
 
 }
-
